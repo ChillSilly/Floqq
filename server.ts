@@ -4,6 +4,7 @@ import axios from 'axios';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { GoogleGenAI, Type } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,6 +32,14 @@ const SYSTEM_HEADERS_A = {
 };
 
 // --- API ROUTES ---
+
+let aiClient: GoogleGenAI | null = null;
+const getAI = () => {
+  if (!aiClient && process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY') {
+    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return aiClient;
+};
 
 app.get('/api/ratio/:ticker', async (req, res) => {
   const { ticker } = req.params;
@@ -129,9 +138,9 @@ app.get('/api/spot/:ticker', async (req, res) => {
 });
 
 app.get('/api/news', async (req, res) => {
-  const cacheKey = 'finviz_news';
+  const cacheKey = 'finviz_news_ai_v1';
 
-  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL * 5) { // 5 min cache for news
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 3 * 60 * 1000) { // 3 min cache for news
     return res.json(cache[cacheKey].data);
   }
 
@@ -154,10 +163,61 @@ app.get('/api/news', async (req, res) => {
         url: clean(matches[2]),
         source: clean(matches[3])
       };
-    }).filter(n => n.title && n.url);
+    }).filter(n => n.title && n.url).slice(0, 30); // limit to top 30 for AI analysis
 
-    cache[cacheKey] = { data: newsData, ts: Date.now() };
-    res.json(newsData);
+    let enhancedNews = newsData;
+
+    try {
+      const genAI = getAI();
+      if (genAI) {
+        const prompt = `Analyze these financial news headlines for their impact on the options market.
+For each index, provide:
+- sentiment: "Positive", "Neutral", "Negative"
+- tickers: an array of 1-4 highly liquid options tickers affected (e.g., ["SPY", "QQQ"], ["NVDA"], ["IWM"]). If none are obvious based on the headline, use ["SPY"].
+- description: A comprehensive, highly detailed 3-4 sentence explanation. You MUST explicitly explain how the news affects the specific options tickers you listed. You MUST include expected sentiment and direction, potential implied volatility (IV) shifts (e.g., expanding or contracting), and specific actions market makers or institutional flow are likely taking (e.g., selling calls, delta hedging, rolling puts).
+
+Headlines:
+` + newsData.map((n, i) => `${i}: ${n.source} - ${n.title}`).join('\n');
+
+        const result = await genAI.models.generateContent({
+           model: 'gemini-3-flash-preview',
+           contents: prompt,
+           config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                 type: Type.ARRAY,
+                 items: {
+                    type: Type.OBJECT,
+                    properties: {
+                       index: { type: Type.INTEGER },
+                       sentiment: { type: Type.STRING, enum: ["Positive", "Neutral", "Negative"] },
+                       tickers: { type: Type.ARRAY, items: { type: Type.STRING } },
+                       description: { type: Type.STRING }
+                    },
+                    required: ["index", "sentiment", "tickers", "description"]
+                 }
+              }
+           }
+        });
+
+        if (result.text) {
+           const aiData = JSON.parse(result.text);
+           enhancedNews = newsData.map((item, i) => {
+               const analysis = aiData.find((a: any) => a.index === i);
+               if (analysis) {
+                   return { ...item, sentiment: analysis.sentiment, tickers: analysis.tickers, ai_description: analysis.description };
+               }
+               return item;
+           });
+        }
+      }
+    } catch (aiError) {
+      console.error("Gemini AI Analysis Error:", aiError);
+      // fallback to un-enhanced if AI fails
+    }
+
+    cache[cacheKey] = { data: enhancedNews, ts: Date.now() };
+    res.json(enhancedNews);
   } catch (error) {
     console.error('News Fetch Error:', error);
     res.status(500).json({ error: 'Failed' });

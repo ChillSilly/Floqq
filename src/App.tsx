@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
-import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus } from 'lucide-react';
+import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus } from 'lucide-react';
 
 import { bs_gamma, bs_delta, bs_vega, implied_vol } from './lib/blackScholes';
 
@@ -96,6 +96,8 @@ export default function App() {
   const [newsSearch, setNewsSearch] = useState('');
   const [newsSourceFilter, setNewsSourceFilter] = useState('ALL');
   const [newsDateFilter, setNewsDateFilter] = useState('ALL');
+  const [newsSentimentFilter, setNewsSentimentFilter] = useState('ALL');
+  const [newsTickerFilter, setNewsTickerFilter] = useState('');
   const [selectedNews, setSelectedNews] = useState<any>(null);
 
   const getDisplaySource = (source: string) => {
@@ -130,7 +132,7 @@ export default function App() {
     return news.filter(item => {
       if (newsSearch) {
         const lowerSearch = newsSearch.toLowerCase();
-        if (!item.title?.toLowerCase().includes(lowerSearch) && !item.source?.toLowerCase().includes(lowerSearch)) {
+        if (!item.title?.toLowerCase().includes(lowerSearch) && !item.source?.toLowerCase().includes(lowerSearch) && !item.ai_description?.toLowerCase().includes(lowerSearch)) {
           return false;
         }
       }
@@ -142,9 +144,19 @@ export default function App() {
         if (newsDateFilter === 'TODAY' && !isToday) return false;
         if (newsDateFilter === 'OLDER' && isToday) return false;
       }
+      if (newsSentimentFilter !== 'ALL') {
+        const sentiment = item.sentiment || 'Neutral';
+        if (sentiment !== newsSentimentFilter) return false;
+      }
+      if (newsTickerFilter) {
+        const desc = item.ai_description || item.description || '';
+        const tickers = Array.isArray(item.tickers) && item.tickers.length > 0 ? item.tickers : getAffectedTickers(item.title, desc);
+        const hasMatch = tickers.some((t: string) => t.toLowerCase() === newsTickerFilter.toLowerCase());
+        if (!hasMatch) return false;
+      }
       return true;
     });
-  }, [news, newsSearch, newsSourceFilter, newsDateFilter]);
+  }, [news, newsSearch, newsSourceFilter, newsDateFilter, newsSentimentFilter, newsTickerFilter]);
 
   const newsSources = useMemo(() => {
     const sources = new Map<string, string>();
@@ -174,7 +186,7 @@ export default function App() {
       }
     };
     fetchNews();
-    const interval = setInterval(fetchNews, 300000); // 5 min
+    const interval = setInterval(fetchNews, 180000); // 3 min
     return () => clearInterval(interval);
   }, [hasAccess]);
 
@@ -1115,7 +1127,7 @@ export default function App() {
                                   </linearGradient>
                                </defs>
                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                               <XAxis dataKey="time" stroke="#ffffff30" fontSize={10} tickLine={false} axisLine={false} />
+                               <XAxis dataKey="time" hide={true} />
                                <YAxis domain={['auto', 'auto']} stroke="#ffffff30" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val.toFixed(1)}B`} width={50} />
                                <Tooltip 
                                   contentStyle={{ backgroundColor: '#0A0B0E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
@@ -1130,40 +1142,64 @@ export default function App() {
                     
                     <div className="grid md:grid-cols-2 gap-6">
                        <div className="preserve-dark p-8 bg-[#0D0D11] text-white border border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl hover:border-white/20 transition-all group overflow-hidden relative">
-                         <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#00E5A0]/80 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                         <div className={`absolute top-0 left-0 w-1 h-full bg-gradient-to-b ${gexMetrics.netGex >= 0 ? 'from-[#00E5A0]/80' : 'from-rose-500/80'} to-transparent opacity-50 group-hover:opacity-100 transition-opacity`}></div>
                          <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2.5 bg-[#00E5A0]/10 rounded-xl border border-[#00E5A0]/20"><TrendingUp size={18} className="text-[#00E5A0]" /></div>
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-white/90">Level Conversion</h3>
+                            <div className={`p-2.5 ${gexMetrics.netGex >= 0 ? 'bg-[#00E5A0]/10 border-[#00E5A0]/20' : 'bg-rose-500/10 border-rose-500/20'} rounded-xl border`}><Zap size={18} className={gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-400'} /></div>
+                            <h3 className="text-sm font-bold uppercase tracking-widest text-white/90">Volatility Regime</h3>
                          </div>
                          <div className="space-y-4">
-                           <div className="flex justify-between items-center text-sm p-5 bg-black/40 border border-white/5 rounded-xl cursor-pointer hover:border-white/20 transition-colors shadow-inner" onClick={() => setActiveModule('vip-conversion')}>
-                             <span className="text-white/60 font-medium tracking-wide">SPY/ES Ratio</span>
-                             <span className="font-mono font-bold text-[#00E5A0] text-xl drop-shadow-[0_0_8px_rgba(0,229,160,0.3)]">{conversionRatios['SPY']?.ratio?.toFixed(4) || '1.0342'}</span>
+                           <div className="flex flex-col gap-1 p-5 bg-black/40 border border-white/5 rounded-xl shadow-inner">
+                             <span className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Dealer Profile</span>
+                             <span className={`font-mono font-bold text-2xl drop-shadow-sm ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-400'}`}>
+                               {gexMetrics.netGex >= 0 ? 'LONG GAMMA' : 'SHORT GAMMA'}
+                             </span>
+                             <p className="text-[11px] text-white/40 leading-tight mt-1">
+                               {gexMetrics.netGex >= 0 
+                                 ? 'Mechanically dampening volatility through mean-reversion hedging.' 
+                                 : 'Accelerating market moves through pro-cyclical hedging behavior.'}
+                             </p>
                            </div>
-                           <div className="flex justify-between items-center text-sm p-5 bg-black/40 border border-white/5 rounded-xl cursor-pointer hover:border-white/20 transition-colors shadow-inner" onClick={() => setActiveModule('vip-conversion')}>
-                             <span className="text-white/60 font-medium tracking-wide">QQQ/NQ Ratio</span>
-                             <span className="font-mono font-bold text-[#F5A623] text-xl drop-shadow-[0_0_8px_rgba(245,166,35,0.3)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '0.9821'}</span>
+                           <div className="flex justify-between items-center px-5 py-3 bg-white/[0.02] border border-white/5 rounded-lg">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Gamma Flip Est.</span>
+                              <span className="font-mono text-sm text-white/60">${gexMetrics.gammaFlip.toFixed(2)}</span>
                            </div>
                          </div>
                        </div>
-                       <div className="preserve-dark p-8 bg-[#0D0D11] text-white border border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl overflow-hidden relative group">
-                         <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
-                            <Terminal size={120} />
+                       <div className="preserve-dark p-8 bg-[#0D0D11] text-white border border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl overflow-hidden relative group hover:border-[#64A0E6]/30 transition-all">
+                         <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-700 pointer-events-none">
+                            <Layers size={120} />
                          </div>
                          <div className="flex items-center gap-3 mb-6 relative z-10">
-                            <div className="p-2.5 bg-[#64A0E6]/10 rounded-xl border border-[#64A0E6]/20"><Terminal size={18} className="text-[#64A0E6]" /></div>
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-white/90">Auto-Sync Status</h3>
+                            <div className="p-2.5 bg-[#64A0E6]/10 rounded-xl border border-[#64A0E6]/20 shadow-inner"><Target size={18} className="text-[#64A0E6]" /></div>
+                            <h3 className="text-sm font-bold uppercase tracking-widest text-white/90">Dealer Concentration</h3>
                          </div>
-                         <div className="flex items-center justify-between mt-8 relative z-10">
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-[#00E5A0] shadow-[0_0_8px_rgba(0,229,160,0.8)] animate-pulse"></div>
-                                <div className="text-[11px] text-[#00E5A0] font-bold uppercase tracking-widest">Active System</div>
-                              </div>
-                              <div className="text-xs text-white/40 font-mono">Syncing market data modules...</div>
+                         <div className="space-y-4 relative z-10">
+                            <div className="flex flex-col gap-1 p-5 bg-black/40 border border-white/5 rounded-xl shadow-inner">
+                               <div className="flex justify-between items-end mb-2">
+                                 <span className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Call/Put GEX Ratio</span>
+                                 <span className="font-mono text-xl text-white font-bold">{(gexMetrics.callGex / Math.abs(gexMetrics.putGex || 1)).toFixed(2)}x</span>
+                               </div>
+                               <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
+                                  <div 
+                                    className="h-full bg-[#00E5A0]" 
+                                    style={{ width: `${(gexMetrics.callGex / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
+                                  />
+                                  <div 
+                                    className="h-full bg-rose-500" 
+                                    style={{ width: `${(Math.abs(gexMetrics.putGex) / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
+                                  />
+                               </div>
+                               <div className="flex justify-between text-[9px] mt-2 font-bold uppercase tracking-tighter opacity-40">
+                                  <span>Call Wall Influence</span>
+                                  <span>Put Support Base</span>
+                               </div>
                             </div>
-                            <div className="w-12 h-12 border border-[#00E5A0]/20 bg-[#00E5A0]/10 rounded-full flex items-center justify-center shadow-[inset_0_0_15px_rgba(0,229,160,0.1)]">
-                              <ShieldCheck size={24} className="text-[#00E5A0]" />
+                            <div className="flex items-center justify-between px-5 pt-2">
+                               <div className="flex items-center gap-2">
+                                 <div className="w-1.5 h-1.5 rounded-full bg-[#00E5A0] shadow-[0_0_8px_rgba(0,229,160,0.8)] animate-pulse"></div>
+                                 <div className="text-[10px] text-[#00E5A0] font-bold uppercase tracking-widest">Live Flow Sync</div>
+                               </div>
+                               <div className="text-[10px] text-white/30 font-mono italic">Institutional grade precision</div>
                             </div>
                          </div>
                        </div>
@@ -1962,35 +1998,34 @@ export default function App() {
 
                 {activeModule === 'vip-alpha' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="preserve-dark bg-[#0A0B0E] border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-white p-8 md:p-10 rounded-2xl relative overflow-hidden group">
-                       <div className="absolute top-0 right-0 p-12 opacity-5 translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-1000">
-                         <Zap size={240} />
+                    <div className="preserve-dark bg-[#0A0B0E] border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-white pb-12 pr-[15px] pl-[19px] pt-10 rounded-2xl relative overflow-hidden group">
+                       <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/80 to-transparent opacity-50">
+                         <div className="absolute top-0 left-0 h-full w-24 bg-white/80 animate-[ping_3s_ease-in-out_infinite] blur-[2px]"></div>
                        </div>
-                       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500/50 via-yellow-500/50 to-orange-500/50 opacity-50"></div>
                       
                       <div className="flex flex-col md:flex-row md:items-start justify-between mb-8 relative z-10 gap-8 border-b border-white/5 pb-8">
                         <div>
                           <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-white/90">Alpha Intelligence News</h2>
                           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
                         </div>
-                        <div className="flex flex-col sm:flex-row items-center gap-4">
-                           <div className="relative w-full sm:w-auto">
-                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                             <input 
-                               type="text" 
-                               placeholder="Search news..." 
-                               value={newsSearch}
-                               onChange={e => setNewsSearch(e.target.value)}
-                               className="bg-black/50 border border-white/10 rounded-lg pl-9 pr-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50 w-full sm:w-48 font-mono"
-                             />
-                           </div>
+                        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4">
+                           <select
+                              value={newsSentimentFilter}
+                              onChange={e => setNewsSentimentFilter(e.target.value)}
+                              className="bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50 w-full sm:w-auto font-mono appearance-none"
+                           >
+                              <option value="ALL" className="bg-black text-white">ALL SENTIMENT</option>
+                              <option value="Positive" className="bg-black text-emerald-400">Positive</option>
+                              <option value="Neutral" className="bg-black text-neutral-400">Neutral</option>
+                              <option value="Negative" className="bg-black text-red-400">Negative</option>
+                           </select>
                            <select
                               value={newsSourceFilter}
                               onChange={e => setNewsSourceFilter(e.target.value)}
                               className="bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50 w-full sm:w-auto font-mono appearance-none"
                            >
                               {newsSources.map(source => (
-                                <option key={source.raw} value={source.raw} className="bg-black text-white">{source.display}</option>
+                                <option key={source.raw} value={source.raw} className="bg-black text-white">{source.display === 'ALL' ? 'ALL SOURCES' : source.display}</option>
                               ))}
                            </select>
                            <select
@@ -2016,11 +2051,22 @@ export default function App() {
                            <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-12 opacity-40 italic font-mono text-sm">NO INTELLIGENCE FOUND MATCHING CRITERIA.</div>
                         ) : (
                           filteredNews.map((item, idx) => {
-                            const desc = item.description || `AI Summary: Initial flow analysis indicates institutional activity surrounding "${item.title}". Volatility markers from ${getDisplaySource(item.source)} suggest market makers are adjusting positions. Further details and market impacts are being processed by our models.`;
+                            const desc = item.ai_description || item.description || `AI Summary: Initial flow analysis indicates institutional activity surrounding "${item.title}". Volatility markers from ${getDisplaySource(item.source)} suggest market makers are adjusting positions. Further details and market impacts are being processed by our models.`;
+                            const sentiment = item.sentiment || 'Neutral';
+                            const tickers = Array.isArray(item.tickers) && item.tickers.length > 0 ? item.tickers : getAffectedTickers(item.title, desc);
+                            
+                            const getSentimentStyle = (s: string) => {
+                                if (s === 'Positive') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                                if (s === 'Negative') return 'bg-red-500/10 text-red-400 border-red-500/20';
+                                return 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20';
+                            };
+
+                            const SentimentIcon = sentiment === 'Positive' ? ArrowUpRight : sentiment === 'Negative' ? ArrowDownRight : Minus;
+
                             return (
                             <div 
                               key={idx} 
-                              onClick={() => setSelectedNews({...item, displayDesc: desc})}
+                              onClick={() => setSelectedNews({...item, displayDesc: desc, displayTickers: tickers, displaySentiment: sentiment})}
                               className="flex flex-col h-full p-6 bg-black/60 border border-white/10 rounded-2xl hover:border-amber-500/50 hover:bg-neutral-900/80 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(245,158,11,0.15)] transition-all duration-300 group/news shadow-[0_4px_20px_rgba(0,0,0,0.5)] overflow-hidden relative cursor-pointer"
                             >
                               <div className="absolute top-0 right-0 p-8 opacity-0 group-hover/news:opacity-[0.03] transition-opacity duration-500 delay-100 pointer-events-none">
@@ -2028,9 +2074,20 @@ export default function App() {
                               </div>
                               <div className="flex-1 flex flex-col z-10 pointer-events-none">
                                 <div className="flex justify-between items-center gap-4 mb-4">
-                                  <span className="text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-sm shrink-0">
-                                    {getDisplaySource(item.source)}
-                                  </span>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-sm">
+                                      {getDisplaySource(item.source)}
+                                    </span>
+                                    {sentiment && (
+                                      <span 
+                                        className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest px-2 py-1 border rounded-sm ${getSentimentStyle(sentiment)}`}
+                                        aria-label={`Sentiment: ${sentiment}`}
+                                      >
+                                        <SentimentIcon size={10} aria-hidden="true" />
+                                        {sentiment}
+                                      </span>
+                                    )}
+                                  </div>
                                   <span className="text-[10px] text-white/40 font-mono font-medium bg-white/5 px-2 py-1 rounded-sm whitespace-nowrap shrink-0">{item.date}</span>
                                 </div>
                                 <h3 className="text-lg font-serif font-medium text-white/95 group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
@@ -2043,6 +2100,13 @@ export default function App() {
                                 </div>
                               </div>
                               <div className="mt-5 pt-5 border-t border-white/5 flex items-center justify-between shrink-0 z-10 pointer-events-none">
+                                <div className="flex gap-2">
+                                  {tickers.slice(0, 3).map((tick: string, i: number) => (
+                                    <span key={i} className="text-[9px] font-mono font-medium bg-white/5 text-white/60 px-1.5 py-0.5 rounded-sm">
+                                      ${tick}
+                                    </span>
+                                  ))}
+                                </div>
                                 <span 
                                   className="text-[10px] font-bold uppercase tracking-widest text-amber-500/80 group-hover/news:text-amber-400 transition-colors flex items-center gap-2"
                                 >
@@ -2086,6 +2150,21 @@ export default function App() {
                                   <span className="text-xs font-bold uppercase tracking-widest px-3 py-1.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-md shrink-0">
                                     {getDisplaySource(selectedNews.source)}
                                   </span>
+                                  {selectedNews.displaySentiment && (
+                                     <span 
+                                       className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2 py-1 border rounded-md ${
+                                         selectedNews.displaySentiment === 'Positive' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                                         selectedNews.displaySentiment === 'Negative' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
+                                         'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+                                       } shrink-0`}
+                                       aria-label={`Sentiment: ${selectedNews.displaySentiment}`}
+                                     >
+                                       {selectedNews.displaySentiment === 'Positive' ? <ArrowUpRight size={12} aria-hidden="true" /> : 
+                                        selectedNews.displaySentiment === 'Negative' ? <ArrowDownRight size={12} aria-hidden="true" /> : 
+                                        <Minus size={12} aria-hidden="true" />}
+                                       {selectedNews.displaySentiment}
+                                     </span>
+                                  )}
                                   <span className="text-xs text-white/40 font-mono font-medium">{selectedNews.date}</span>
                                 </div>
                                 
@@ -2104,7 +2183,7 @@ export default function App() {
                                   <div>
                                     <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-3 border-b border-white/10 pb-2 mt-8">Affected Tickers</h4>
                                     <div className="flex gap-3">
-                                      {getAffectedTickers(selectedNews.title, selectedNews.displayDesc).map(ticker => (
+                                      {(selectedNews.displayTickers || []).map((ticker: string) => (
                                         <span key={ticker} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white font-mono shadow-sm">
                                           <Target size={14} className="text-emerald-500" />
                                           {ticker}
