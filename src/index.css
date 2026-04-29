@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #FDFCFB;
+  color: #1A1A1A;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1A1A1A;
+}
+
+html.dark-theme {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #FDFCFB; /* ensure the html has a bg to invert */
+}
+
+html.dark-theme img,
+html.dark-theme video,
+html.dark-theme iframe,
+html.dark-theme .preserve-dark {
+  filter: invert(1) hue-rotate(180deg);
+}
