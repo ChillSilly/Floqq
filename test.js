@@ -1,8 +1,19 @@
-import { readFileSync } from 'fs';
+const axios = require('axios');
 
-let content = readFileSync('src/App.tsx', 'utf8');
+async function testAlpaca() {
+  try {
+    const url = 'https://data.alpaca.markets/v1beta1/options/snapshots/SPY?feed=indicative&limit=5';
+    const response = await axios.get(url, {
+      headers: {
+        'APCA-API-KEY-ID': 'PKP6JPYFGE77PL32QB3DO6WVCH',
+        'APCA-API-SECRET-KEY': 'EVKt1FsFqJmWbMyZV4YekUVQYNgBqMPSoNm21b4emruR'
+      }
+    });
+    console.log("Success with indicative:");
+    console.log(JSON.stringify(response.data, null, 2));
+  } catch (err) {
+    console.error("Error indicative:", err.response ? err.response.data : err.message);
+  }
+}
 
-// A very naive script is not enough, as we need the rendered DOM.
-// We can use a Node script with jsdom or just run the dev server?
-// No, the agent can't hit the dev server with curl if we want rendered react unless it's SSR.
-// Wait, we can output `console.log` from a React component.
+testAlpaca();

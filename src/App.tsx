@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
 import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus } from 'lucide-react';
@@ -103,16 +103,41 @@ export default function App() {
   const getDisplaySource = (source: string) => {
     if (!source) return 'INTEL';
     const lower = source.toLowerCase();
+    
+    // Explicit normalization for common sources
     if (lower.includes('bloomberg')) return 'Bloomberg';
-    if (lower.includes('wsj')) return 'WSJ';
+    if (lower.includes('wsj') || lower.includes('wall street journal')) return 'WSJ';
     if (lower.includes('nytimes') || lower.includes('new york times')) return 'New York Times';
     if (lower.includes('cnbc')) return 'CNBC';
     if (lower.includes('reuters')) return 'Reuters';
     if (lower.includes('yahoo')) return 'Yahoo Finance';
     if (lower.includes('bbc')) return 'BBC';
+    if (lower.includes('marketwatch') || lower.includes('market watch')) return 'MarketWatch';
+    if (lower.includes('seeking alpha') || lower.includes('seekingalpha')) return 'Seeking Alpha';
+    if (lower.includes('barrons') || lower.includes('barron\'s') || lower.includes('barrons.com')) return 'Barron\'s';
+    if (lower.includes('investopedia')) return 'Investopedia';
+    if (lower.includes('ft.com') || lower.includes('financial times')) return 'Financial Times';
+    if (lower.includes('fool.com') || lower.includes('motley fool')) return 'Motley Fool';
+    if (lower.includes('fox business') || lower.includes('foxbusiness')) return 'Fox Business';
+    if (lower.includes('forbes')) return 'Forbes';
+    if (lower.includes('business insider') || lower.includes('markets insider')) return 'Business Insider';
+    if (lower.includes('benzinga')) return 'Benzinga';
+    if (lower.includes('zacks')) return 'Zacks';
+    if (lower.includes('thestreet')) return 'TheStreet';
+    if (lower.includes('investors.com') || lower.includes('investor\'s business daily')) return 'IBD';
+    if (lower.includes('morningstar')) return 'Morningstar';
+    if (lower.includes('marketbeat')) return 'MarketBeat';
+    if (lower.includes('prnewswire') || lower.includes('pr newswire')) return 'PR Newswire';
+    if (lower.includes('businesswire') || lower.includes('business wire')) return 'Business Wire';
+    if (lower.includes('globenewswire')) return 'GlobeNewswire';
+
     try {
       const url = new URL(source.startsWith('http') ? source : `https://${source}`);
-      return url.hostname.replace('www.', '').split('.')[0].toUpperCase();
+      let host = url.hostname.replace('www.', '');
+      
+      const parts = host.split('.');
+      if (parts.length > 1) parts.pop();
+      return parts.join(' ').replace(/\b\w/g, c => c.toUpperCase());
     } catch {
       return source.length > 20 ? source.substring(0, 20) + '...' : source;
     }
@@ -136,7 +161,7 @@ export default function App() {
           return false;
         }
       }
-      if (newsSourceFilter !== 'ALL' && (item.source || 'INTEL') !== newsSourceFilter) {
+      if (newsSourceFilter !== 'ALL' && getDisplaySource(item.source || 'INTEL') !== newsSourceFilter) {
         return false;
       }
       if (newsDateFilter !== 'ALL') {
@@ -158,37 +183,51 @@ export default function App() {
     });
   }, [news, newsSearch, newsSourceFilter, newsDateFilter, newsSentimentFilter, newsTickerFilter]);
 
-  const newsSources = useMemo(() => {
-    const sources = new Map<string, string>();
+  const { newsSources, sourceCounts } = useMemo(() => {
+    const counts: Record<string, number> = {};
     news.forEach(n => {
       const raw = n.source || 'INTEL';
-      sources.set(raw, getDisplaySource(raw));
+      const source = getDisplaySource(raw);
+      counts[source] = (counts[source] || 0) + 1;
     });
     // Sort sources alphabetically by display name
-    return [{raw: 'ALL', display: 'ALL'}, ...Array.from(sources.entries()).map(([raw, display]) => ({raw, display})).sort((a, b) => a.display.localeCompare(b.display))];
+    const sources = ['ALL', ...Object.keys(counts).sort((a, b) => a.localeCompare(b))];
+    return { newsSources: sources, sourceCounts: counts };
   }, [news]);
 
 
-  useEffect(() => {
+  const fetchNews = useCallback(async (force = false) => {
     if (!hasAccess) return;
-    const fetchNews = async () => {
-      setNewsLoading(true);
+    setNewsLoading(true);
+    try {
+      const url = force ? '/api/news?force=true' : '/api/news';
+      const res = await fetch(url);
+      const text = await res.text();
       try {
-        const res = await fetch('/api/news');
-        const data = await res.json();
+        const data = JSON.parse(text);
         if (Array.isArray(data)) {
           setNews(data);
         }
-      } catch (err) {
-        console.error("News fetch error:", err);
-      } finally {
-        setNewsLoading(false);
+      } catch (e) {
+        if (!text.trim().toLowerCase().startsWith('<!doctype html>')) {
+           console.error("News JSON parse error:", e, "Text:", text.substring(0, 200));
+        } else {
+           console.warn("Dev server restarting, intercepted news fetch.");
+        }
       }
-    };
-    fetchNews();
-    const interval = setInterval(fetchNews, 180000); // 3 min
-    return () => clearInterval(interval);
+    } catch (err) {
+      console.error("News fetch error:", err);
+    } finally {
+      setNewsLoading(false);
+    }
   }, [hasAccess]);
+
+  useEffect(() => {
+    if (!hasAccess) return;
+    fetchNews();
+    const interval = setInterval(() => fetchNews(false), 180000); // 3 min
+    return () => clearInterval(interval);
+  }, [hasAccess, fetchNews]);
 
   // Journal State
   const [journalData, setJournalData] = useState<Record<string, any>>({});
@@ -393,11 +432,21 @@ export default function App() {
     if (!hasAccess) return;
 
     const fetchData = async () => {
+      if (!activeTicker) return;
       setIsLoadingLive(true);
       try {
         // Fetch Chain
         const chainRes = await fetch(`/api/chain/${activeTicker}`);
-        const chain = await chainRes.json();
+        const chainText = await chainRes.text();
+        let chain;
+        try {
+          chain = JSON.parse(chainText);
+        } catch (e) {
+          if (!chainText.trim().toLowerCase().startsWith('<!doctype html>')) {
+             console.error("Chain JSON parse error:", e, "Text:", chainText.substring(0, 200));
+          }
+          return; // Stop processing silently to avoid throwing and breaking the UI
+        }
         setChainData(chain);
 
         // Fetch Ratios
@@ -405,7 +454,14 @@ export default function App() {
         const ratios: any = {};
         for (const symbol of symbols) {
           const res = await fetch(`/api/ratio/${symbol}`);
-          ratios[symbol] = await res.json();
+          const ratioText = await res.text();
+          try {
+            ratios[symbol] = JSON.parse(ratioText);
+          } catch(e) {
+             if (!ratioText.trim().toLowerCase().startsWith('<!doctype html>')) {
+                console.error("Ratio parse error for", symbol, ":", e, "Text:", ratioText.substring(0, 200));
+             }
+          }
         }
         setConversionRatios(ratios);
         setLastUpdate(new Date());
@@ -455,7 +511,7 @@ export default function App() {
       
       if (t <= 0) return;
 
-      const gamma = bs_gamma(spot, strike, t, r, q, iv);
+      const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bs_gamma(spot, strike, t, r, q, iv);
       if (isNaN(gamma)) return;
       
       const gex = calculateGEX(gamma, oi, spot);
@@ -1039,20 +1095,40 @@ export default function App() {
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                   <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Live Terminal active</span>
                 </div>
-                <div className="flex items-center gap-6">
-                  <h1 className="text-5xl font-serif italic">The Elite Dashboard</h1>
-                  <input 
-                    type="text" 
-                    placeholder="search ticker" 
-                    className="bg-transparent border-2 border-dashed border-blue-400/50 text-blue-600 placeholder-blue-400/60 text-xs font-mono font-bold uppercase tracking-wider px-4 py-2 outline-none w-48 focus:border-blue-500 transition-colors rounded-sm"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const val = e.currentTarget.value.trim().toUpperCase();
-                        if (val) setActiveTicker(val);
-                        e.currentTarget.value = '';
-                      }
-                    }}
-                  />
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-6">
+                    <h1 className="text-5xl font-serif italic">The Elite Dashboard</h1>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-4 w-4 text-black/30 group-focus-within:text-black/60 transition-colors" />
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder="SEARCH TICKER..." 
+                        className="bg-white border border-black/10 text-black placeholder-black/30 text-xs font-mono font-bold uppercase tracking-wider pl-9 pr-4 py-2.5 outline-none w-64 focus:border-black/30 focus:ring-1 focus:ring-black/5 transition-all rounded-sm shadow-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = e.currentTarget.value.trim().toUpperCase();
+                            if (val) setActiveTicker(val);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Presets:</span>
+                    {['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setActiveTicker(t)}
+                        className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-sm transition-all ${activeTicker === t ? 'bg-black text-white shadow-sm' : 'bg-black/5 text-black/60 hover:bg-black/10 hover:text-black'}`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <p className="text-neutral-500 text-sm max-w-md">Proprietary institutional flow models. Real-time dealer positioning and volatility regime conversion.</p>
               </div>
@@ -1414,9 +1490,9 @@ export default function App() {
                                     const calcIv = implied_vol(marketPrice, spot, strike, t, RISK_FREE_RATE, div, type as "C" | "P");
                                     if (!isNaN(calcIv) && calcIv > 0) iv = calcIv;
                                     
-                                    const gamma = bs_gamma(spot, strike, t, RISK_FREE_RATE, div, iv);
-                                    const delta = bs_delta(spot, strike, t, RISK_FREE_RATE, div, iv, type as "C" | "P");
-                                    const vega = bs_vega(spot, strike, t, RISK_FREE_RATE, div, iv);
+                                    const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bs_gamma(spot, strike, t, RISK_FREE_RATE, div, iv);
+                                    const delta = opt.delta !== undefined && opt.delta !== null ? parseFloat(opt.delta) : bs_delta(spot, strike, t, RISK_FREE_RATE, div, iv, type as "C" | "P");
+                                    const vega = opt.vega !== undefined && opt.vega !== null ? parseFloat(opt.vega) : bs_vega(spot, strike, t, RISK_FREE_RATE, div, iv);
 
                                     const gex = calculateGEX(gamma, oi, spot) || 0; // Return in Billions
                                     
@@ -2007,8 +2083,10 @@ export default function App() {
                         <div>
                           <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-white/90">Alpha Intelligence News</h2>
                           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
+
                         </div>
                         <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4">
+
                            <select
                               value={newsSentimentFilter}
                               onChange={e => setNewsSentimentFilter(e.target.value)}
@@ -2025,7 +2103,7 @@ export default function App() {
                               className="bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50 w-full sm:w-auto font-mono appearance-none"
                            >
                               {newsSources.map(source => (
-                                <option key={source.raw} value={source.raw} className="bg-black text-white">{source.display === 'ALL' ? 'ALL SOURCES' : source.display}</option>
+                                <option key={source} value={source} className="bg-black text-white">{source === 'ALL' ? 'ALL SOURCES' : source}</option>
                               ))}
                            </select>
                            <select
@@ -2038,7 +2116,7 @@ export default function App() {
                               <option value="OLDER" className="bg-black text-white">Older</option>
                            </select>
                            <button 
-                             onClick={() => {/* refresh handled by effect */}}
+                             onClick={() => fetchNews(true)}
                              className="flex items-center justify-center p-2.5 rounded-lg bg-black/50 border border-white/10 hover:border-amber-500/40 transition-colors"
                            >
                               {newsLoading ? <RefreshCcw size={16} className="text-amber-500 animate-spin" /> : <RefreshCcw size={16} className="text-white/30 hover:text-amber-500" />}
@@ -2056,9 +2134,9 @@ export default function App() {
                             const tickers = Array.isArray(item.tickers) && item.tickers.length > 0 ? item.tickers : getAffectedTickers(item.title, desc);
                             
                             const getSentimentStyle = (s: string) => {
-                                if (s === 'Positive') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                                if (s === 'Negative') return 'bg-red-500/10 text-red-400 border-red-500/20';
-                                return 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20';
+                                if (s === 'Positive') return 'text-emerald-400';
+                                if (s === 'Negative') return 'text-red-400';
+                                return 'text-neutral-400';
                             };
 
                             const SentimentIcon = sentiment === 'Positive' ? ArrowUpRight : sentiment === 'Negative' ? ArrowDownRight : Minus;
@@ -2067,50 +2145,47 @@ export default function App() {
                             <div 
                               key={idx} 
                               onClick={() => setSelectedNews({...item, displayDesc: desc, displayTickers: tickers, displaySentiment: sentiment})}
-                              className="flex flex-col h-full p-6 bg-black/60 border border-white/10 rounded-2xl hover:border-amber-500/50 hover:bg-neutral-900/80 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(245,158,11,0.15)] transition-all duration-300 group/news shadow-[0_4px_20px_rgba(0,0,0,0.5)] overflow-hidden relative cursor-pointer"
+                              className="flex flex-col h-full p-6 bg-[#0D0D11] border border-white/5 rounded-xl hover:border-amber-500/40 hover:bg-[#111115] hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
                             >
                               <div className="absolute top-0 right-0 p-8 opacity-0 group-hover/news:opacity-[0.03] transition-opacity duration-500 delay-100 pointer-events-none">
                                 <Zap size={100} />
                               </div>
                               <div className="flex-1 flex flex-col z-10 pointer-events-none">
-                                <div className="flex justify-between items-center gap-4 mb-4">
+                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-white/5 pb-4">
                                   <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-sm">
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500">
                                       {getDisplaySource(item.source)}
                                     </span>
+                                    <span className="text-white/20 text-[9px]">•</span>
                                     {sentiment && (
-                                      <span 
-                                        className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest px-2 py-1 border rounded-sm ${getSentimentStyle(sentiment)}`}
-                                        aria-label={`Sentiment: ${sentiment}`}
-                                      >
-                                        <SentimentIcon size={10} aria-hidden="true" />
+                                      <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${getSentimentStyle(sentiment)}`}>
                                         {sentiment}
                                       </span>
                                     )}
                                   </div>
-                                  <span className="text-[10px] text-white/40 font-mono font-medium bg-white/5 px-2 py-1 rounded-sm whitespace-nowrap shrink-0">{item.date}</span>
+                                  <span className="text-[9px] text-white/30 font-mono font-medium whitespace-nowrap">{item.date}</span>
                                 </div>
-                                <h3 className="text-lg font-serif font-medium text-white/95 group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
+                                <h3 className="text-lg font-serif font-medium text-white group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
                                   {item.title}
                                 </h3>
                                 <div className="relative mt-auto">
-                                  <p className={`text-sm text-white/50 leading-relaxed line-clamp-3`}>
+                                  <p className="text-sm text-neutral-400 leading-relaxed font-sans line-clamp-3">
                                     {desc}
                                   </p>
                                 </div>
                               </div>
-                              <div className="mt-5 pt-5 border-t border-white/5 flex items-center justify-between shrink-0 z-10 pointer-events-none">
-                                <div className="flex gap-2">
-                                  {tickers.slice(0, 3).map((tick: string, i: number) => (
-                                    <span key={i} className="text-[9px] font-mono font-medium bg-white/5 text-white/60 px-1.5 py-0.5 rounded-sm">
+                              <div className="mt-5 pt-4 flex items-center justify-between shrink-0 z-10 pointer-events-none">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {tickers.slice(0, 4).map((tick: string, i: number) => (
+                                    <span key={i} className="text-[9px] font-mono font-bold uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-sm flex items-center gap-1">
                                       ${tick}
                                     </span>
                                   ))}
                                 </div>
                                 <span 
-                                  className="text-[10px] font-bold uppercase tracking-widest text-amber-500/80 group-hover/news:text-amber-400 transition-colors flex items-center gap-2"
+                                  className="text-[10px] font-bold uppercase tracking-widest text-amber-500 opacity-60 group-hover/news:opacity-100 transition-opacity flex items-center gap-1"
                                 >
-                                  Open Analysis Modal
+                                  Deep Analysis <ArrowUpRight size={12} />
                                 </span>
                               </div>
                             </div>
@@ -2133,7 +2208,7 @@ export default function App() {
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="bg-[#0A0B0E] border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.8)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden"
+                                className="bg-[#0A0B0E] border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.8)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh]"
                               >
                                 <div className="absolute top-0 right-0 opacity-5 pointer-events-none transform translate-x-1/4 -translate-y-1/4">
                                   <Zap size={300} />
@@ -2141,31 +2216,30 @@ export default function App() {
                                 
                                 <button
                                   onClick={() => setSelectedNews(null)}
-                                  className="absolute top-6 right-6 p-2 text-white/40 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                                  className="absolute top-6 right-6 p-2 text-white/40 hover:text-white rounded-full hover:bg-white/10 transition-colors z-50 bg-black/20"
                                 >
                                   <X size={20} />
                                 </button>
                                 
-                                <div className="flex items-center gap-4 mb-6">
-                                  <span className="text-xs font-bold uppercase tracking-widest px-3 py-1.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-md shrink-0">
-                                    {getDisplaySource(selectedNews.source)}
-                                  </span>
+                                <div className="overflow-y-auto custom-scrollbar pr-2 mt-4">
+                                  <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500 shrink-0">
+                                      {getDisplaySource(selectedNews.source)}
+                                    </span>
+                                    <span className="text-white/20 text-[10px]">•</span>
                                   {selectedNews.displaySentiment && (
                                      <span 
-                                       className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2 py-1 border rounded-md ${
-                                         selectedNews.displaySentiment === 'Positive' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                                         selectedNews.displaySentiment === 'Negative' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
-                                         'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+                                       className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest ${
+                                         selectedNews.displaySentiment === 'Positive' ? 'text-emerald-400' : 
+                                         selectedNews.displaySentiment === 'Negative' ? 'text-red-400' : 
+                                         'text-neutral-400'
                                        } shrink-0`}
                                        aria-label={`Sentiment: ${selectedNews.displaySentiment}`}
                                      >
-                                       {selectedNews.displaySentiment === 'Positive' ? <ArrowUpRight size={12} aria-hidden="true" /> : 
-                                        selectedNews.displaySentiment === 'Negative' ? <ArrowDownRight size={12} aria-hidden="true" /> : 
-                                        <Minus size={12} aria-hidden="true" />}
                                        {selectedNews.displaySentiment}
                                      </span>
                                   )}
-                                  <span className="text-xs text-white/40 font-mono font-medium">{selectedNews.date}</span>
+                                  <span className="ml-auto text-[10px] text-white/30 font-mono font-medium">{selectedNews.date}</span>
                                 </div>
                                 
                                 <h2 className="text-2xl md:text-3xl font-serif font-medium text-white leading-tight mb-8">
@@ -2174,23 +2248,35 @@ export default function App() {
                                 
                                 <div className="space-y-6">
                                   <div>
-                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-3 border-b border-white/10 pb-2">Institutional Summary</h4>
+                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-amber-500/50 mb-3">General Summary</h4>
                                     <p className="text-base text-white/80 leading-relaxed font-light">
                                       {selectedNews.displayDesc}
                                     </p>
+                                  </div>
+
+                                  <div>
+                                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#a8b8d0] mb-3 border-b border-[#2d3748] pb-2 mt-8">Source</h4>
+                                    <a 
+                                      href={selectedNews.url} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#234bd8] hover:bg-[#1a38a3] text-white rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                      Read Full Article <ExternalLink size={16} />
+                                    </a>
                                   </div>
                                   
                                   <div>
                                     <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-3 border-b border-white/10 pb-2 mt-8">Affected Tickers</h4>
                                     <div className="flex gap-3">
                                       {(selectedNews.displayTickers || []).map((ticker: string) => (
-                                        <span key={ticker} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white font-mono shadow-sm">
-                                          <Target size={14} className="text-emerald-500" />
-                                          {ticker}
+                                        <span key={ticker} className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs font-mono">
+                                          ${ticker}
                                         </span>
                                       ))}
                                     </div>
                                   </div>
+                                </div>
                                 </div>
                               </motion.div>
                            </motion.div>
@@ -2211,7 +2297,81 @@ export default function App() {
               </div>
 
               {/* Sidebar Info/Status */}
-              {!['vip-journal', 'vip-conversion', 'vip-gex'].includes(activeModule) && (
+              {activeModule === 'vip-alpha' ? (
+                <div className="lg:col-span-4 space-y-6">
+                   <div className="p-6 border border-amber-500/20 bg-[#0D0D11] rounded-xl relative overflow-hidden shadow-[0_4px_20px_rgba(245,158,11,0.05)]">
+                      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Cpu size={14} className="text-amber-500" />
+                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-white">AI Overall Sentiment Analysis</h3>
+                      </div>
+                      
+                      {(() => {
+                         if (newsLoading) {
+                           return (
+                             <div className="flex flex-col items-center justify-center py-6">
+                               <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin mb-3"></div>
+                               <div className="text-xs text-amber-500/80 uppercase tracking-widest animate-pulse">Scanning flow...</div>
+                             </div>
+                           );
+                         }
+
+                         const validNews = filteredNews.filter(n => n.sentiment && ['Positive', 'Negative', 'Neutral'].includes(n.sentiment));
+                         if (validNews.length === 0) return <div className="text-xs text-white/40 py-4">Awaiting intelligence...</div>;
+                         
+                         const pos = validNews.filter(n => n.sentiment === 'Positive').length;
+                         const neg = validNews.filter(n => n.sentiment === 'Negative').length;
+                         const neu = validNews.filter(n => n.sentiment === 'Neutral').length;
+                         const total = validNews.length;
+                         
+                         const posPct = (pos / total) * 100;
+                         const negPct = (neg / total) * 100;
+                         const neuPct = (neu / total) * 100;
+                         
+                         const dominant = pos > neg ? 'Net Positive' : neg > pos ? 'Net Negative' : 'Mixed / Neutral';
+                         const dominantColor = pos > neg ? 'text-emerald-400' : neg > pos ? 'text-red-400' : 'text-neutral-400';
+                         const analysisText = pos > neg ? 'Catalyst flow is heavily titled towards bullish positioning. Institutions are buying dips.' : neg > pos ? 'Catalyst flow shows structural weakness. Large participants are accelerating distribution.' : 'Conflicting fundamental drivers. Expect dealer mean-reversion chopping action.';
+                         
+                         return (
+                           <>
+                             <div className="mb-5">
+                               <div className={`text-xl font-serif italic mb-1 ${dominantColor}`}>{dominant}</div>
+                               <div className="text-[10px] text-white/40 uppercase tracking-widest">{total} Market Drivers Analyzed</div>
+                             </div>
+                             
+                             <div className="space-y-3 mb-5">
+                               <div>
+                                  <div className="flex justify-between text-[9px] font-mono mb-1">
+                                    <span className="text-emerald-400">Positive ({Math.round(posPct)}%)</span>
+                                    <span className="text-emerald-400">{pos}</span>
+                                  </div>
+                                  <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-emerald-500/80" style={{width: `${posPct}%`}}></div></div>
+                               </div>
+                               <div>
+                                  <div className="flex justify-between text-[9px] font-mono mb-1">
+                                    <span className="text-red-400">Negative ({Math.round(negPct)}%)</span>
+                                    <span className="text-red-400">{neg}</span>
+                                  </div>
+                                  <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-red-500/80" style={{width: `${negPct}%`}}></div></div>
+                               </div>
+                               <div>
+                                  <div className="flex justify-between text-[9px] font-mono mb-1">
+                                    <span className="text-neutral-400">Neutral ({Math.round(neuPct)}%)</span>
+                                    <span className="text-neutral-400">{neu}</span>
+                                  </div>
+                                  <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-neutral-500/80" style={{width: `${neuPct}%`}}></div></div>
+                               </div>
+                             </div>
+                             
+                             <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/10">
+                               <p className="text-xs text-amber-500/80 leading-relaxed italic">{analysisText}</p>
+                             </div>
+                           </>
+                         );
+                      })()}
+                   </div>
+                </div>
+              ) : !['vip-journal', 'vip-conversion', 'vip-gex'].includes(activeModule) && (
                 <div className="lg:col-span-4 space-y-6">
                    <div className="p-6 bg-white border border-black/5 shadow-sm rounded-sm">
                       <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4 opacity-40">System Diagnostics</h3>
