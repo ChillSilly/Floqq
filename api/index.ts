@@ -199,9 +199,9 @@ app.get('/api/news', async (req, res) => {
 
   try {
     const urls = [
-      'https://query2.finance.yahoo.com/v1/finance/search?q=financial%20news&quotesCount=0&newsCount=10',
-      'https://query2.finance.yahoo.com/v1/finance/search?q=us%20equities&quotesCount=0&newsCount=10',
-      'https://query2.finance.yahoo.com/v1/finance/search?q=tech%20stocks&quotesCount=0&newsCount=10'
+      'https://query2.finance.yahoo.com/v1/finance/search?q=financial%20news&quotesCount=0&newsCount=40',
+      'https://query2.finance.yahoo.com/v1/finance/search?q=us%20equities&quotesCount=0&newsCount=40',
+      'https://query2.finance.yahoo.com/v1/finance/search?q=tech%20stocks&quotesCount=0&newsCount=40'
     ];
     
     let allNews: any[] = [];
@@ -225,7 +225,7 @@ app.get('/api/news', async (req, res) => {
     }
     const mergedNews = Array.from(uniqueNews.values())
         .sort((a: any, b: any) => b.providerPublishTime - a.providerPublishTime)
-        .slice(0, 15);
+        .slice(0, 60);
 
     const newsData = mergedNews.map((item: any) => ({
       date: new Date(item.providerPublishTime * 1000).toISOString(),

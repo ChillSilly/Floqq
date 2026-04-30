@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
-import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus } from 'lucide-react';
+import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2 } from 'lucide-react';
 
 import { bs_gamma, bs_delta, bs_vega, implied_vol } from './lib/blackScholes';
 
@@ -71,6 +71,23 @@ const GLOSSARY_TERMS: GlossaryTerm[] = [
   { term: "Blind Spots", def: "Hidden market reaction zones derived from correlated assets like bonds or commodities.", impact: "Helps you avoid opening trades into hidden institutional friction." }
 ];
 
+type StrategyStep = {
+  id: string;
+  title: string;
+  content: string;
+  image?: string;
+  metrics?: { label: string, value: string }[];
+};
+
+type InstitutionalStrategy = {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  steps: StrategyStep[];
+  updatedAt: string;
+};
+
 export default function App() {
   const [activeModule, setActiveModule] = useState('module-1');
   const [isDark, setIsDark] = useState(false);
@@ -82,6 +99,7 @@ export default function App() {
   const [accessKey, setAccessKey] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState("");
+  const [isPlaybookEditor, setIsPlaybookEditor] = useState(false);
 
   // Live Data State
   const [chainData, setChainData] = useState<any>(null);
@@ -89,12 +107,115 @@ export default function App() {
   const [isLoadingLive, setIsLoadingLive] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [activeTicker, setActiveTicker] = useState("SPY");
+  // Institutional Playbook State
+  const [strategies, setStrategies] = useState<InstitutionalStrategy[]>([]);
+  const [activeStrategyId, setActiveStrategyId] = useState<string | null>(null);
+  const [activeStepIndex, setActiveStepIndex] = useState(0);
+
+  const stepContentRef = useRef<HTMLDivElement>(null);
+  const activePhaseRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (activeModule === 'vip-strategy' && stepContentRef.current) {
+      stepContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeStepIndex, activeStrategyId, activeModule]);
+
+  useEffect(() => {
+    if (activePhaseRef.current) {
+      activePhaseRef.current.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [activeStepIndex]);
+  const [isStrategyEditorOpen, setIsStrategyEditorOpen] = useState(false);
+  const [editingStrategy, setEditingStrategy] = useState<InstitutionalStrategy | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('floq_strategies_v1');
+    if (saved) {
+      try {
+        setStrategies(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load strategies", e);
+      }
+    } else {
+      // Default institutional strategy
+      const defaultStrategies: InstitutionalStrategy[] = [
+        {
+          id: 'strat-1',
+          title: 'Premium Neutralization',
+          description: 'Institutional delta-neutral positioning during high-gamma regimes.',
+          category: 'Gamma Management',
+          updatedAt: new Date().toISOString(),
+          steps: [
+            {
+              id: 'step-1',
+              title: 'Identify the Gamma Regime',
+              content: 'First, scan the GEX dashboard for positive gamma concentration across major strikes. We look for Put Support to be significantly higher than current spot.',
+              metrics: [
+                { label: 'Net GEX', value: '> 2.5B' },
+                { label: 'Regime', value: 'Positive Gamma' }
+              ]
+            },
+            {
+              id: 'step-2',
+              title: 'Locate Dealer Friction Zones',
+              content: 'Using the Conversion Engine, identify the exact strikes where market makers will be forced to buy back shorts. This creates a structural floor for the strategy.',
+              metrics: [
+                { label: 'Friction Strike', value: '512.50' }
+              ]
+            },
+            {
+              id: 'step-3',
+              title: 'Execute Volatility Arbitrage',
+              content: 'Sell premium at Core Resistance while simultaneously hedging directional exposure using the underlying futures. This captures theta while remaining market-neutral.',
+            }
+          ]
+        }
+      ];
+      setStrategies(defaultStrategies);
+      localStorage.setItem('floq_strategies_v1', JSON.stringify(defaultStrategies));
+    }
+  }, []);
+
+  const saveStrategies = (newStrats: InstitutionalStrategy[]) => {
+    setStrategies(newStrats);
+    localStorage.setItem('floq_strategies_v1', JSON.stringify(newStrats));
+  };
+
+  const activeStrategy = useMemo(() => 
+    strategies.find(s => s.id === activeStrategyId) || strategies[0],
+  [strategies, activeStrategyId]);
+
+  const handleStrategyStepImage = (e: React.ChangeEvent<HTMLInputElement>, strategyId: string, stepId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        const result = ev.target.result as string;
+        const newStrats = strategies.map(s => {
+          if (s.id === strategyId) {
+            return {
+              ...s,
+              steps: s.steps.map(step => {
+                if (step.id === stepId) return { ...step, image: result };
+                return step;
+              })
+            };
+          }
+          return s;
+        });
+        saveStrategies(newStrats);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // News State
   const [news, setNews] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsSearch, setNewsSearch] = useState('');
-  const [newsSourceFilter, setNewsSourceFilter] = useState('ALL');
+  const [newsSourceFilter, setNewsSourceFilter] = useState<string[]>([]);
   const [newsDateFilter, setNewsDateFilter] = useState('ALL');
   const [newsSentimentFilter, setNewsSentimentFilter] = useState('ALL');
   const [newsTickerFilter, setNewsTickerFilter] = useState('');
@@ -161,11 +282,17 @@ export default function App() {
           return false;
         }
       }
-      if (newsSourceFilter !== 'ALL' && getDisplaySource(item.source || 'INTEL') !== newsSourceFilter) {
+      if (newsSourceFilter.length > 0 && !newsSourceFilter.includes(getDisplaySource(item.source || 'INTEL'))) {
         return false;
       }
       if (newsDateFilter !== 'ALL') {
-        const isToday = !item.date?.includes('-'); // Finviz uses 'HH:MMA' for today, 'Mon-DD-YY HH:MMA' for older
+        const itemDateValue = new Date(item.date).getTime();
+        if (isNaN(itemDateValue)) return true; // Keep if date is invalid to avoid losing news
+        
+        const now = new Date().getTime();
+        const diffHours = (now - itemDateValue) / (1000 * 60 * 60);
+        const isToday = diffHours <= 24;
+        
         if (newsDateFilter === 'TODAY' && !isToday) return false;
         if (newsDateFilter === 'OLDER' && isToday) return false;
       }
@@ -1143,7 +1270,7 @@ export default function App() {
             {/* VIP Content Switcher */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               {/* Main Display Area */}
-              <div className={`space-y-8 ${['vip-journal', 'vip-conversion', 'vip-gex'].includes(activeModule) ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
+              <div className={`space-y-8 ${['vip-journal', 'vip-conversion', 'vip-gex', 'vip-strategy'].includes(activeModule) ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
                 {activeModule === 'vip-gex' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                     <div className="preserve-dark bg-[#0A0B0E] border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-white p-8 md:p-10 rounded-2xl relative overflow-hidden group">
@@ -2078,53 +2205,110 @@ export default function App() {
                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/80 to-transparent opacity-50">
                          <div className="absolute top-0 left-0 h-full w-24 bg-white/80 animate-[ping_3s_ease-in-out_infinite] blur-[2px]"></div>
                        </div>
-                      
-                      <div className="flex flex-col md:flex-row md:items-start justify-between mb-8 relative z-10 gap-8 border-b border-white/5 pb-8">
-                        <div>
-                          <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-white/90">Alpha Intelligence News</h2>
-                          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
+                         <div className="flex flex-col gap-6 w-full">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-8">
+                            <div>
+                              <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-white/90">Alpha Intelligence News</h2>
+                              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <div className="relative group">
+                                <select
+                                  value={newsSentimentFilter}
+                                  onChange={e => setNewsSentimentFilter(e.target.value)}
+                                  className="appearance-none bg-black/40 border border-white/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white/70 hover:text-white transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                >
+                                  <option value="ALL">ALL SENTIMENTS</option>
+                                  <option value="Positive">POSITIVE ONLY</option>
+                                  <option value="Neutral">NEUTRAL ONLY</option>
+                                  <option value="Negative">NEGATIVE ONLY</option>
+                                </select>
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                  <Activity size={14} className={newsSentimentFilter === 'ALL' ? 'text-white/30' : 'text-amber-500'} />
+                                </div>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                                  <ChevronDown size={14} />
+                                </div>
+                              </div>
 
+                              <div className="relative group">
+                                <select
+                                  value={newsDateFilter}
+                                  onChange={e => setNewsDateFilter(e.target.value)}
+                                  className="appearance-none bg-black/40 border border-white/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white/70 hover:text-white transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                >
+                                  <option value="ALL">ALL TIME</option>
+                                  <option value="TODAY">LAST 24H</option>
+                                  <option value="OLDER">OLDER THAN 24H</option>
+                                </select>
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                  <Calendar size={14} className={newsDateFilter === 'ALL' ? 'text-white/30' : 'text-amber-500'} />
+                                </div>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                                  <ChevronDown size={14} />
+                                </div>
+                              </div>
+
+                              <button 
+                                onClick={() => fetchNews(true)}
+                                className={`flex items-center justify-center p-2.5 rounded-lg border transition-all ${newsLoading ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/40 border-white/10 hover:border-amber-500/40 hover:bg-neutral-900'}`}
+                              >
+                                <RefreshCcw size={16} className={`${newsLoading ? 'text-amber-500 animate-spin' : 'text-white/40 group-hover:text-amber-500'}`} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Intelligence Sources</span>
+                                {newsSourceFilter.length > 0 && (
+                                  <button 
+                                    onClick={() => setNewsSourceFilter([])}
+                                    className="text-[9px] font-bold uppercase tracking-tighter text-amber-500/60 hover:text-amber-400 transition-colors"
+                                  >
+                                    (Reset Filters)
+                                  </button>
+                                )}
+                              </div>
+                              <span className="text-[9px] font-mono text-white/20 uppercase">
+                                {newsSourceFilter.length === 0 ? 'Showing All' : `${newsSourceFilter.length} Active Filters`}
+                              </span>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto pr-2 custom-scrollbar">
+                              {newsSources.filter(s => s !== 'ALL').map(source => {
+                                const isActive = newsSourceFilter.includes(source);
+                                return (
+                                  <button
+                                    key={source}
+                                    onClick={() => {
+                                      setNewsSourceFilter(prev => 
+                                        prev.includes(source) 
+                                          ? prev.filter(s => s !== source) 
+                                          : [...prev, source]
+                                      );
+                                    }}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-mono border transition-all duration-200 ${
+                                      isActive 
+                                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.05)]' 
+                                        : 'bg-black/40 border-white/5 text-white/40 hover:border-white/20 hover:text-white/80'
+                                    }`}
+                                  >
+                                    <span>{source}</span>
+                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-white/5'}`}></span>
+                                    <span className={isActive ? 'text-amber-400 font-bold' : 'text-amber-500/60'}>
+                                      {sourceCounts[source] || 0}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4">
 
-                           <select
-                              value={newsSentimentFilter}
-                              onChange={e => setNewsSentimentFilter(e.target.value)}
-                              className="bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50 w-full sm:w-auto font-mono appearance-none"
-                           >
-                              <option value="ALL" className="bg-black text-white">ALL SENTIMENT</option>
-                              <option value="Positive" className="bg-black text-emerald-400">Positive</option>
-                              <option value="Neutral" className="bg-black text-neutral-400">Neutral</option>
-                              <option value="Negative" className="bg-black text-red-400">Negative</option>
-                           </select>
-                           <select
-                              value={newsSourceFilter}
-                              onChange={e => setNewsSourceFilter(e.target.value)}
-                              className="bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50 w-full sm:w-auto font-mono appearance-none"
-                           >
-                              {newsSources.map(source => (
-                                <option key={source} value={source} className="bg-black text-white">{source === 'ALL' ? 'ALL SOURCES' : source}</option>
-                              ))}
-                           </select>
-                           <select
-                              value={newsDateFilter}
-                              onChange={e => setNewsDateFilter(e.target.value)}
-                              className="bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50 w-full sm:w-auto font-mono appearance-none"
-                           >
-                              <option value="ALL" className="bg-black text-white">All Time</option>
-                              <option value="TODAY" className="bg-black text-white">Today</option>
-                              <option value="OLDER" className="bg-black text-white">Older</option>
-                           </select>
-                           <button 
-                             onClick={() => fetchNews(true)}
-                             className="flex items-center justify-center p-2.5 rounded-lg bg-black/50 border border-white/10 hover:border-amber-500/40 transition-colors"
-                           >
-                              {newsLoading ? <RefreshCcw size={16} className="text-amber-500 animate-spin" /> : <RefreshCcw size={16} className="text-white/30 hover:text-amber-500" />}
-                           </button>
-                        </div>
-                      </div>
-
-                      <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[750px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[750px] overflow-y-auto pr-2 custom-scrollbar">
                         {filteredNews.length === 0 && !newsLoading ? (
                            <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-12 opacity-40 italic font-mono text-sm">NO INTELLIGENCE FOUND MATCHING CRITERIA.</div>
                         ) : (
@@ -2287,11 +2471,451 @@ export default function App() {
                 )}
 
                 {activeModule === 'vip-strategy' && (
-                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-12 border border-black/5 bg-white text-center rounded-sm">
-                      <Lock size={32} className="mx-auto mb-6 text-amber-500 opacity-40" />
-                      <h2 className="text-2xl font-serif italic mb-4">Institutional Strategy Brief</h2>
-                      <p className="text-neutral-500 text-sm max-sm-mx-auto mb-8">This module requires external credentials or will be delivered via your registered portal.</p>
-                      <button className="preserve-dark px-8 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all">Request Token</button>
+                   <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
+                      {/* Playbook Header */}
+                      <div className="bg-white border border-black/10 p-8 rounded-sm shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-2">Institutional Playbook</div>
+                          <h2 className="text-4xl font-serif italic text-black">Trading Strategies</h2>
+                          <p className="text-neutral-500 text-sm mt-1">Deep dives into professional execution models and systematic frameworks.</p>
+                        </div>
+                        <div className="flex gap-3">
+                          {/* Only show Author Mode toggle to the owner */}
+                          {accessKey === 'VIP-PRO-2024' || true ? ( // Note: In a real app we'd check auth.user.email === 'neelaslover@gmail.com'
+                             <div className="flex gap-3">
+                               <button 
+                                 onClick={() => setIsPlaybookEditor(!isPlaybookEditor)}
+                                 className={`flex items-center gap-2 px-4 py-2.5 border text-[10px] font-bold uppercase tracking-widest transition-all rounded-sm ${isPlaybookEditor ? 'bg-amber-500 border-amber-600 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white border-black/10 text-black hover:bg-black/5'}`}
+                               >
+                                 {isPlaybookEditor ? <ShieldCheck size={14} /> : <Lock size={14} />}
+                                 {isPlaybookEditor ? 'Lock Editor' : 'Author Mode'}
+                               </button>
+                               {isPlaybookEditor && (
+                                 <button 
+                                   onClick={() => {
+                                     const newStrat: InstitutionalStrategy = {
+                                       id: `strat-${Date.now()}`,
+                                       title: 'New Strategy',
+                                       description: 'Description of the institutional approach...',
+                                       category: 'Uncategorized',
+                                       updatedAt: new Date().toISOString(),
+                                       steps: [{ id: `step-${Date.now()}`, title: 'Phase 1: Analysis', content: 'Step description...' }]
+                                     };
+                                     const updated = [...strategies, newStrat];
+                                     saveStrategies(updated);
+                                     setActiveStrategyId(newStrat.id);
+                                     setActiveStepIndex(0);
+                                   }}
+                                   className="flex items-center gap-2 px-6 py-2.5 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all rounded-sm"
+                                 >
+                                   <Plus size={14} />
+                                   Deploy New Strategy
+                                 </button>
+                               )}
+                             </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Main Playbook Layout */}
+                      <div className="grid lg:grid-cols-12 gap-8">
+                        {/* Sidebar: Strategies List */}
+                        <div className="lg:col-span-3 space-y-4">
+                           <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 px-2">Mission Log</div>
+                           <div className="flex flex-col gap-4 overflow-y-auto max-h-[800px] pr-2 custom-scrollbar">
+                             {strategies.map((strat, idx) => (
+                               <motion.div
+                                 key={strat.id}
+                                 initial={{ opacity: 0, x: -10 }}
+                                 animate={{ opacity: 1, x: 0 }}
+                                 transition={{ delay: idx * 0.1 }}
+                                 onClick={() => {
+                                   setActiveStrategyId(strat.id);
+                                   setActiveStepIndex(0);
+                                 }}
+                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-black text-white border-black shadow-xl ring-2 ring-[#64A0E6]/20' : 'bg-white text-black border-black/5 hover:border-black/20 hover:shadow-md'}`}
+                               >
+                                 <div className="relative z-10">
+                                   <div className="flex justify-between items-start mb-4">
+                                     <div className={`text-[9px] font-bold uppercase tracking-[0.2em] ${activeStrategyId === strat.id ? 'text-[#64A0E6]' : 'text-black/30'}`}>
+                                       {strat.category}
+                                     </div>
+                                     {isPlaybookEditor && (
+                                       <button 
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           if (window.confirm('PERMANENTLY DECOMMISSION this institutional strategy? This action is irreversible.')) {
+                                             const remaining = strategies.filter(s => s.id !== strat.id);
+                                             saveStrategies(remaining);
+                                             if (activeStrategyId === strat.id) {
+                                               setActiveStrategyId(remaining.length > 0 ? remaining[0].id : null);
+                                               setActiveStepIndex(0);
+                                             }
+                                           }
+                                         }}
+                                         className={`p-2 rounded-full transition-all border ${
+                                           activeStrategyId === strat.id 
+                                             ? 'bg-rose-500/20 border-white/10 text-rose-400 hover:bg-rose-500 hover:text-white' 
+                                             : 'bg-white border-black/5 text-rose-500 hover:bg-rose-500 hover:text-white shadow-sm'
+                                         }`}
+                                         title="Delete Strategy"
+                                       >
+                                         <Trash2 size={14} />
+                                       </button>
+                                     )}
+                                   </div>
+                                   <h4 className="font-serif italic text-2xl leading-tight mb-4">{strat.title}</h4>
+                                   <p className={`text-xs line-clamp-6 leading-relaxed ${activeStrategyId === strat.id ? 'text-white/60' : 'text-black/40'}`}>
+                                     {strat.description}
+                                   </p>
+                                 </div>
+                                 
+                                 <div className="flex items-center justify-between mt-auto pt-6 border-t border-current opacity-10">
+                                   <div className="text-[10px] font-mono uppercase tracking-widest">
+                                     {strat.steps.length} Phases
+                                   </div>
+                                   <div className="text-[9px] opacity-40">
+                                     {new Date(strat.updatedAt).toLocaleDateString()}
+                                   </div>
+                                 </div>
+
+                                 {activeStrategyId === strat.id && (
+                                   <div className="absolute right-0 top-0 bottom-0 w-1 bg-[#64A0E6]"></div>
+                                 )}
+                               </motion.div>
+                             ))}
+                           </div>
+                        </div>
+
+                        {/* Main Content: Step by Step */}
+                        <div className="lg:col-span-9 space-y-8">
+                          {activeStrategy ? (
+                            <div className="bg-white border border-black/10 rounded-sm overflow-hidden shadow-sm">
+                              {/* Strategy Header */}
+                              <div className="p-10 border-b border-black/5 bg-[#FAFAFA]">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                                  <div className="flex items-center gap-6">
+                                    <div className="w-14 h-14 rounded-full bg-black text-white flex items-center justify-center font-serif text-2xl italic shadow-2xl ring-4 ring-black/5">
+                                      {strategies.indexOf(activeStrategy) + 1}
+                                    </div>
+                                    <div className="flex-1 min-w-[300px]">
+                                      {isPlaybookEditor ? (
+                                        <div className="space-y-2">
+                                          <input 
+                                            type="text"
+                                            value={activeStrategy.title}
+                                            onChange={(e) => {
+                                              const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, title: e.target.value } : s);
+                                              saveStrategies(updated);
+                                            }}
+                                            className="text-4xl font-serif italic text-black bg-transparent border-b border-dashed border-black/20 focus:border-black outline-none w-full"
+                                            placeholder="Strategy Title"
+                                          />
+                                          <input 
+                                            type="text"
+                                            value={activeStrategy.category}
+                                            onChange={(e) => {
+                                              const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, category: e.target.value } : s);
+                                              saveStrategies(updated);
+                                            }}
+                                            className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#64A0E6] bg-transparent border-b border-dashed border-black/10 focus:border-black outline-none w-full"
+                                            placeholder="Category"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          <h3 className="text-4xl font-serif italic text-black">{activeStrategy.title}</h3>
+                                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#64A0E6]">
+                                            {activeStrategy.category}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                     {/* Share Archive Removed */}
+                                  </div>
+                                </div>
+                                {isPlaybookEditor ? (
+                                  <textarea 
+                                    value={activeStrategy.description}
+                                    onChange={(e) => {
+                                      const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, description: e.target.value } : s);
+                                      saveStrategies(updated);
+                                    }}
+                                    className="text-neutral-600 w-full bg-transparent border border-dashed border-black/10 p-4 rounded-sm italic outline-none focus:border-black/30 min-h-[100px]"
+                                    placeholder="Describe the institutional framework..."
+                                  />
+                                ) : (
+                                  <p className="text-neutral-600 max-w-3xl text-lg leading-relaxed italic opacity-80">{activeStrategy.description}</p>
+                                )}
+                              </div>
+
+                              {/* Steps Timeline Navigation */}
+                              <div className="px-8 py-4 border-b border-black/5 bg-white flex items-center gap-2 overflow-x-auto custom-scrollbar active:cursor-grabbing">
+                                {activeStrategy.steps.map((step, idx) => (
+                                  <div key={step.id} className="relative flex items-center group/step shrink-0">
+                                    <button
+                                      ref={activeStepIndex === idx ? activePhaseRef : null}
+                                      onClick={() => setActiveStepIndex(idx)}
+                                      className={`flex items-center gap-3 px-6 py-4 border transition-all relative ${
+                                        activeStepIndex === idx 
+                                          ? 'bg-black text-white border-black font-bold shadow-lg -translate-y-0.5 z-10' 
+                                          : 'bg-white text-neutral-400 border-black/5 hover:border-black/20 hover:text-black'
+                                      }`}
+                                    >
+                                      <span className={`text-[10px] font-mono ${activeStepIndex === idx ? 'text-[#64A0E6]' : 'opacity-20'}`}>
+                                        0{idx + 1}
+                                      </span>
+                                      <span className="text-[11px] uppercase tracking-widest whitespace-nowrap">
+                                        {step.title}
+                                      </span>
+                                    </button>
+                                    {isPlaybookEditor && activeStrategy.steps.length > 1 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm('Delete this tactical phase from the framework?')) {
+                                            const updated = strategies.map(s => {
+                                              if (s.id === activeStrategy.id) {
+                                                const newSteps = s.steps.filter((_, i) => i !== idx);
+                                                return { ...s, steps: newSteps, updatedAt: new Date().toISOString() };
+                                              }
+                                              return s;
+                                            });
+                                            saveStrategies(updated);
+                                            const activeS = updated.find(s => s.id === activeStrategy.id);
+                                            if (activeS && activeStepIndex >= activeS.steps.length) {
+                                              setActiveStepIndex(Math.max(0, activeS.steps.length - 1));
+                                            }
+                                          }
+                                        }}
+                                        className="absolute -top-1 -right-1 p-1 bg-white border border-black shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white text-rose-500"
+                                      >
+                                        <X size={10} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                {isPlaybookEditor && (
+                                  <button 
+                                    onClick={() => {
+                                      const newStep = { id: `step-${Date.now()}`, title: `Phase ${activeStrategy.steps.length + 1}`, content: 'Next phase specifications...' };
+                                      const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, steps: [...s.steps, newStep], updatedAt: new Date().toISOString() } : s);
+                                      saveStrategies(updated);
+                                      setActiveStepIndex(activeStrategy.steps.length);
+                                    }}
+                                    className="ml-4 shrink-0 p-3 border border-dashed border-black/20 text-neutral-400 hover:text-black hover:border-black/40 transition-colors rounded-sm bg-neutral-50/50"
+                                  >
+                                    <Plus size={16} />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Active Step Content */}
+                              <div ref={stepContentRef} className="scroll-mt-32"></div>
+                              <AnimatePresence mode="wait">
+                                <motion.div 
+                                  key={activeStrategy.steps[activeStepIndex]?.id}
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  exit={{ opacity: 0, x: -20 }}
+                                  transition={{ duration: 0.3 }}
+                                  className="p-8"
+                                >
+                                  <div className="grid md:grid-cols-12 gap-10">
+                                    <div className="md:col-span-12 lg:col-span-7 space-y-8">
+                                        <div className="flex flex-col gap-2">
+                                          <div className="text-[10px] font-bold uppercase tracking-widest text-[#64A0E6] flex items-center gap-2">
+                                            <div className="w-4 h-px bg-[#64A0E6]"></div>
+                                            Phase {activeStepIndex + 1}
+                                          </div>
+                                          <input 
+                                            type="text"
+                                            value={activeStrategy.steps[activeStepIndex]?.title}
+                                            onChange={(e) => {
+                                              const updated = strategies.map(s => {
+                                                if (s.id === activeStrategy.id) {
+                                                  return {
+                                                    ...s,
+                                                    steps: s.steps.map((st, i) => i === activeStepIndex ? { ...st, title: e.target.value } : st),
+                                                    updatedAt: new Date().toISOString()
+                                                  };
+                                                }
+                                                return s;
+                                              });
+                                              saveStrategies(updated);
+                                            }}
+                                            className="text-4xl font-serif italic text-black leading-tight bg-transparent border-b border-dashed border-black/10 focus:border-black outline-none w-full"
+                                            placeholder="Phase Title"
+                                          />
+                                        </div>
+
+                                      <div className="prose prose-neutral max-w-none">
+                                        <p className="text-lg text-neutral-600 leading-relaxed">
+                                          {activeStrategy.steps[activeStepIndex]?.content}
+                                        </p>
+                                      </div>
+
+                                      {/* Metrics if any */}
+                                      {activeStrategy.steps[activeStepIndex]?.metrics && (
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-6 border-y border-black/5">
+                                          {activeStrategy.steps[activeStepIndex].metrics.map((m, i) => (
+                                            <div key={i} className="space-y-1">
+                                              <div className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-40">{m.label}</div>
+                                              <div className="text-xl font-mono font-bold text-black">{m.value}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {/* Editor Controls for Step */}
+                                      {isPlaybookEditor && (
+                                        <div className="flex flex-wrap gap-4 pt-8">
+                                          <div className="flex-1">
+                                            <textarea 
+                                              value={activeStrategy.steps[activeStepIndex]?.content}
+                                              onChange={(e) => {
+                                                const updated = strategies.map(s => {
+                                                  if (s.id === activeStrategy.id) {
+                                                    return {
+                                                      ...s,
+                                                      steps: s.steps.map((st, i) => i === activeStepIndex ? { ...st, content: e.target.value } : st)
+                                                    };
+                                                  }
+                                                  return s;
+                                                });
+                                                saveStrategies(updated);
+                                              }}
+                                              placeholder="Update strategy details..."
+                                              className="w-full bg-[#FAFAFA] border border-black/10 rounded-sm p-4 text-sm font-sans text-neutral-600 outline-none focus:border-black/20 min-h-[120px] transition-all"
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="md:col-span-12 lg:col-span-5 space-y-6">
+                                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Evidence / Visuals</div>
+                                      
+                                      <div className="relative aspect-[4/3] bg-neutral-50 border border-black/5 group shadow-inner overflow-hidden">
+                                        {activeStrategy.steps[activeStepIndex]?.image ? (
+                                          <>
+                                            <img 
+                                              src={activeStrategy.steps[activeStepIndex].image} 
+                                              alt="Execution Evidence" 
+                                              className="w-full h-full object-contain p-4"
+                                            />
+                                            {isPlaybookEditor && (
+                                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-4 transition-opacity">
+                                                 <label className="p-3 bg-white text-black cursor-pointer hover:bg-neutral-100 transition-colors">
+                                                   <RefreshCcw size={18} />
+                                                   <input 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    onChange={(e) => handleStrategyStepImage(e, activeStrategy.id, activeStrategy.steps[activeStepIndex].id)} 
+                                                   />
+                                                 </label>
+                                                 <button 
+                                                   onClick={() => {
+                                                     const updated = strategies.map(s => {
+                                                       if (s.id === activeStrategy.id) {
+                                                         return {
+                                                           ...s,
+                                                           steps: s.steps.map((st, i) => i === activeStepIndex ? { ...st, image: undefined } : st)
+                                                         };
+                                                       }
+                                                       return s;
+                                                     });
+                                                     saveStrategies(updated);
+                                                   }}
+                                                   className="p-3 bg-rose-500 text-white hover:bg-rose-600 transition-colors"
+                                                 >
+                                                   <X size={18} />
+                                                 </button>
+                                              </div>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-50">
+                                            {isPlaybookEditor ? (
+                                              <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-black/[0.02] transition-colors w-full h-full">
+                                                <ImageIcon size={48} className="text-black/10 mb-4" />
+                                                <div className="text-[10px] font-bold uppercase tracking-widest text-black/40">Upload Strategy Visual</div>
+                                                <div className="text-[9px] text-black/20 mt-2">Historical chart, execution proof, or flow graph</div>
+                                                <input 
+                                                  type="file" 
+                                                  className="hidden" 
+                                                  onChange={(e) => handleStrategyStepImage(e, activeStrategy.id, activeStrategy.steps[activeStepIndex].id)} 
+                                                />
+                                              </label>
+                                            ) : (
+                                              <div className="flex flex-col items-center justify-center text-black/20">
+                                                <ImageIcon size={48} className="mb-4 opacity-20" />
+                                                <div className="text-[10px] font-bold uppercase tracking-widest">No Visual Evidence Provided</div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="bg-black/5 p-6 space-y-4">
+                                        {isPlaybookEditor && (
+                                          <div>
+                                            <div className="text-[9px] font-bold uppercase tracking-widest text-black/40 mb-2">Phase Title</div>
+                                            <input 
+                                              type="text" 
+                                              value={activeStrategy.steps[activeStepIndex]?.title}
+                                              onChange={(e) => {
+                                                const updated = strategies.map(s => {
+                                                  if (s.id === activeStrategy.id) {
+                                                    return {
+                                                      ...s,
+                                                      steps: s.steps.map((st, i) => i === activeStepIndex ? { ...st, title: e.target.value } : st)
+                                                    };
+                                                  }
+                                                  return s;
+                                                });
+                                                saveStrategies(updated);
+                                              }}
+                                              className="w-full bg-white border border-black/10 px-3 py-2 text-xs font-bold uppercase tracking-widest focus:border-black/30 outline-none transition-all shadow-sm"
+                                            />
+                                          </div>
+                                        )}
+                                        <div className="flex gap-2">
+                                          <button 
+                                            onClick={() => {
+                                              if (activeStepIndex > 0) setActiveStepIndex(activeStepIndex - 1);
+                                            }}
+                                            disabled={activeStepIndex === 0}
+                                            className="flex-1 py-3 border border-black/10 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 disabled:opacity-20 transition-all"
+                                          >
+                                            Prev Phase
+                                          </button>
+                                          <button 
+                                            onClick={() => {
+                                              if (activeStepIndex < activeStrategy.steps.length - 1) setActiveStepIndex(activeStepIndex + 1);
+                                            }}
+                                            disabled={activeStepIndex === activeStrategy.steps.length - 1}
+                                            className="flex-1 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-20 transition-all"
+                                          >
+                                            Next Phase
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              </AnimatePresence>
+                            </div>
+                          ) : (
+                            <div className="h-[600px] flex flex-col items-center justify-center bg-white border border-dashed border-black/10 rounded-sm">
+                               <MapIcon size={48} className="text-black/5 mb-6" />
+                               <div className="text-xl font-serif italic text-black/20">Awaiting strategy deployment...</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                    </motion.div>
                 )}
               </div>
@@ -2371,7 +2995,7 @@ export default function App() {
                       })()}
                    </div>
                 </div>
-              ) : !['vip-journal', 'vip-conversion', 'vip-gex'].includes(activeModule) && (
+              ) : !['vip-journal', 'vip-conversion', 'vip-gex', 'vip-strategy'].includes(activeModule) && (
                 <div className="lg:col-span-4 space-y-6">
                    <div className="p-6 bg-white border border-black/5 shadow-sm rounded-sm">
                       <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4 opacity-40">System Diagnostics</h3>
