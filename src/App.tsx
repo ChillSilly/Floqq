@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
-import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2 } from 'lucide-react';
+import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2 } from 'lucide-react';
 
 import { bs_gamma, bs_delta, bs_vega, implied_vol } from './lib/blackScholes';
+import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from './lib/firebase';
 
 const RISK_FREE_RATE = 0.043;
 const DIV_YIELD: Record<string, number> = {
@@ -92,7 +93,38 @@ export default function App() {
   const [activeModule, setActiveModule] = useState('module-1');
   const [isDark, setIsDark] = useState(false);
   const [isVIPOpen, setIsVIPOpen] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      console.error("Login failed:", err);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
+
   // Key Access State
   const [hasAccess, setHasAccess] = useState(false);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
@@ -773,15 +805,17 @@ export default function App() {
           Trading Guide
         </div>
 
-        <button
-          onClick={() => setIsVIPOpen(true)}
-          className="flex items-center gap-3 px-3 py-3 text-left transition-all mb-4 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm group relative overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-linear-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-          <Crown size={14} className="text-amber-500 fill-amber-500/20" />
-          <span className="text-[11px] font-bold uppercase tracking-wider flex-1 text-amber-500">VIP Access</span>
-          <ChevronRight size={14} className="text-amber-500 opacity-50 group-hover:opacity-100 transition-opacity" />
-        </button>
+        {!hasAccess && (
+          <button
+            onClick={() => setIsVIPOpen(true)}
+            className="flex items-center gap-3 px-3 py-3 text-left transition-all mb-4 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm group relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-linear-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            <Crown size={14} className="text-amber-500 fill-amber-500/20" />
+            <span className="text-[11px] font-bold uppercase tracking-wider flex-1 text-amber-500">VIP Access</span>
+            <ChevronRight size={14} className="text-amber-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </button>
+        )}
         
         <div className="flex flex-col gap-2">
           {(hasAccess ? VIP_MODULES : MODULES).map((mod, idx) => {
@@ -821,8 +855,52 @@ export default function App() {
              <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-700">Institutional Session</span>
            </div>
         )}
+
+        <div className="mt-auto px-1 py-4 mb-2">
+            {user ? (
+                <div id="user-profile-section" className="flex flex-col gap-3 p-3 bg-black/5 border border-black/5 rounded-sm">
+                    <div className="flex items-center gap-3">
+                        {user.photoURL ? (
+                            <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-black/10" />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-black/10 flex items-center justify-center">
+                                <UserIcon size={14} className="opacity-40" />
+                            </div>
+                        )}
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[11px] font-bold truncate text-black leading-none mb-1">
+                                {user.displayName || 'Anonymous'}
+                            </span>
+                            <span className="text-[9px] font-medium opacity-40 truncate">
+                                {user.email}
+                            </span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={handleLogout}
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-white border border-black/10 hover:bg-black/5 transition-all text-[9px] font-bold uppercase tracking-widest"
+                    >
+                        <LogOut size={12} />
+                        Logout
+                    </button>
+                </div>
+            ) : (
+                <button 
+                    onClick={handleLogin}
+                    disabled={isLoggingIn}
+                    className="flex items-center gap-3 w-full px-3 py-3 bg-black text-white hover:bg-neutral-800 transition-all rounded-sm group overflow-hidden relative shadow-lg"
+                >
+                    <div className="absolute inset-0 bg-white/10 -translate-x-full group-hover:translate-x-0 transition-transform duration-500"></div>
+                    <LogIn size={14} className="relative z-10" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest flex-1 relative z-10">
+                        {isLoggingIn ? 'Connecting...' : 'Secure Login'}
+                    </span>
+                    <ChevronRight size={14} className="relative z-10 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </button>
+            )}
+        </div>
         
-        <div className="mt-auto pt-6 border-t border-black/10 flex items-center justify-between">
+        <div className="pt-6 border-t border-black/10 flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest opacity-40 font-bold mt-1">
             Vol. 01 — Journal
           </div>
@@ -2544,13 +2622,11 @@ export default function App() {
                                        <button 
                                          onClick={(e) => {
                                            e.stopPropagation();
-                                           if (window.confirm('PERMANENTLY DECOMMISSION this institutional strategy? This action is irreversible.')) {
-                                             const remaining = strategies.filter(s => s.id !== strat.id);
-                                             saveStrategies(remaining);
-                                             if (activeStrategyId === strat.id) {
-                                               setActiveStrategyId(remaining.length > 0 ? remaining[0].id : null);
-                                               setActiveStepIndex(0);
-                                             }
+                                           const remaining = strategies.filter(s => s.id !== strat.id);
+                                           saveStrategies(remaining);
+                                           if (activeStrategyId === strat.id) {
+                                             setActiveStrategyId(remaining.length > 0 ? remaining[0].id : null);
+                                             setActiveStepIndex(0);
                                            }
                                          }}
                                          className={`p-2 rounded-full transition-all border ${
@@ -2675,19 +2751,17 @@ export default function App() {
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          if (window.confirm('Delete this tactical phase from the framework?')) {
-                                            const updated = strategies.map(s => {
-                                              if (s.id === activeStrategy.id) {
-                                                const newSteps = s.steps.filter((_, i) => i !== idx);
-                                                return { ...s, steps: newSteps, updatedAt: new Date().toISOString() };
-                                              }
-                                              return s;
-                                            });
-                                            saveStrategies(updated);
-                                            const activeS = updated.find(s => s.id === activeStrategy.id);
-                                            if (activeS && activeStepIndex >= activeS.steps.length) {
-                                              setActiveStepIndex(Math.max(0, activeS.steps.length - 1));
+                                          const updated = strategies.map(s => {
+                                            if (s.id === activeStrategy.id) {
+                                              const newSteps = s.steps.filter((_, i) => i !== idx);
+                                              return { ...s, steps: newSteps, updatedAt: new Date().toISOString() };
                                             }
+                                            return s;
+                                          });
+                                          saveStrategies(updated);
+                                          const activeS = updated.find(s => s.id === activeStrategy.id);
+                                          if (activeS && activeStepIndex >= activeS.steps.length) {
+                                            setActiveStepIndex(Math.max(0, activeS.steps.length - 1));
                                           }
                                         }}
                                         className="absolute -top-1 -right-1 p-1 bg-white border border-black shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white text-rose-500"
@@ -2800,12 +2874,18 @@ export default function App() {
                                       
                                       <div className="relative aspect-[4/3] bg-neutral-50 border border-black/5 group shadow-inner overflow-hidden">
                                         {activeStrategy.steps[activeStepIndex]?.image ? (
-                                          <>
+                                          <div className="relative group/image h-full w-full">
                                             <img 
                                               src={activeStrategy.steps[activeStepIndex].image} 
                                               alt="Execution Evidence" 
-                                              className="w-full h-full object-contain p-4"
+                                              className="w-full h-full object-contain p-4 cursor-zoom-in transition-transform duration-300 group-hover/image:scale-[1.02]"
+                                              onClick={() => setZoomedImage(activeStrategy.steps[activeStepIndex].image!)}
                                             />
+                                            <div className="absolute top-4 right-4 opacity-0 group-hover/image:opacity-100 transition-opacity pointer-events-none">
+                                              <div className="bg-black/50 backdrop-blur-sm text-white p-2 rounded-full">
+                                                <Maximize2 size={14} />
+                                              </div>
+                                            </div>
                                             {isPlaybookEditor && (
                                               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-4 transition-opacity">
                                                  <label className="p-3 bg-white text-black cursor-pointer hover:bg-neutral-100 transition-colors">
@@ -2835,7 +2915,7 @@ export default function App() {
                                                  </button>
                                               </div>
                                             )}
-                                          </>
+                                          </div>
                                         ) : (
                                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-50">
                                             {isPlaybookEditor ? (
@@ -3207,6 +3287,41 @@ export default function App() {
                 </div>
               </motion.div>
             </div>
+          )}
+        </AnimatePresence>
+
+        {/* Global Zoom Preview Modal */}
+        <AnimatePresence>
+          {zoomedImage && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setZoomedImage(null)}
+              className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-12 cursor-zoom-out"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="relative max-w-7xl max-h-full"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img 
+                  src={zoomedImage} 
+                  alt="Zoomed View" 
+                  className="w-full h-full object-contain shadow-2xl rounded-sm" 
+                />
+                <button 
+                  onClick={() => setZoomedImage(null)}
+                  className="absolute -top-12 right-0 p-2 text-white/50 hover:text-white transition-colors flex items-center gap-2 group"
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Close Preview</span>
+                  <X size={24} />
+                </button>
+              </motion.div>
+            </motion.div>
           )}
         </AnimatePresence>
 
