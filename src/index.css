@@ -8,6 +8,19 @@
 }
 
 @layer utilities {
+  .text-glow-sm {
+    text-shadow: 0 0 10px currentColor;
+  }
+  .title-elegant {
+    @apply font-serif italic tracking-tight;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.05);
+  }
+  .bg-soft-gradient {
+    background: linear-gradient(135deg, rgba(255,255,255,1) 0%, rgba(240,249,255,1) 100%);
+  }
+  .card-premium {
+    @apply bg-white border border-black/5 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] hover:shadow-[0_20px_40px_-20px_rgba(0,0,0,0.2)] transition-all duration-500 rounded-2xl;
+  }
   .custom-scrollbar::-webkit-scrollbar {
     width: 3px;
   }
@@ -21,7 +34,6 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.1);
   }
-  
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -33,7 +45,11 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: #FDFCFB;
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(210,100%,98%,1) 0, transparent 50%), 
+    radial-gradient(at 50% 0%, hsla(220,100%,97%,1) 0, transparent 50%), 
+    radial-gradient(at 100% 0%, hsla(230,100%,98%,1) 0, transparent 50%);
   color: #1A1A1A;
   -webkit-font-smoothing: antialiased;
 }

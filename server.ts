@@ -21,8 +21,12 @@ const cache: Record<string, { data: any; ts: number }> = {};
 const CACHE_TTL = 58 * 1000; // 58 seconds
 
 const SYSTEM_HEADERS_B = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  'Accept': 'application/json',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Origin': 'https://finance.yahoo.com',
+  'Referer': 'https://finance.yahoo.com/',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache'
 };
 
 const SYSTEM_HEADERS_A = {
@@ -60,12 +64,12 @@ app.get('/api/ratio/:ticker', async (req, res) => {
     const futuresTicker = symbolMapping[ticker] || 'ES=F';
     
     // Fetch Futures Price
-    const futureRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B });
+    const futureRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
     const futureMeta = futureRes.data.chart.result[0].meta;
     const futurePrice = futureMeta.regularMarketPrice || futureMeta.previousClose;
 
     // Fetch Spot Price (the ETF)
-    const spotRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B });
+    const spotRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
     const spotMeta = spotRes.data.chart.result[0].meta;
     const spotPrice = spotMeta.regularMarketPrice || spotMeta.previousClose;
 
@@ -94,7 +98,7 @@ app.get('/api/chain/:symbol', async (req, res) => {
     // 1. Fetch spot price from Yahoo
     let spotPrice = 0;
     try {
-      const spotRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B });
+      const spotRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
       const spotMeta = spotRes.data.chart.result[0].meta;
       spotPrice = spotMeta.regularMarketPrice || spotMeta.previousClose;
     } catch(err) {
@@ -202,6 +206,47 @@ app.get('/api/spot/:ticker', async (req, res) => {
   }
 });
 
+app.get('/api/yahoo/chart/:ticker', async (req, res) => {
+  const { ticker } = req.params;
+  const { interval = '5m', range = '1d' } = req.query;
+  
+  if (!ticker || ticker === 'undefined') {
+    return res.status(400).json({ error: 'Ticker is required' });
+  }
+
+  try {
+    const symbolMapping: Record<string, string> = {
+      'SPY': 'SPY',
+      'QQQ': 'QQQ',
+      'IWM': 'IWM',
+    };
+    
+    const symbol = symbolMapping[ticker] || ticker;
+    // Yahoo often blocks v8, v10 or v11 might be more stable in some regions
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
+    
+    const response = await axios.get(url, { 
+      headers: SYSTEM_HEADERS_B,
+      timeout: 8000,
+      validateStatus: (status) => status < 500 // Allow 404 to come through so we can handle it
+    });
+
+    if (response.status !== 200) {
+      console.warn(`Yahoo API returned ${response.status} for ${symbol}`);
+      return res.status(response.status).json(response.data || { error: 'Yahoo API Error' });
+    }
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Yahoo Chart Fetch Error:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch chart data',
+      message: error.message,
+      ticker
+    });
+  }
+});
+
 app.get('/api/news', async (req, res) => {
   const cacheKey = 'yahoo_news_ai_v3';
   const force = req.query.force === 'true';
@@ -220,7 +265,7 @@ app.get('/api/news', async (req, res) => {
     let allNews: any[] = [];
     
     try {
-       const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_A })));
+       const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_A, timeout: 10000 })));
        responses.forEach(r => {
           if (r.data && r.data.news) {
              allNews = allNews.concat(r.data.news);

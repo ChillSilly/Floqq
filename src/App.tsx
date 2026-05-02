@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
-import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2 } from 'lucide-react';
+import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info } from 'lucide-react';
+import { TradingViewWidget } from './components/TradingViewWidget';
+import { BeautifulChart } from './components/BeautifulChart';
+import { GexDashboardChart } from './components/GexDashboardChart';
 
 import { bs_gamma, bs_delta, bs_vega, implied_vol } from './lib/blackScholes';
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from './lib/firebase';
@@ -9,7 +12,7 @@ import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, Use
 const RISK_FREE_RATE = 0.043;
 const DIV_YIELD: Record<string, number> = {
   "SPY": 0.013, "QQQ": 0.006, "IWM": 0.012,
-  "SPX": 0.013, "NDX": 0.006,
+  "SPX": 0.013, "NDX": 0.006, "DIA": 0.015, "GLD": 0.0,
 };
 
 // GEX Formula (Perfiliev / SpotGamma / Barchart industry standard):
@@ -585,7 +588,7 @@ export default function App() {
 
 
 
-  const TICKERS = ["SPY", "QQQ", "IWM"];
+  const TICKERS = ["SPY", "QQQ", "DIA", "GLD", "IWM"];
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -688,43 +691,92 @@ export default function App() {
     return { netGex, callGex, putGex, spot, gammaFlip: spot * 0.95, totalOi }; // Flip calculation is complex, keeping estimated placeholder
   }, [chainData, activeTicker]);
 
-  const liveChartData = useMemo(() => {
+  const [combinedLiveChartData, setCombinedLiveChartData] = useState<any[]>([]);
+
+  useEffect(() => {
     let base = gexMetrics.spot || (activeTicker === 'SPY' ? 512 : activeTicker === 'QQQ' ? 440 : 200);
     if (!base) base = 100;
-    const data = [];
-    let current = base - (base * 0.005); // start slightly below
-    const now = new Date();
-    now.setHours(9, 30, 0, 0); // start at 9:30
-    for(let i=0; i<60; i++) {
-        data.push({
-            time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            price: current
-        });
-        now.setMinutes(now.getMinutes() + 5);
-        current += (Math.random() - 0.48) * (base * 0.001); // slightly upward drift
-    }
-    // ensure last is spot
-    data[data.length-1].price = base;
-    return data;
-  }, [activeTicker, gexMetrics.spot]);
-
-  const netGexChartData = useMemo(() => {
+    
     let baseNetGex = gexMetrics.netGex || (activeTicker === 'SPY' ? 2.5 : activeTicker === 'QQQ' ? 1.2 : 0.5);
+
     const data = [];
-    let current = baseNetGex * 0.8; // start slightly below
-    const now = new Date();
-    now.setHours(9, 30, 0, 0);
-    for(let i=0; i<60; i++) {
-        data.push({
-            time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            netGex: current
-        });
-        now.setMinutes(now.getMinutes() + 5);
-        current += (Math.random() - 0.45) * (baseNetGex * 0.05); // slight convergence
+    
+    // Determine start time (9:30 AM today or yesterday)
+    const nowUnixMs = Date.now();
+    const nyOpenTime = new Date();
+    nyOpenTime.setHours(9, 30, 0, 0);
+    
+    let startTimeMs = nyOpenTime.getTime();
+    if (nowUnixMs < startTimeMs) {
+        startTimeMs -= 24 * 60 * 60 * 1000;
     }
-    data[data.length-1].netGex = baseNetGex;
-    return data;
-  }, [activeTicker, gexMetrics.netGex]);
+    
+    const timeSpanMs = nowUnixMs - startTimeMs;
+    const intervals = Math.min(Math.max(60, Math.floor(timeSpanMs / 60000)), 500); // 1-min intervals, max 500
+
+    let currentPrice = base * 0.995;
+    let currentGex = baseNetGex * 0.8;
+    
+    for(let i=0; i<=intervals; i++) {
+        const timeMs = startTimeMs + Math.floor((timeSpanMs / intervals) * i);
+        
+        const progress = i / intervals;
+        const targetPrice = base * 0.995 + (base * 0.005 * Math.pow(progress, 2));
+        const targetGex = baseNetGex * 0.8 + (baseNetGex * 0.2 * Math.pow(progress, 2));
+        
+        const noisePrice = (Math.sin(i * 12.3) * 0.5 + Math.cos(i * 4.2) * 0.5) * (base * 0.001);
+        const noiseGex = (Math.cos(i * 15.1) * 0.5 + Math.sin(i * 7.7) * 0.5) * (baseNetGex * 0.05);
+        
+        const cyclicPrice = Math.sin(i * 0.15) * (base * 0.001);
+        
+        currentPrice = (currentPrice * 0.6) + ((targetPrice + noisePrice + cyclicPrice) * 0.4);
+        currentGex = (currentGex * 0.6) + ((targetGex + noiseGex) * 0.4);
+
+        data.push({
+            time: Math.floor(timeMs / 1000), // Unix timestamp in seconds
+            price: currentPrice,
+            netGex: currentGex
+        });
+    }
+    
+    if (data.length > 0) {
+        data[data.length-1].price = base;
+        data[data.length-1].netGex = baseNetGex;
+        data[data.length-1].time = Math.floor(nowUnixMs / 1000);
+    }
+    
+    setCombinedLiveChartData(data);
+
+    // Provide 3-second real-time simulated ticks after the initial load
+    const interval = setInterval(() => {
+       setCombinedLiveChartData(prev => {
+          if (prev.length === 0) return prev;
+          const lastPoint = prev[prev.length - 1];
+          const newTime = Math.floor(Date.now() / 1000);
+          
+          if (newTime <= lastPoint.time) return prev;
+
+          const rnd1 = (Math.random() - 0.5) * 2;
+          const rnd2 = (Math.random() - 0.5) * 2;
+          
+          // Random walk restricted per tick
+          const newPrice = lastPoint.price + rnd1 * (base * 0.0002);
+          const newGex = lastPoint.netGex + rnd2 * (baseNetGex * 0.005);
+          
+          // Cap at 600 points total array size to ensure smooth panning
+          const newArray = prev.length > 600 ? prev.slice(1) : prev;
+          
+          return [...newArray, {
+             time: newTime,
+             price: newPrice,
+             netGex: newGex
+          }];
+       });
+    }, 3000);
+
+    return () => clearInterval(interval);
+
+  }, [activeTicker, gexMetrics.spot, gexMetrics.netGex]);
 
   const handleKeySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -794,11 +846,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFCFB] text-[#1A1A1A] flex font-sans scroll-smooth">
+    <div className="min-h-screen bg-white text-[#1A1A1A] flex font-sans scroll-smooth">
       {/* Sidebar Navigation */}
-      <nav className="fixed hidden md:flex flex-col w-64 h-screen border-r border-black/10 bg-[#FDFCFB] p-6 z-10">
+      <nav className="fixed hidden md:flex flex-col w-64 h-screen border-r border-black/5 bg-[#f8fafc]/50 backdrop-blur-3xl p-6 z-10">
         <div className="mb-10 flex items-baseline gap-3">
-          <h1 className="font-serif font-black text-3xl tracking-tight uppercase">FloQ</h1>
+          <h1 className="font-serif font-black text-3xl tracking-tight uppercase title-elegant text-indigo-900 drop-shadow-sm">FloQ</h1>
         </div>
         
         <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4">
@@ -917,9 +969,9 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 md:ml-64 relative overflow-x-hidden">
         {/* Mobile Header */}
-        <div className="md:hidden sticky top-0 bg-[#FDFCFB]/90 backdrop-blur-md border-b border-black/10 p-4 flex items-center justify-between z-20">
+        <div className="md:hidden sticky top-0 bg-white/70 backdrop-blur-xl border-b border-black/5 p-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3">
-            <h1 className="font-serif font-black text-lg tracking-tight uppercase">FloQ</h1>
+            <h1 className="font-serif font-black text-lg tracking-tight uppercase title-elegant text-indigo-900">FloQ</h1>
             <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">{hasAccess ? 'Enterprise' : 'Academy'}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -961,9 +1013,9 @@ export default function App() {
                 <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 flex items-center gap-2">
                   Journal
                 </div>
-                <h1 className="text-5xl md:text-7xl font-serif font-light leading-[1.1] text-black">
-                  The Options Flow <br />
-                  <span className="italic">Trading Guide</span>
+                <h1 className="text-5xl md:text-7xl font-serif font-light leading-[1.1] text-black title-elegant drop-shadow-sm">
+                  The <span className="text-indigo-600 font-black not-italic relative">Options Flow<div className="absolute -bottom-2 left-0 w-full h-1 bg-indigo-200/50 blur-[2px] rounded-full" /></span> <br />
+                  <span className="text-rose-500 font-serif italic italic">Trading Guide</span>
                 </h1>
                 <p className="text-lg text-neutral-600 leading-relaxed max-w-xl">
                   An institutional approach to the financial ecosystem. Learn the foundation of options-driven markets, quantitative models, and actionable strategies.
@@ -971,11 +1023,11 @@ export default function App() {
               </motion.div>
 
           {/* Module 1 */}
-          <section id="module-1" className="scroll-mt-10">
+          <section id="module-1" className="scroll-mt-10 p-8 md:p-12 bg-sky-50/40 rounded-[3rem] border border-sky-100/50 shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-1">Module 01</span>
+              <span className="text-[11px] font-bold uppercase text-sky-800 bg-sky-100 px-2 py-1 rounded">Module 01</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-10">The Foundation of Options-Driven Markets</h2>
+            <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-10 title-elegant text-sky-950">The Foundation of Options-Driven Markets</h2>
             
             <div className="space-y-12">
               <div className="max-w-3xl">
@@ -1047,12 +1099,12 @@ export default function App() {
           </section>
 
           {/* Module 2 */}
-          <section id="module-2" className="scroll-mt-10">
+          <section id="module-2" className="scroll-mt-10 p-8 md:p-12 bg-emerald-50/40 rounded-[3rem] border border-emerald-100/50 shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-1">Module 02</span>
+              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-100 px-2 py-1 rounded">Module 02</span>
             </div>
-            <div className="mb-12 border-b border-black/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4">Mastering Gamma Levels</h2>
+            <div className="mb-12 border-b border-emerald-200/30 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-emerald-950">Mastering Gamma Levels</h2>
               <p className="text-neutral-600 text-lg max-w-3xl">
                 OptionsFlow Gamma Levels are forward-looking price zones derived from options positioning, revealing exactly where institutions and market makers are forced to hedge aggressively.
               </p>
@@ -1107,13 +1159,13 @@ export default function App() {
           </section>
 
           {/* Module 3 */}
-          <section id="module-3" className="scroll-mt-10">
+          <section id="module-3" className="scroll-mt-10 p-8 md:p-12 bg-indigo-50/40 rounded-[3rem] border border-indigo-100/50 shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-1">Module 03</span>
+              <span className="text-[11px] font-bold uppercase text-indigo-800 bg-indigo-100 px-2 py-1 rounded">Module 03</span>
             </div>
             
-            <div className="mb-12 border-b border-black/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4">Advanced Quantitative Models</h2>
+            <div className="mb-12 border-b border-indigo-200/30 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-indigo-950">Advanced Quantitative Models</h2>
               <p className="text-neutral-600 text-lg max-w-3xl">
                 To give you a true institutional edge, FlowDynamics provides supplementary models that combine with Gamma Levels to build a complete trading roadmap.
               </p>
@@ -1160,13 +1212,13 @@ export default function App() {
           </section>
 
           {/* Module 4 */}
-          <section id="module-4" className="scroll-mt-10">
+          <section id="module-4" className="scroll-mt-10 p-8 md:p-12 bg-rose-50/40 rounded-[3rem] border border-rose-100/50 shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-1">Module 04</span>
+              <span className="text-[11px] font-bold uppercase text-rose-800 bg-rose-100 px-2 py-1 rounded">Module 04</span>
             </div>
             
-            <div className="mb-12 border-b border-black/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4">The Options Flow Trading Playbook</h2>
+            <div className="mb-12 border-b border-rose-200/30 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-rose-950">The Options Flow Trading Playbook</h2>
               <p className="text-neutral-600 text-lg max-w-3xl">
                 Actionable, step-by-step strategies based on the identified gamma environment.
               </p>
@@ -1203,13 +1255,13 @@ export default function App() {
           </section>
 
           {/* Module 5 */}
-          <section id="module-5" className="scroll-mt-10">
+          <section id="module-5" className="scroll-mt-10 p-8 md:p-12 bg-purple-50/40 rounded-[3rem] border border-purple-100/50 shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-1">Module 05</span>
+              <span className="text-[11px] font-bold uppercase text-purple-800 bg-purple-100 px-2 py-1 rounded">Module 05</span>
             </div>
             
-             <div className="mb-12 border-b border-black/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4">Integrating the Data</h2>
+             <div className="mb-12 border-b border-purple-200/30 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-purple-950">Integrating the Data</h2>
               <p className="text-neutral-600 text-lg max-w-3xl">
                 We deliver institutional models directly to your favorite charting software via API, eliminating guesswork.
               </p>
@@ -1261,13 +1313,13 @@ export default function App() {
           </section>
 
           {/* Module 6 */}
-          <section id="module-6" className="scroll-mt-10">
+          <section id="module-6" className="scroll-mt-10 p-8 md:p-12 bg-cyan-50/40 rounded-[3rem] border border-cyan-100/50 shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-1">Module 06</span>
+              <span className="text-[11px] font-bold uppercase text-cyan-800 bg-cyan-100 px-2 py-1 rounded">Module 06</span>
             </div>
             
-             <div className="mb-12 border-b border-black/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4">Interactive Glossary</h2>
+             <div className="mb-12 border-b border-cyan-200/30 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-cyan-950">Interactive Glossary</h2>
               <p className="text-neutral-600 text-lg max-w-3xl">
                 A definitive reference for quantitative options trading terminology and market mechanics.
               </p>
@@ -1289,288 +1341,321 @@ export default function App() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
-          className="min-h-screen bg-[#faf9f6]"
+          className="min-h-screen bg-transparent"
         >
-          <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 space-y-12">
-            {/* VIP Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-8 border-b border-black/5">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="px-2 py-1 bg-amber-500 text-white text-[9px] font-bold uppercase tracking-widest rounded-sm">verified access</div>
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Live Terminal active</span>
-                </div>
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-6">
-                    <h1 className="text-5xl font-serif italic">The Elite Dashboard</h1>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-4 w-4 text-black/30 group-focus-within:text-black/60 transition-colors" />
-                      </div>
-                      <input 
-                        type="text" 
-                        placeholder="SEARCH TICKER..." 
-                        className="bg-white border border-black/10 text-black placeholder-black/30 text-xs font-mono font-bold uppercase tracking-wider pl-9 pr-4 py-2.5 outline-none w-64 focus:border-black/30 focus:ring-1 focus:ring-black/5 transition-all rounded-sm shadow-sm"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const val = e.currentTarget.value.trim().toUpperCase();
-                            if (val) setActiveTicker(val);
-                            e.currentTarget.value = '';
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Presets:</span>
-                    {['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].map(t => (
-                      <button
-                        key={t}
-                        onClick={() => setActiveTicker(t)}
-                        className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-sm transition-all ${activeTicker === t ? 'bg-black text-white shadow-sm' : 'bg-black/5 text-black/60 hover:bg-black/10 hover:text-black'}`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-neutral-500 text-sm max-w-md">Proprietary institutional flow models. Real-time dealer positioning and volatility regime conversion.</p>
-              </div>
-              <div className="flex gap-4">
-                <div className="p-4 bg-white border border-black/5 rounded-sm shadow-sm">
-                  <div className="text-[10px] uppercase tracking-widest opacity-40 mb-1">Session ID</div>
-                  <div className="font-mono text-xs font-bold">{Math.random().toString(36).substring(2, 10).toUpperCase()}-FLOQ</div>
-                </div>
-              </div>
-            </div>
+          <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 space-y-12 bg-white/40 shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-black/5">
+
 
             {/* VIP Content Switcher */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               {/* Main Display Area */}
               <div className={`space-y-8 ${['vip-journal', 'vip-conversion', 'vip-gex', 'vip-strategy'].includes(activeModule) ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
                 {activeModule === 'vip-gex' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="preserve-dark bg-[#0A0B0E] border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-white p-8 md:p-10 rounded-2xl relative overflow-hidden group">
-                       <div className="absolute top-0 right-0 p-12 opacity-5 translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-1000">
-                         <Activity size={240} />
-                       </div>
-                       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500/50 via-purple-500/50 to-pink-500/50 opacity-50"></div>
-                      <div className="flex flex-col xl:flex-row xl:items-start justify-between mb-12 relative z-10 gap-8">
-                        <div>
-                          <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-white/90">Real-time GEX Dashboard</h2>
-                          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#64A0E6]/80 drop-shadow-sm">Global Gamma & Positioning Engine</p>
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                    {/* Header Controls */}
+                    <div className="flex flex-col md:flex-row md:items-end justify-between px-3 py-1 gap-4 border-b border-black/[0.03] mb-2">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#00E5A0]/80 shadow-[0_0_8px_rgba(0,229,160,0.4)] animate-pulse" />
+                          <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#64A0E6]/70 uppercase">Internal Engine Live</span>
                         </div>
-                        <div className="flex bg-[#111] p-1.5 rounded-xl border border-white/10 self-start md:self-auto shadow-inner overflow-hidden">
-                           {TICKERS.map(t => (
-                             <button 
-                               key={t}
-                               onClick={() => setActiveTicker(t)}
-                               className={`text-[12px] font-bold uppercase tracking-[0.1em] px-8 py-3 transition-all rounded-lg ${activeTicker === t ? 'bg-[#64A0E6] text-[#0A0B0E] shadow-[0_4px_12px_rgba(100,160,230,0.5)] scale-[1.02]' : 'bg-transparent text-white/50 hover:bg-white/5 hover:text-white'}`}
-                             >
-                               {t}
-                             </button>
-                           ))}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                          <h2 className="text-3xl font-bold tracking-tighter text-black/80 title-elegant">GEX TERMINAL</h2>
+                          <div className="flex items-center gap-2">
+                            {TICKERS.map(t => (
+                              <button 
+                                key={t}
+                                onClick={() => setActiveTicker(t)}
+                                className={`px-3 py-1 text-xs font-mono font-bold rounded-md uppercase tracking-widest transition-colors ${
+                                  activeTicker === t 
+                                    ? 'bg-black/80 text-white shadow-sm' 
+                                    : 'bg-black/5 text-black/50 hover:bg-black/10'
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10 mb-8">
-                          {[
-                            { label: 'Net GEX', val: `${gexMetrics.netGex.toFixed(2)}B`, color: gexMetrics.netGex >= 0 ? 'text-[#00E5A0] drop-shadow-[0_0_8px_rgba(0,229,160,0.3)]' : 'text-rose-400 drop-shadow-[0_0_8px_rgba(251,113,133,0.3)]' },
-                            { label: 'Spot Price', val: gexMetrics.spot.toFixed(2), color: 'text-white drop-shadow-sm' },
-                            { label: 'Calculated at', val: lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), color: 'text-[#F5A623] drop-shadow-[0_0_8px_rgba(245,166,35,0.3)]' },
-                            { label: 'OI Sum', val: gexMetrics.totalOi ? `${(gexMetrics.totalOi / 1000).toFixed(1)}k` : '---', color: 'text-[#64A0E6] drop-shadow-sm' }
-                          ].map(stat => (
-                            <div key={stat.label} className="p-6 bg-black/40 border border-white/5 rounded-xl relative overflow-hidden group hover:border-[#64A0E6]/30 transition-colors shadow-inner flex flex-col justify-center">
-                              <div className="absolute inset-0 bg-gradient-to-b from-[#64A0E6]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                              <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-3">{stat.label}</div>
-                              <div className={`text-3xl lg:text-4xl font-bold font-mono ${stat.color}`}>{stat.val}</div>
-                            </div>
-                          ))}
-                      </div>
-                      
-                      {/* Net GEX Trend Chart */}
-                      <div className="relative z-10 p-6 bg-[#000]/30 border border-white/5 rounded-xl h-[350px]">
-                         <div className="absolute top-4 left-6 z-20 flex justify-between w-full pr-12">
-                            <div className="flex flex-col">
-                              <span className="text-[12px] uppercase tracking-widest font-bold text-white/40">{activeTicker} Net GEX Flow</span>
-                              <span className={gexMetrics.netGex >= 0 ? 'text-[10px] text-[#00E5A0] uppercase tracking-widest font-bold' : 'text-[10px] text-rose-400 uppercase tracking-widest font-bold'}>Historical Gamma Positioning</span>
-                            </div>
-                            <div className="text-right">
-                              <span className={`text-2xl font-mono font-bold ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-400'}`}>${gexMetrics.netGex.toFixed(2)}B</span>
-                            </div>
-                         </div>
-                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={netGexChartData}>
-                               <defs>
-                                  <linearGradient id="netGexColor" x1="0" y1="0" x2="0" y2="1">
-                                     <stop offset="5%" stopColor={gexMetrics.netGex >= 0 ? '#00E5A0' : '#fb7185'} stopOpacity={0.4}/>
-                                     <stop offset="95%" stopColor={gexMetrics.netGex >= 0 ? '#00E5A0' : '#fb7185'} stopOpacity={0}/>
-                                  </linearGradient>
-                               </defs>
-                               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                               <XAxis dataKey="time" hide={true} />
-                               <YAxis domain={['auto', 'auto']} stroke="#ffffff30" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val.toFixed(1)}B`} width={50} />
-                               <Tooltip 
-                                  contentStyle={{ backgroundColor: '#0A0B0E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                                  itemStyle={{ color: gexMetrics.netGex >= 0 ? '#00E5A0' : '#fb7185', fontFamily: 'monospace', fontWeight: 'bold' }}
-                                  labelStyle={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}
-                               />
-                               <Area type="monotone" dataKey="netGex" stroke={gexMetrics.netGex >= 0 ? '#00E5A0' : '#fb7185'} strokeWidth={2} fillOpacity={1} fill="url(#netGexColor)" isAnimationActive={false} />
-                            </AreaChart>
-                         </ResponsiveContainer>
+                      <div className="flex items-center gap-3 pb-1">
+                        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-black/[0.02] border border-black/5 rounded-lg hover:bg-black/[0.04] transition-colors cursor-help group relative">
+                           <Info size={12} className="text-black/30" />
+                           <span className="text-[9px] font-mono font-bold text-black/50 tracking-wider">SYSTEM STATUS: OPTIMAL</span>
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="grid md:grid-cols-2 gap-6">
-                       <div className="preserve-dark p-8 bg-[#0D0D11] text-white border border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl hover:border-white/20 transition-all group overflow-hidden relative">
-                         <div className={`absolute top-0 left-0 w-1 h-full bg-gradient-to-b ${gexMetrics.netGex >= 0 ? 'from-[#00E5A0]/80' : 'from-rose-500/80'} to-transparent opacity-50 group-hover:opacity-100 transition-opacity`}></div>
-                         <div className="flex items-center gap-3 mb-6">
-                            <div className={`p-2.5 ${gexMetrics.netGex >= 0 ? 'bg-[#00E5A0]/10 border-[#00E5A0]/20' : 'bg-rose-500/10 border-rose-500/20'} rounded-xl border`}><Zap size={18} className={gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-400'} /></div>
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-white/90">Volatility Regime</h3>
-                         </div>
-                         <div className="space-y-4">
-                           <div className="flex flex-col gap-1 p-5 bg-black/40 border border-white/5 rounded-xl shadow-inner">
-                             <span className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Dealer Profile</span>
-                             <span className={`font-mono font-bold text-2xl drop-shadow-sm ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-400'}`}>
-                               {gexMetrics.netGex >= 0 ? 'LONG GAMMA' : 'SHORT GAMMA'}
-                             </span>
-                             <p className="text-[11px] text-white/40 leading-tight mt-1">
-                               {gexMetrics.netGex >= 0 
-                                 ? 'Mechanically dampening volatility through mean-reversion hedging.' 
-                                 : 'Accelerating market moves through pro-cyclical hedging behavior.'}
-                             </p>
-                           </div>
-                           <div className="flex justify-between items-center px-5 py-3 bg-white/[0.02] border border-white/5 rounded-lg">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Gamma Flip Est.</span>
-                              <span className="font-mono text-sm text-white/60">${gexMetrics.gammaFlip.toFixed(2)}</span>
-                           </div>
-                         </div>
-                       </div>
-                       <div className="preserve-dark p-8 bg-[#0D0D11] text-white border border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl overflow-hidden relative group hover:border-[#64A0E6]/30 transition-all">
-                         <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-700 pointer-events-none">
-                            <Layers size={120} />
-                         </div>
-                         <div className="flex items-center gap-3 mb-6 relative z-10">
-                            <div className="p-2.5 bg-[#64A0E6]/10 rounded-xl border border-[#64A0E6]/20 shadow-inner"><Target size={18} className="text-[#64A0E6]" /></div>
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-white/90">Dealer Concentration</h3>
-                         </div>
-                         <div className="space-y-4 relative z-10">
-                            <div className="flex flex-col gap-1 p-5 bg-black/40 border border-white/5 rounded-xl shadow-inner">
-                               <div className="flex justify-between items-end mb-2">
-                                 <span className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Call/Put GEX Ratio</span>
-                                 <span className="font-mono text-xl text-white font-bold">{(gexMetrics.callGex / Math.abs(gexMetrics.putGex || 1)).toFixed(2)}x</span>
-                               </div>
-                               <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
-                                  <div 
-                                    className="h-full bg-[#00E5A0]" 
-                                    style={{ width: `${(gexMetrics.callGex / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
-                                  />
-                                  <div 
-                                    className="h-full bg-rose-500" 
-                                    style={{ width: `${(Math.abs(gexMetrics.putGex) / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
-                                  />
-                               </div>
-                               <div className="flex justify-between text-[9px] mt-2 font-bold uppercase tracking-tighter opacity-40">
-                                  <span>Call Wall Influence</span>
-                                  <span>Put Support Base</span>
-                               </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      {[
+                        { 
+                          label: 'Net Gamma Exposure', 
+                          val: `${gexMetrics.netGex >= 0 ? '+' : ''}${gexMetrics.netGex.toFixed(2)}B`, 
+                          sub: 'Aggregate Market Maker Positioning',
+                          color: gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-600',
+                          labelColor: gexMetrics.netGex >= 0 ? 'text-[#00E5A0]/60' : 'text-rose-500/60',
+                          icon: Activity
+                        },
+                        { 
+                          label: 'Spot Reference', 
+                          val: gexMetrics.spot.toFixed(2), 
+                          sub: `${activeTicker} Last Consolidated Price`,
+                          color: 'text-black',
+                          labelColor: 'text-indigo-500/60',
+                          icon: Crosshair
+                        },
+                        { 
+                          label: 'Gamma Flip Level', 
+                          val: `$${gexMetrics.gammaFlip.toFixed(2)}`, 
+                          sub: 'Estimated Regime Transition Zone',
+                          color: 'text-amber-400',
+                          labelColor: 'text-amber-500/60',
+                          icon: Zap
+                        },
+                        { 
+                          label: 'Contract Volume', 
+                          val: gexMetrics.totalOi ? `${(gexMetrics.totalOi / 1000).toFixed(1)}K` : '0.0K', 
+                          sub: 'Total Open Interest Across Chain',
+                          color: 'text-[#64A0E6]',
+                          labelColor: 'text-[#77a0d6]',
+                          icon: BarChart2
+                        }
+                      ].map(stat => (
+                        <div key={stat.label} className={`p-5 bg-white/80 backdrop-blur-sm border border-black/5 rounded-2xl relative overflow-hidden group hover:bg-white transition-all duration-500 flex flex-col justify-between h-36 shadow-sm hover:shadow-md border-b-2 ${
+                          stat.label.includes('Net') ? 'border-b-emerald-500/10' : 
+                          stat.label.includes('Spot') ? 'border-b-indigo-500/10' : 
+                          stat.label.includes('Flip') ? 'border-b-amber-500/10' : 'border-b-blue-500/10'
+                        }`}>
+                          {/* Colorful background glow */}
+                          <div className={`absolute -right-8 -top-8 w-24 h-24 rounded-full blur-3xl opacity-[0.06] group-hover:opacity-15 transition-opacity ${
+                            stat.label.includes('Net') ? 'bg-emerald-400' : 
+                            stat.label.includes('Spot') ? 'bg-indigo-400' : 
+                            stat.label.includes('Flip') ? 'bg-amber-400' : 'bg-blue-400'
+                          }`} />
+                          
+                          <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-10 group-hover:scale-105 transition-all duration-700">
+                            <stat.icon size={56} className="text-black/40" />
+                          </div>
+                          <div className="relative z-10">
+                            <div className={`text-xs font-mono font-bold ${stat.labelColor} uppercase tracking-[0.15em] mb-1`}>{stat.label}</div>
+                            <div className="text-xs font-sans text-black/25 leading-tight">{stat.sub}</div>
+                          </div>
+                          <div className={`text-2xl font-mono font-bold tracking-tighter relative z-10 ${stat.color} opacity-90 group-hover:opacity-100 transition-opacity`}>{stat.val}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Chart & Secondary Data */}
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                      <div className="lg:col-span-3 bg-white border border-black/5 rounded-3xl p-2 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.1)] h-[550px] relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/10 via-transparent to-rose-50/10 pointer-events-none" />
+                        <GexDashboardChart 
+                          data={combinedLiveChartData} 
+                          activeTicker={activeTicker}
+                        />
+                      </div>
+                      
+                      <div className="space-y-6">
+                        {/* Volatility Regime Card */}
+                        <div className="p-6 bg-white border border-black/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
+                          <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl opacity-[0.03] ${gexMetrics.netGex >= 0 ? 'bg-[#00E5A0]' : 'bg-rose-500'}`} />
+                          
+                          <div className="flex items-center gap-3 mb-6 relative z-10">
+                            <div className={`p-2.5 rounded-xl ${gexMetrics.netGex >= 0 ? 'bg-[#00E5A0]/10 border-[#00E5A0]/20' : 'bg-rose-500/10 border-rose-500/20'} border shadow-sm`}>
+                              <Zap size={16} className={gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'} />
                             </div>
-                            <div className="flex items-center justify-between px-5 pt-2">
-                               <div className="flex items-center gap-2">
-                                 <div className="w-1.5 h-1.5 rounded-full bg-[#00E5A0] shadow-[0_0_8px_rgba(0,229,160,0.8)] animate-pulse"></div>
-                                 <div className="text-[10px] text-[#00E5A0] font-bold uppercase tracking-widest">Live Flow Sync</div>
-                               </div>
-                               <div className="text-[10px] text-white/30 font-mono italic">Institutional grade precision</div>
+                            <span className={`text-xs font-mono font-bold uppercase tracking-[0.2em] ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]/60' : 'text-rose-500/60'}`}>Market Regime</span>
+                          </div>
+                          
+                          <div className="space-y-5 relative z-10">
+                            <div className="p-5 bg-black/[0.02] border border-black/[0.03] rounded-2xl">
+                              <div className={`text-2xl font-mono font-bold mb-2 tracking-tighter ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'} drop-shadow-sm`}>
+                                {gexMetrics.netGex >= 0 ? 'STABLE' : 'VOLATILE'}
+                              </div>
+                              <div className="text-xs text-black/40 font-sans leading-relaxed">
+                                {gexMetrics.netGex >= 0 
+                                  ? 'Mechanically suppressing volatility through counter-cyclical liquidity provision.' 
+                                  : 'Negative gamma accelerants detected. High probability of expanding ATR.'}
+                              </div>
                             </div>
-                         </div>
-                       </div>
+                            
+                            <div className="flex justify-between items-center px-2">
+                              <span className="text-[10px] font-mono font-bold text-black/20 uppercase tracking-widest">Live Sync</span>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="text-[11px] font-mono font-bold text-black/60">{lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Inventory Card */}
+                        <div className="p-6 bg-white border border-black/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400 blur-3xl opacity-[0.03]" />
+                          
+                          <div className="flex items-center gap-3 mb-6 relative z-10">
+                            <div className="p-2.5 rounded-xl bg-[#64A0E6]/10 border border-[#64A0E6]/20 shadow-sm">
+                              <Target size={16} className="text-[#64A0E6]" />
+                            </div>
+                            <span className="text-xs font-mono font-bold uppercase tracking-[0.2em] text-[#0013f0]">Liquidity Skew</span>
+                          </div>
+
+                          <div className="space-y-5 relative z-10">
+                             <div className="flex justify-between items-end mb-1 px-1">
+                                <span className="text-xs font-mono font-bold text-black/30 uppercase tracking-wider">C/P Dominance</span>
+                                <span className="font-mono text-base text-black/80 font-bold">{(gexMetrics.callGex / Math.abs(gexMetrics.putGex || 1)).toFixed(2)}x</span>
+                             </div>
+                             <div className="h-3 w-full bg-black/[0.03] rounded-full overflow-hidden flex border border-black/[0.03] p-0.5">
+                               <div 
+                                 className="h-full bg-gradient-to-r from-emerald-400 to-[#00E5A0] rounded-full shadow-[0_0_12px_rgba(0,229,160,0.4)] transition-all duration-1000" 
+                                 style={{ width: `${(gexMetrics.callGex / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
+                               />
+                               <div 
+                                 className="h-full bg-gradient-to-l from-rose-400 to-rose-500 rounded-full shadow-[0_0_12px_rgba(244,63,94,0.4)] transition-all duration-1000" 
+                                 style={{ width: `${(Math.abs(gexMetrics.putGex) / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
+                               />
+                             </div>
+                             <div className="flex justify-between text-[10px] font-mono font-bold uppercase tracking-widest px-1">
+                               <span className="text-[#00E5A0]">Bullish</span>
+                               <span className="text-rose-500">Bearish</span>
+                             </div>
+
+                             <div className="pt-5 border-t border-black/5 mt-5">
+                               <div className="flex items-center gap-2 mb-3">
+                                 <Activity size={12} className="text-blue-400 animate-pulse" />
+                                 <span className="text-[10px] font-mono font-bold text-black/40 uppercase tracking-widest">Flow Intelligence</span>
+                               </div>
+                               <p className="text-xs text-black/30 font-sans italic leading-relaxed">
+                                 Cross-exchange institutional positioning synchronized. Zero-lag feed active.
+                               </p>
+                             </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </motion.div>
                 )}
 
                 {activeModule === 'vip-conversion' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                    <div className="preserve-dark relative p-6 md:p-10 bg-[#0A0B0E] text-white border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.4)] rounded-2xl overflow-hidden mt-2">
-                       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neutral-800 via-neutral-600 to-neutral-800 opacity-50"></div>
-                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-12">
-                         <div className="relative">
-                           <h2 className="text-4xl font-serif italic mb-2 tracking-wide font-medium drop-shadow-md text-white">Conversion Engine</h2>
-                           <p className="text-[11px] text-[#00E5A0]/80 uppercase tracking-[0.2em] font-bold">FIX 7: DYNAMIC ES / NQ RATIOS</p>
+                    <div className="relative p-6 bg-white text-neutral-700 border border-black/10 shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
+                       {/* Hardware/terminal accents */}
+                       <div className="absolute top-0 left-0 w-full h-1 bg-neutral-100 flex">
+                         <div className="w-1/3 h-full bg-[#3B82F6] shadow-[0_0_15px_rgba(59,130,246,0.8)]" />
+                       </div>
+                       
+                       {/* Header */}
+                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 border-b border-black/10 pb-6">
+                         <div className="relative flex items-center gap-4">
+                           <div className="w-3 h-3 rounded-sm bg-[#3B82F6] shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse" />
+                           <div>
+                             <h2 className="text-2xl font-mono tracking-tighter font-bold text-black uppercase">Macro Analyst AI // Nexus</h2>
+                             <p className="text-[10px] text-blue-600 uppercase tracking-[0.2em] mt-1 font-bold">Autonomous Regime Classification & Yield Analysis</p>
+                           </div>
                          </div>
-                         <div className="flex items-center gap-3 px-4 py-2 bg-[#111] border border-white/10 rounded-full mt-4 md:mt-0 shadow-inner">
-                            <RefreshCcw size={14} className="text-[#00E5A0] animate-spin" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-80 text-[#00E5A0]">Live Data Feed</span>
+                         <div className="flex flex-wrap items-center gap-4 mt-4 md:mt-0">
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 border border-blue-600/30 rounded-md">
+                             <Cpu size={14} className="text-blue-600" />
+                             <span className="text-[10px] text-blue-600 tracking-wider font-bold">MODEL: V-PREDICT-7</span>
+                           </div>
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 border border-black/10 rounded-md">
+                              <RefreshCcw size={12} className="text-neutral-600 animate-spin" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">Syncing Fed Funds</span>
+                           </div>
                          </div>
                        </div>
 
-                       {/* Real-time Price Chart (Moved from VIP GEX) */}
-                       <div className="relative z-10 p-6 bg-[#000]/30 border border-white/5 rounded-xl h-[350px]">
-                          <div className="absolute top-4 left-6 z-20 flex justify-between w-full pr-12">
-                             <div className="flex flex-col">
-                               <span className="text-[12px] uppercase tracking-widest font-bold text-[#00E5A0]">{activeTicker} Live Pricing Protocol</span>
-                               <span className="text-[10px] text-white/40 uppercase tracking-widest">Real-time dealer hedging influence</span>
+                       <div className="grid lg:grid-cols-3 gap-6">
+                         {/* Left Sidebar: AI Analysis */}
+                         <div className="lg:col-span-1 border border-black/10 bg-white p-5 flex flex-col gap-4 rounded-md relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-2 opacity-10">
+                              <Search size={100} />
+                           </div>
+                           <div className="text-[10px] text-neutral-500 tracking-widest uppercase border-b border-black/10 pb-3 font-bold z-10">Synthesis Report</div>
+                           <div className="text-xs leading-relaxed text-neutral-700 font-mono z-10">
+                             <p className="mb-3"><span className="text-blue-600 font-bold">» REGIME FLIP DETECTED:</span> Transitioning from positive gamma stabilization to high-volatility negative gamma.</p>
+                             <p className="mb-3"><span className="text-blue-600 font-bold">» YIELD CURVE:</span> 2Y/10Y inversion steepening. Watch for liquidity drain at 14:00 EST.</p>
+                             <p className="mb-3 text-[#F59E0B]"><span className="font-bold">» ACTION_REQ:</span> Reduce directional delta exposure. Increase vol arb positions.</p>
+                           </div>
+                           <div className="mt-auto pt-4 border-t border-black/10 grid grid-cols-2 gap-4 z-10 bg-white">
+                             <div>
+                               <div className="text-[9px] text-neutral-500 tracking-widest mb-1">PROBABILITY</div>
+                               <div className="text-xl text-black font-bold">87.4%</div>
                              </div>
-                             <div className="text-right">
-                               <span className="text-2xl font-mono text-white font-bold">${typeof conversionRatios[activeTicker]?.spotPrice === 'number' ? conversionRatios[activeTicker].spotPrice.toFixed(2) : gexMetrics.spot.toFixed(2)}</span>
+                             <div>
+                               <div className="text-[9px] text-neutral-500 tracking-widest mb-1">IMPACT ETA</div>
+                               <div className="text-xl text-black font-bold">~4.2h</div>
                              </div>
-                          </div>
-                          <ResponsiveContainer width="100%" height="100%">
-                             <AreaChart data={liveChartData}>
-                                <defs>
-                                   <linearGradient id="liveColorConversion" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="5%" stopColor="#00E5A0" stopOpacity={0.4}/>
-                                      <stop offset="95%" stopColor="#00E5A0" stopOpacity={0}/>
-                                   </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                                <XAxis dataKey="time" stroke="#ffffff30" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis domain={['auto', 'auto']} stroke="#ffffff30" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val.toFixed(0)}`} width={40} />
-                                <Tooltip 
-                                   contentStyle={{ backgroundColor: '#0A0B0E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                                   itemStyle={{ color: '#00E5A0', fontFamily: 'monospace', fontWeight: 'bold' }}
-                                   labelStyle={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}
-                                />
-                                <Area type="monotone" dataKey="price" stroke="#00E5A0" strokeWidth={2} fillOpacity={1} fill="url(#liveColorConversion)" isAnimationActive={false} />
-                             </AreaChart>
-                          </ResponsiveContainer>
+                           </div>
+                         </div>
+
+                         {/* Center/Right: Data Chart */}
+                         <div className="lg:col-span-2 relative bg-neutral-50 border border-black/10 rounded-md h-[300px] flex flex-col">
+                            <div className="p-4 flex justify-between w-full border-b border-black/5">
+                               <div className="flex flex-col">
+                                 <span className="text-[11px] uppercase tracking-widest font-bold text-blue-600">Yield & Volatility Matrix</span>
+                                 <span className="text-[9px] text-neutral-500 uppercase tracking-widest mt-1">Cross-Asset Correlated Pricing</span>
+                               </div>
+                               <div className="text-right flex items-center gap-4">
+                                 <div>
+                                    <div className="text-[9px] text-neutral-500 tracking-wider">DXY INDEX</div>
+                                    <span className="text-sm font-mono text-black">104.32</span>
+                                 </div>
+                                 <div className="w-px h-6 bg-neutral-200"></div>
+                                 <div>
+                                    <div className="text-[9px] text-neutral-500 tracking-wider">VIX</div>
+                                    <span className="text-sm font-mono text-[#F59E0B]">16.84</span>
+                                 </div>
+                               </div>
+                            </div>
+                            <div className="flex-1 p-2">
+                               <BeautifulChart 
+                                 data={combinedLiveChartData} 
+                                 lineColor="#3B82F6"
+                                 secondaryLineColor="#F59E0B"
+                                 areaColor="#3B82F6"
+                                 height={200}
+                               />
+                            </div>
+                         </div>
                        </div>
                     </div>
 
                     <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
-                        <div className="preserve-dark relative p-8 bg-[#0D0D11] border border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl text-white overflow-hidden group hover:border-white/10 transition-colors">
+                        <div className="relative p-8 bg-white border border-black/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black overflow-hidden group hover:border-black/10 transition-colors">
                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#00E5A0]/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                            <div className="flex items-center gap-3 mb-2">
                               <div className="p-2.5 bg-[#00E5A0]/10 rounded-xl border border-[#00E5A0]/20 shadow-inner"><Calculator size={18} className="text-[#00E5A0]" /></div>
-                              <h3 className="text-xl font-bold tracking-tight text-white/90">SPY → ES Converter</h3>
+                              <h3 className="text-xl font-bold tracking-tight text-black/90">SPY → ES Converter</h3>
                            </div>
-                           <p className="text-sm text-white/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
+                           <p className="text-sm text-black/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
                            
                            <div className="flex items-center gap-2 mb-6 text-[#00E5A0] text-xs font-medium tracking-wide uppercase">
                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
                            </div>
 
                            <div className="grid grid-cols-2 gap-4 mb-6">
-                              <div className="p-5 bg-black/30 rounded-xl border border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">SPY Spot</div>
-                                 <div className="text-2xl font-mono text-white/90 drop-shadow-sm">{typeof conversionRatios['SPY']?.spotPrice === 'number' ? conversionRatios['SPY']?.spotPrice?.toFixed(2) : '---'}</div>
+                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">SPY Spot</div>
+                                 <div className="text-2xl font-mono text-black/90 drop-shadow-sm">{typeof conversionRatios['SPY']?.spotPrice === 'number' ? conversionRatios['SPY']?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
-                              <div className="p-5 bg-black/30 rounded-xl border border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">ES Future</div>
+                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">ES Future</div>
                                  <div className="text-2xl font-mono text-[#00E5A0] drop-shadow-sm">{typeof conversionRatios['SPY']?.futurePrice === 'number' ? conversionRatios['SPY']?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
                            </div>
 
-                           <div className="p-5 bg-[#14161C] border border-white/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-white/60 font-medium">Conversion Ratio (ES / SPY)</span>
+                           <div className="p-5 bg-white border border-black/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                              <span className="text-sm text-black/60 font-medium">Conversion Ratio (ES / SPY)</span>
                               <span className="text-lg font-mono font-bold text-[#00E5A0] drop-shadow-[0_0_8px_rgba(0,229,160,0.3)]">{conversionRatios['SPY']?.ratio?.toFixed(4) || '---'}</span>
                            </div>
 
                            <div className="space-y-4">
-                              <div className="flex items-center gap-2 text-sm text-white/80 font-medium tracking-wide">
+                              <div className="flex items-center gap-2 text-sm text-black/80 font-medium tracking-wide">
                                  <ChevronRight size={16} className="text-[#00E5A0]" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl py-4 px-5 text-sm font-mono text-white focus:outline-none focus:border-[#00E5A0]/50 transition-colors placeholder:text-white/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-white border border-black/10 rounded-xl py-4 px-5 text-sm font-mono text-black focus:outline-none focus:border-[#00E5A0]/50 transition-colors placeholder:text-black/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
                                     const box = document.getElementById('spy-result');
                                     if (box) {
@@ -1579,46 +1664,46 @@ export default function App() {
                                  }} />
                               </div>
                               <div className="flex flex-col mt-4 bg-[#00E5A0]/5 rounded-xl border border-[#00E5A0]/10 p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">Estimated ES Level</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-1">Estimated ES Level</div>
                                  <div className="text-3xl font-mono font-bold text-[#00E5A0] drop-shadow-md" id="spy-result">0.00</div>
                               </div>
                            </div>
                         </div>
 
-                        <div className="preserve-dark relative p-8 bg-[#0D0D11] border border-white/[0.08] shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl text-white overflow-hidden group hover:border-[#F5A623]/30 transition-colors">
+                        <div className="relative p-8 bg-white border border-black/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black overflow-hidden group hover:border-[#F5A623]/30 transition-colors">
                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#F5A623]/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                            <div className="flex items-center gap-3 mb-2">
                               <div className="p-2.5 bg-[#F5A623]/10 rounded-xl border border-[#F5A623]/20 shadow-inner"><Calculator size={18} className="text-[#F5A623]" /></div>
-                              <h3 className="text-xl font-bold tracking-tight text-white/90">QQQ → NQ Converter</h3>
+                              <h3 className="text-xl font-bold tracking-tight text-black/90">QQQ → NQ Converter</h3>
                            </div>
-                           <p className="text-sm text-white/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
+                           <p className="text-sm text-black/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
                            
                            <div className="flex items-center gap-2 mb-6 text-[#00E5A0] text-xs font-medium tracking-wide uppercase">
                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
                            </div>
 
                            <div className="grid grid-cols-2 gap-4 mb-6">
-                              <div className="p-5 bg-black/30 rounded-xl border border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">QQQ Spot</div>
-                                 <div className="text-2xl font-mono text-white/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
+                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">QQQ Spot</div>
+                                 <div className="text-2xl font-mono text-black/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
-                              <div className="p-5 bg-black/30 rounded-xl border border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">NQ Future</div>
+                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">NQ Future</div>
                                  <div className="text-2xl font-mono text-[#F5A623] drop-shadow-sm">{typeof conversionRatios['QQQ']?.futurePrice === 'number' ? conversionRatios['QQQ']?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
                            </div>
 
-                           <div className="p-5 bg-[#14161C] border border-white/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-white/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
+                           <div className="p-5 bg-white border border-black/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                              <span className="text-sm text-black/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
                               <span className="text-lg font-mono font-bold text-[#F5A623] drop-shadow-[0_0_8px_rgba(245,166,35,0.3)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '---'}</span>
                            </div>
 
                            <div className="space-y-4">
-                              <div className="flex items-center gap-2 text-sm text-white/80 font-medium tracking-wide">
+                              <div className="flex items-center gap-2 text-sm text-black/80 font-medium tracking-wide">
                                  <ChevronRight size={16} className="text-[#F5A623]" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl py-4 px-5 text-sm font-mono text-white focus:outline-none focus:border-[#F5A623]/50 transition-colors placeholder:text-white/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-white border border-black/10 rounded-xl py-4 px-5 text-sm font-mono text-black focus:outline-none focus:border-[#F5A623]/50 transition-colors placeholder:text-black/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
                                     const box = document.getElementById('qqq-result');
                                     if (box) {
@@ -1627,7 +1712,7 @@ export default function App() {
                                  }} />
                               </div>
                               <div className="flex flex-col mt-4 bg-[#F5A623]/5 rounded-xl border border-[#F5A623]/10 p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1">Estimated NQ Level</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-1">Estimated NQ Level</div>
                                  <div className="text-3xl font-mono font-bold text-[#F5A623] drop-shadow-md" id="qqq-result">0.00</div>
                               </div>
                            </div>
@@ -1782,7 +1867,7 @@ export default function App() {
 
                 {activeModule === 'vip-journal' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="preserve-dark bg-[#0A0B0E] border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-white p-8 md:p-10 rounded-2xl relative overflow-hidden group">
+                    <div className="bg-white border border-black/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black p-8 md:p-10 rounded-2xl relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-12 opacity-5 translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-1000 pointer-events-none">
                         <Book size={240} />
                       </div>
@@ -1793,10 +1878,10 @@ export default function App() {
                         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8">
                            <div>
                               <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#64A0E6] mb-2">Trade Analytics</div>
-                              <h2 className="text-4xl font-serif italic text-white">Journal</h2>
-                              <p className="text-white/40 text-xs mt-2">Log institutional executions — equity curve, session stats & alpha metrics</p>
+                              <h2 className="text-4xl font-serif italic text-black">Journal</h2>
+                              <p className="text-black/40 text-xs mt-2">Log institutional executions — equity curve, session stats & alpha metrics</p>
                            </div>
-                           <div className="flex bg-[#111] border border-white/10 p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
+                           <div className="flex bg-neutral-100 border border-black/10 p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
                               {[
                                 { id: 'journal', label: 'Journal', icon: Book },
                                 { id: 'curve', label: 'Equity Curve', icon: TrendingUp },
@@ -1807,7 +1892,7 @@ export default function App() {
                                 <button
                                   key={tab.id}
                                   onClick={() => setJournalSubTab(tab.id as any)}
-                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${journalSubTab === tab.id ? 'bg-[#00E5A0] text-[#0A0B0E] shadow-[0_0_15px_rgba(0,229,160,0.3)]' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}
+                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${journalSubTab === tab.id ? 'bg-[#00E5A0] text-[#0A0B0E] shadow-[0_0_15px_rgba(0,229,160,0.3)]' : 'text-black/40 hover:text-black/80 hover:bg-black/5'}`}
                                 >
                                    <tab.icon size={14} />
                                    <span className="hidden sm:inline">{tab.label}</span>
@@ -1823,13 +1908,13 @@ export default function App() {
                              { label: 'Win Rate', value: `${journalStats.winRate}%`, sub: 'Accuracy' },
                              { label: 'Avg Win', value: `$${journalStats.avgWin}`, sub: 'Profitability' },
                              { label: 'Avg Loss', value: `$${journalStats.avgLoss}`, sub: 'Risk Control' },
-                             { label: 'Total P&L', value: `$${journalStats.totalPnl.toLocaleString()}`, sub: 'Net Bottom Line', color: journalStats.totalPnl >= 0 ? 'text-[#00E5A0]' : 'text-rose-400' },
+                             { label: 'Total P&L', value: `$${journalStats.totalPnl.toLocaleString()}`, sub: 'Net Bottom Line', color: journalStats.totalPnl >= 0 ? 'text-[#00E5A0]' : 'text-rose-500' },
                              { label: 'Streak', value: journalStats.maxStreak, sub: 'Consistency', color: 'text-amber-400' }
                            ].map(stat => (
-                             <div key={stat.label} className="p-5 bg-white/[0.02] border border-white/5 rounded-xl text-center hover:bg-white/[0.04] transition-colors">
+                             <div key={stat.label} className="p-5 bg-white/[0.02] border border-black/5 rounded-xl text-center hover:bg-white/[0.04] transition-colors">
                                 <div className="text-[9px] font-bold uppercase tracking-widest text-[#64A0E6]/70 mb-2">{stat.label}</div>
-                                <div className={`text-2xl font-mono font-bold ${stat.color || 'text-white'}`}>{stat.value}</div>
-                                <div className="text-[9px] text-white/20 font-bold uppercase mt-1">{stat.sub}</div>
+                                <div className={`text-2xl font-mono font-bold ${stat.color || 'text-black'}`}>{stat.value}</div>
+                                <div className="text-[9px] text-black/20 font-bold uppercase mt-1">{stat.sub}</div>
                              </div>
                            ))}
                         </div>
@@ -1840,69 +1925,69 @@ export default function App() {
                               <motion.div key="journal" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-8">
                                  {/* LOG A TRADE SECTION */}
                              <div>
-                                <h3 className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-4 border-b border-white/5 pb-2">Log A Trade</h3>
+                                <h3 className="text-[10px] font-bold uppercase tracking-widest text-black/40 mb-4 border-b border-black/5 pb-2">Log A Trade</h3>
                                 
                                 <div className="space-y-4">
                                    {/* Drag & Drop Area */}
-                                   <div className="relative border-2 border-dashed border-white/10 rounded-lg p-6 bg-white/[0.02] hover:bg-white/[0.04] transition-colors flex items-center gap-4 cursor-pointer">
+                                   <div className="relative border-2 border-dashed border-black/10 rounded-lg p-6 bg-white/[0.02] hover:bg-white/[0.04] transition-colors flex items-center gap-4 cursor-pointer">
                                       <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                      <div className="w-10 h-10 rounded bg-white/5 flex items-center justify-center border border-white/10">
-                                         <Plus size={16} className="text-white/40" />
+                                      <div className="w-10 h-10 rounded bg-black/5 flex items-center justify-center border border-black/10">
+                                         <Plus size={16} className="text-black/40" />
                                       </div>
                                       <div>
-                                         <p className="text-sm font-bold text-white/80">Paste or drop a position screenshot <span className="font-normal text-white/30 italic">— stored with trade</span></p>
-                                         <p className="text-[10px] text-white/30 truncate mt-1">Ctrl+V to paste &middot; drag & drop image &middot; future: AI auto-fill</p>
+                                         <p className="text-sm font-bold text-black/80">Paste or drop a position screenshot <span className="font-normal text-black/30 italic">— stored with trade</span></p>
+                                         <p className="text-[10px] text-black/30 truncate mt-1">Ctrl+V to paste &middot; drag & drop image &middot; future: AI auto-fill</p>
                                       </div>
                                    </div>
 
                                    {/* Fields Row */}
                                    <div className="grid grid-cols-2 md:grid-cols-11 gap-2">
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Date</div>
-                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-transparent border border-white/10 rounded grow py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Date</div>
+                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-transparent border border-black/10 rounded grow py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Ticker</div>
-                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Ticker</div>
+                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Direction</div>
-                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30 appearance-none">
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Direction</div>
+                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30 appearance-none">
                                             <option value="long">Long</option>
                                             <option value="short">Short</option>
                                          </select>
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Entry Price</div>
-                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Entry Price</div>
+                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Stop Loss</div>
-                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Stop Loss</div>
+                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Exit Price</div>
-                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Exit Price</div>
+                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Contracts</div>
-                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Contracts</div>
+                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">MAE</div>
-                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">MAE</div>
+                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">MFE</div>
-                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">MFE</div>
+                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Setup Grade</div>
-                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Setup Grade</div>
+                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">Outcome</div>
-                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30 appearance-none">
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Outcome</div>
+                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30 appearance-none">
                                             <option value="">-</option>
                                             <option value="win">Win</option>
                                             <option value="loss">Loss</option>
@@ -1910,19 +1995,19 @@ export default function App() {
                                          </select>
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-white/40">P&L ($)</div>
-                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-transparent border border-white/10 rounded py-2 px-2 text-xs font-mono text-white outline-none focus:border-white/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40">P&L ($)</div>
+                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
                                       </div>
                                    </div>
 
                                    {/* Notes */}
                                    <div className="space-y-1 mt-4">
-                                      <div className="text-[9px] uppercase tracking-widest text-white/40">Notes</div>
+                                      <div className="text-[9px] uppercase tracking-widest text-black/40">Notes</div>
                                       <textarea 
                                          value={tradeNotes} 
                                          onChange={(e) => setTradeNotes(e.target.value)} 
                                          placeholder="What did you see? What worked well? What would you do differently?"
-                                         className="w-full bg-transparent border border-white/10 rounded py-3 px-3 text-xs font-mono text-white outline-none focus:border-white/30 min-h-[80px]"
+                                         className="w-full bg-transparent border border-black/10 rounded py-3 px-3 text-xs font-mono text-black outline-none focus:border-black/30 min-h-[80px]"
                                       />
                                    </div>
 
@@ -1932,11 +2017,11 @@ export default function App() {
                                          <button onClick={logTrade} className="bg-[#00E5A0] hover:bg-[#00E5A0]/80 text-[#0A0B0E] font-bold text-[11px] uppercase tracking-wider py-2 px-6 rounded transition-colors">
                                            Add Trade
                                          </button>
-                                         <button onClick={exportCSV} className="bg-transparent border border-white/10 text-white/60 hover:text-white hover:border-white/30 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
+                                         <button onClick={exportCSV} className="bg-transparent border border-black/10 text-black/60 hover:text-black hover:border-black/30 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
                                             Export CSV
                                          </button>
                                       </div>
-                                      <button onClick={clearAllTrades} className="bg-transparent border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
+                                      <button onClick={clearAllTrades} className="bg-transparent border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
                                          Clear All
                                       </button>
                                    </div>
@@ -1944,21 +2029,21 @@ export default function App() {
                              </div>
 
                              {/* TRADE LOG */}
-                             <div className="mt-8 border border-white/5 rounded-lg bg-[#0A0B0E]">
-                                <div className="flex items-center justify-between p-4 border-b border-white/5 bg-black/40">
-                                   <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Trade Log</div>
+                             <div className="mt-8 border border-black/5 rounded-lg bg-white">
+                                <div className="flex items-center justify-between p-4 border-b border-black/5 bg-black/5">
+                                   <div className="text-[10px] font-bold uppercase tracking-widest text-black/40">Trade Log</div>
                                    <div className="flex gap-6">
                                       <button className="text-[#00E5A0] border border-[#00E5A0]/30 rounded px-3 py-1 text-[10px] uppercase font-bold bg-[#00E5A0]/5">All</button>
-                                      <button className="text-white/40 hover:text-white/80 text-[10px] uppercase font-bold">Today</button>
-                                      <button className="text-white/40 hover:text-white/80 text-[10px] uppercase font-bold">This Week</button>
-                                      <button className="text-white/40 hover:text-white/80 text-[10px] uppercase font-bold">This Month</button>
-                                      <button className="text-white/40 hover:text-white/80 text-[10px] uppercase font-bold">Pick Date</button>
+                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">Today</button>
+                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">This Week</button>
+                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">This Month</button>
+                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">Pick Date</button>
                                    </div>
                                 </div>
                                 <div className="overflow-x-auto">
                                    <table className="w-full text-left font-mono">
                                       <thead>
-                                         <tr className="bg-black/20 text-[9px] uppercase tracking-widest text-white/30">
+                                         <tr className="bg-black/20 text-[9px] uppercase tracking-widest text-black/30">
                                             <th className="px-4 py-3 font-normal">Date</th>
                                             <th className="px-4 py-3 font-normal">TKR</th>
                                             <th className="px-4 py-3 font-normal">Dir</th>
@@ -1968,23 +2053,23 @@ export default function App() {
                                             <th className="px-4 py-3 font-normal">CTS</th>
                                             <th className="px-4 py-3 font-normal relative group cursor-help">
                                                Grade
-                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-[#111] border border-white/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                                                  <div className="text-[10px] space-y-1 text-white/70 normal-case tracking-normal">
+                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-neutral-100 border border-black/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                                                  <div className="text-[10px] space-y-1 text-black/70 normal-case tracking-normal">
                                                      <div className="flex justify-between"><span className="text-[#00E5A0] font-bold">A+</span><span>Perfect Execution</span></div>
-                                                     <div className="flex justify-between"><span className="text-white font-bold">A</span><span>Good Setup</span></div>
-                                                     <div className="flex justify-between"><span className="text-white/50 font-bold">B</span><span>Mediocre</span></div>
-                                                     <div className="flex justify-between"><span className="text-rose-400 font-bold">C</span><span>Poor Context</span></div>
-                                                     <div className="flex justify-between"><span className="text-rose-500 font-bold">D</span><span>Rule Break</span></div>
+                                                     <div className="flex justify-between"><span className="text-black font-bold">A</span><span>Good Setup</span></div>
+                                                     <div className="flex justify-between"><span className="text-black/50 font-bold">B</span><span>Mediocre</span></div>
+                                                     <div className="flex justify-between"><span className="text-rose-500 font-bold">C</span><span>Poor Context</span></div>
+                                                     <div className="flex justify-between"><span className="text-rose-600 font-bold">D</span><span>Rule Break</span></div>
                                                   </div>
                                                </div>
                                             </th>
                                             <th className="px-4 py-3 font-normal relative group cursor-help">
                                                Outcome
-                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-3 bg-[#111] border border-white/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                                                  <div className="text-[10px] space-y-1 text-white/70 normal-case tracking-normal">
+                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-3 bg-neutral-100 border border-black/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                                                  <div className="text-[10px] space-y-1 text-black/70 normal-case tracking-normal">
                                                      <div className="flex justify-between"><span className="text-[#00E5A0] font-bold">Win</span><span>Target hit</span></div>
-                                                     <div className="flex justify-between"><span className="text-rose-400 font-bold">Loss</span><span>Stop-out</span></div>
-                                                     <div className="flex justify-between"><span className="text-white/50 font-bold">BE</span><span>Break Even</span></div>
+                                                     <div className="flex justify-between"><span className="text-rose-500 font-bold">Loss</span><span>Stop-out</span></div>
+                                                     <div className="flex justify-between"><span className="text-black/50 font-bold">BE</span><span>Break Even</span></div>
                                                   </div>
                                                </div>
                                             </th>
@@ -1993,7 +2078,7 @@ export default function App() {
                                             <th className="px-4 py-3 font-normal">Notes</th>
                                          </tr>
                                       </thead>
-                                      <tbody className="divide-y divide-white/5 text-[11px] text-white/70">
+                                      <tbody className="divide-y divide-white/5 text-[11px] text-black/70">
                                          {Object.entries(journalData).slice(-15).reverse().map(([date, day]: [string, any]) => (
                                             day.trades?.map((t: any, i: number) => {
                                                const rr = (parseFloat(t.entry) && parseFloat(t.stop) && parseFloat(t.exit)) 
@@ -2002,7 +2087,7 @@ export default function App() {
                                                return (
                                                <tr key={`${date}-${i}`} className="hover:bg-white/[0.02] transition-colors group">
                                                   <td className="px-4 py-3 opacity-50 group-hover:opacity-100 transition-opacity whitespace-nowrap">{date}</td>
-                                                  <td className="px-4 py-3 font-bold text-white">{t.sym}</td>
+                                                  <td className="px-4 py-3 font-bold text-black">{t.sym}</td>
                                                   <td className="px-4 py-3 capitalize">{t.dir}</td>
                                                   <td className="px-4 py-3">{t.entry || '-'}</td>
                                                   <td className="px-4 py-3">{t.stop || '-'}</td>
@@ -2012,7 +2097,7 @@ export default function App() {
                                                   <td className="px-4 py-3 capitalize">{t.outcome || '-'}</td>
                                                   <td className="px-4 py-3">{rr}</td>
                                                   <td className="px-4 py-3">
-                                                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${t.pnl > 0 ? 'bg-[#00E5A0]/10 text-[#00E5A0]' : t.pnl < 0 ? 'bg-rose-500/10 text-rose-400' : 'bg-white/5 text-white/70'}`}>
+                                                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${t.pnl > 0 ? 'bg-[#00E5A0]/10 text-[#00E5A0]' : t.pnl < 0 ? 'bg-rose-500/10 text-rose-500' : 'bg-black/5 text-black/70'}`}>
                                                         {t.pnl === 0 ? '$0' : t.pnl > 0 ? `+$${t.pnl}` : `-$${Math.abs(t.pnl)}`}
                                                      </span>
                                                   </td>
@@ -2040,15 +2125,15 @@ export default function App() {
 
                        {journalSubTab === 'curve' && (
                           <motion.div key="curve" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} className="space-y-6">
-                             <div className="p-8 bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors rounded-2xl h-[400px]">
+                             <div className="p-8 bg-white/[0.02] border border-black/5 hover:border-black/10 transition-colors rounded-2xl h-[400px]">
                                 <div className="flex items-center justify-between mb-8">
                                    <div>
-                                      <h3 className="text-lg font-serif italic text-white/90">Institutional Equity Curve</h3>
+                                      <h3 className="text-lg font-serif italic text-black/90">Institutional Equity Curve</h3>
                                       <p className="text-xs text-[#64A0E6]/50">Statistical consistency visualization across all mandates</p>
                                    </div>
                                    <div className="text-right">
                                       <div className="text-[10px] font-bold uppercase tracking-widest text-[#00E5A0]/50">Total Net Balance</div>
-                                      <div className="text-2xl font-bold font-mono text-white">${journalStats.totalPnl.toLocaleString()}</div>
+                                      <div className="text-2xl font-bold font-mono text-black">${journalStats.totalPnl.toLocaleString()}</div>
                                    </div>
                                 </div>
                                 <div className="h-[250px]">
@@ -2064,9 +2149,21 @@ export default function App() {
                                          <XAxis dataKey="date" stroke="#ffffff30" fontSize={10} tickLine={false} axisLine={false} />
                                          <YAxis stroke="#ffffff30" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} />
                                          <Tooltip 
-                                            contentStyle={{ backgroundColor: '#0A0B0E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                                            itemStyle={{ color: '#00E5A0', fontFamily: 'monospace', fontWeight: 'bold' }}
-                                            labelStyle={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}
+                                            content={({ active, payload }) => {
+                                              if (active && payload && payload.length) {
+                                                const data = payload[0].payload;
+                                                return (
+                                                  <div className="bg-white border border-black/10 p-3 rounded-lg shadow-xl shadow-black/50">
+                                                    <div className="text-[10px] text-black/50 uppercase tracking-widest mb-1">{data.date}</div>
+                                                    <div className="text-[#00E5A0] font-mono font-bold text-[15px] mb-1">${data.balance.toLocaleString()} Total</div>
+                                                    <div className={`text-xs font-mono font-bold ${data.pnl >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'}`}>
+                                                      {data.pnl >= 0 ? '+' : '-'}${Math.abs(data.pnl).toLocaleString()} Day P&L
+                                                    </div>
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
+                                            }}
                                          />
                                          <Area type="monotone" dataKey="balance" stroke="#00E5A0" strokeWidth={2} fillOpacity={1} fill="url(#curveColor)" />
                                       </AreaChart>
@@ -2074,15 +2171,15 @@ export default function App() {
                                 </div>
                              </div>
 
-                             <div className="p-8 bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors rounded-2xl h-[400px]">
+                             <div className="p-8 bg-white/[0.02] border border-black/5 hover:border-black/10 transition-colors rounded-2xl h-[400px]">
                                 <div className="flex items-center justify-between mb-8">
                                    <div>
-                                      <h3 className="text-lg font-serif italic text-white/90">Consistency Graph (Daily P&L)</h3>
+                                      <h3 className="text-lg font-serif italic text-black/90">Consistency Graph (Daily P&L)</h3>
                                       <p className="text-xs text-[#64A0E6]/50">Day-by-day distribution of returns</p>
                                    </div>
                                    <div className="text-right">
                                       <div className="text-[10px] font-bold uppercase tracking-widest text-[#64A0E6]/50">Win Rate</div>
-                                      <div className="text-2xl font-bold font-mono text-white">{journalStats.winRate}%</div>
+                                      <div className="text-2xl font-bold font-mono text-black">{journalStats.winRate}%</div>
                                    </div>
                                 </div>
                                 <div className="h-[250px]">
@@ -2112,13 +2209,13 @@ export default function App() {
                        )}
 
                        {journalSubTab === 'calendar' && (
-                          <motion.div key="calendar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="preserve-dark bg-[#0A0B0E] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-                            <div className="p-6 border-b border-white/10 flex items-center justify-between bg-black/20">
+                          <motion.div key="calendar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white border border-black/10 rounded-2xl overflow-hidden shadow-2xl">
+                            <div className="p-6 border-b border-black/10 flex items-center justify-between bg-black/20">
                               <div className="flex items-center gap-4">
-                                 <div className="p-2 bg-white/5 rounded-lg border border-white/10">
+                                 <div className="p-2 bg-black/5 rounded-lg border border-black/10">
                                     <Calendar size={18} className="text-[#64A0E6]" />
                                  </div>
-                                 <h2 className="text-xl font-serif italic text-white/90">
+                                 <h2 className="text-xl font-serif italic text-black/90">
                                    {new Date(journalYear, journalMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}
                                  </h2>
                               </div>
@@ -2126,21 +2223,21 @@ export default function App() {
                                  <button onClick={() => {
                                    if (journalMonth === 0) { setJournalMonth(11); setJournalYear(journalYear - 1); }
                                    else setJournalMonth(journalMonth - 1);
-                                 }} className="p-2 hover:bg-white/5 border border-white/10 rounded-lg text-white/60 transition-colors">
+                                 }} className="p-2 hover:bg-black/5 border border-black/10 rounded-lg text-black/60 transition-colors">
                                    <ChevronRight size={18} className="rotate-180" />
                                  </button>
                                  <button onClick={() => {
                                    if (journalMonth === 11) { setJournalMonth(0); setJournalYear(journalYear + 1); }
                                    else setJournalMonth(journalMonth + 1);
-                                 }} className="p-2 hover:bg-white/5 border border-white/10 rounded-lg text-white/60 transition-colors">
+                                 }} className="p-2 hover:bg-black/5 border border-black/10 rounded-lg text-black/60 transition-colors">
                                    <ChevronRight size={18} />
                                  </button>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-5 border-b border-white/10 bg-black/40">
+                            <div className="grid grid-cols-5 border-b border-black/10 bg-black/5">
                               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(day => (
-                                <div key={day} className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-white/30 text-center border-r border-white/5 last:border-0">{day}</div>
+                                <div key={day} className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-black/30 text-center border-r border-black/5 last:border-0">{day}</div>
                               ))}
                             </div>
 
@@ -2169,24 +2266,24 @@ export default function App() {
                                            setJournalSubTab('journal');
                                          }
                                        }}
-                                       className={`min-h-[120px] p-4 border-r border-b border-white/5 relative group cursor-pointer transition-all ${
+                                       className={`min-h-[120px] p-4 border-r border-b border-black/5 relative group cursor-pointer transition-all ${
                                          !isThisMonth ? 'opacity-10 pointer-events-none' : 'hover:bg-white/[0.02]'
-                                       } ${isToday ? 'bg-white/[0.03]' : ''}`}
+                                       } ${isToday ? 'bg-black/[0.03]' : ''}`}
                                      >
-                                       <div className={`text-[11px] font-mono font-bold mb-2 ${isToday ? 'text-[#64A0E6]' : 'text-white/40'}`}>
+                                       <div className={`text-[11px] font-mono font-bold mb-2 ${isToday ? 'text-[#64A0E6]' : 'text-black/40'}`}>
                                          {current.getDate()}
                                        </div>
                                        
                                        {entry && (
                                          <div className="space-y-1">
                                             {dayPnl !== 0 && (
-                                              <div className={`text-sm font-bold font-mono ${dayPnl > 0 ? 'text-[#00E5A0]' : 'text-rose-400'}`}>
+                                              <div className={`text-sm font-bold font-mono ${dayPnl > 0 ? 'text-[#00E5A0]' : 'text-rose-500'}`}>
                                                 {dayPnl > 0 ? '+' : ''}{dayPnl >= 1000 ? `${(dayPnl/1000).toFixed(1)}k` : dayPnl.toFixed(0)}
                                               </div>
                                             )}
                                             <div className="flex flex-wrap gap-1">
                                                {entry.accountType === 'challenge' && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]" />}
-                                               {entry.trades?.length > 0 && <div className="text-[9px] text-white/20 font-bold">{entry.trades.length}T</div>}
+                                               {entry.trades?.length > 0 && <div className="text-[9px] text-black/20 font-bold">{entry.trades.length}T</div>}
                                             </div>
                                          </div>
                                        )}
@@ -2207,7 +2304,7 @@ export default function App() {
                           <motion.div key="gallery" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-2 md:grid-cols-4 gap-4">
                              {Object.entries(journalData).map(([date, day]: [string, any]) => (
                                 day.images?.map((img: string, i: number) => (
-                                   <div key={`${date}-${i}`} className="group relative aspect-video bg-black/40 border border-white/10 rounded-xl overflow-hidden cursor-zoom-in">
+                                   <div key={`${date}-${i}`} className="group relative aspect-video bg-black/5 border border-black/10 rounded-xl overflow-hidden cursor-zoom-in">
                                       <img src={img} alt="Execution Evidence" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
                                          <div className="text-[10px] font-bold text-[#00E5A0] uppercase tracking-widest">{date}</div>
@@ -2223,28 +2320,28 @@ export default function App() {
 
                        {journalSubTab === 'stats' && (
                           <motion.div key="stats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                             <div className="p-8 bg-black/40 border border-white/10 rounded-2xl">
-                                <h3 className="text-sm font-bold text-white uppercase tracking-[0.2em] mb-6">Performance Distribution</h3>
+                             <div className="p-8 bg-black/5 border border-black/10 rounded-2xl">
+                                <h3 className="text-sm font-bold text-black uppercase tracking-[0.2em] mb-6">Performance Distribution</h3>
                                 <div className="space-y-6">
                                    <div>
-                                      <div className="flex justify-between text-[10px] uppercase font-bold text-white/30 mb-2">
+                                      <div className="flex justify-between text-[10px] uppercase font-bold text-black/30 mb-2">
                                          <span>Win / Loss Ratio</span>
-                                         <span className="text-white">{journalStats.winRate}%</span>
+                                         <span className="text-black">{journalStats.winRate}%</span>
                                       </div>
-                                      <div className="h-2 bg-white/5 rounded-full overflow-hidden flex">
+                                      <div className="h-2 bg-black/5 rounded-full overflow-hidden flex">
                                          <div className="h-full bg-[#00E5A0]" style={{ width: `${journalStats.winRate}%` }} />
                                          <div className="h-full bg-rose-500/30" style={{ width: `${100 - parseFloat(journalStats.winRate)}%` }} />
                                       </div>
                                    </div>
                                    <div className="grid grid-cols-2 gap-4">
-                                      <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                                         <div className="text-[9px] uppercase font-bold text-white/20 mb-1">Expectancy</div>
-                                         <div className="text-lg font-mono font-bold text-white">
+                                      <div className="p-4 bg-black/5 rounded-xl border border-black/5">
+                                         <div className="text-[9px] uppercase font-bold text-black/20 mb-1">Expectancy</div>
+                                         <div className="text-lg font-mono font-bold text-black">
                                             ${( (parseFloat(journalStats.winRate)/100 * parseFloat(journalStats.avgWin)) - ((1 - parseFloat(journalStats.winRate)/100) * parseFloat(journalStats.avgLoss)) ).toFixed(2)}
                                          </div>
                                       </div>
-                                      <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                                         <div className="text-[9px] uppercase font-bold text-white/20 mb-1">Profit Factor</div>
+                                      <div className="p-4 bg-black/5 rounded-xl border border-black/5">
+                                         <div className="text-[9px] uppercase font-bold text-black/20 mb-1">Profit Factor</div>
                                          <div className="text-lg font-mono font-bold text-[#00E5A0]">
                                             {(parseFloat(journalStats.avgWin) / (parseFloat(journalStats.avgLoss) || 1)).toFixed(2)}
                                          </div>
@@ -2252,20 +2349,20 @@ export default function App() {
                                    </div>
                                 </div>
                              </div>
-                             <div className="p-8 bg-black/40 border border-white/10 rounded-2xl">
-                                <h3 className="text-sm font-bold text-white uppercase tracking-[0.2em] mb-6">System Extremes</h3>
+                             <div className="p-8 bg-black/5 border border-black/10 rounded-2xl">
+                                <h3 className="text-sm font-bold text-black uppercase tracking-[0.2em] mb-6">System Extremes</h3>
                                 <div className="space-y-4">
-                                   <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                                      <span className="text-[10px] uppercase font-bold text-white/30">Apex Session</span>
+                                   <div className="flex justify-between items-center p-4 bg-black/5 rounded-xl border border-black/5">
+                                      <span className="text-[10px] uppercase font-bold text-black/30">Apex Session</span>
                                       <span className="text-sm font-mono font-bold text-[#00E5A0]">+${journalStats.best.toLocaleString()}</span>
                                    </div>
-                                   <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                                      <span className="text-[10px] uppercase font-bold text-white/30">Nadir Session</span>
-                                      <span className="text-sm font-mono font-bold text-rose-400">-${Math.abs(journalStats.worst).toLocaleString()}</span>
+                                   <div className="flex justify-between items-center p-4 bg-black/5 rounded-xl border border-black/5">
+                                      <span className="text-[10px] uppercase font-bold text-black/30">Nadir Session</span>
+                                      <span className="text-sm font-mono font-bold text-rose-500">-${Math.abs(journalStats.worst).toLocaleString()}</span>
                                    </div>
-                                   <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                                      <span className="text-[10px] uppercase font-bold text-white/30">Max Consistency Streak</span>
-                                      <span className="text-sm font-mono font-bold text-white">{journalStats.maxStreak} Sessions</span>
+                                   <div className="flex justify-between items-center p-4 bg-black/5 rounded-xl border border-black/5">
+                                      <span className="text-[10px] uppercase font-bold text-black/30">Max Consistency Streak</span>
+                                      <span className="text-sm font-mono font-bold text-black">{journalStats.maxStreak} Sessions</span>
                                    </div>
                                 </div>
                              </div>
@@ -2279,14 +2376,14 @@ export default function App() {
 
                 {activeModule === 'vip-alpha' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="preserve-dark bg-[#0A0B0E] border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-white pb-12 pr-[15px] pl-[19px] pt-10 rounded-2xl relative overflow-hidden group">
+                    <div className="bg-white border border-black/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black pb-12 pr-[15px] pl-[19px] pt-10 rounded-2xl relative overflow-hidden group">
                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/80 to-transparent opacity-50">
                          <div className="absolute top-0 left-0 h-full w-24 bg-white/80 animate-[ping_3s_ease-in-out_infinite] blur-[2px]"></div>
                        </div>
                          <div className="flex flex-col gap-6 w-full">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-8">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-black/5 pb-8">
                             <div>
-                              <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-white/90">Alpha Intelligence News</h2>
+                              <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-black/90 title-elegant">Alpha Intelligence <span className="text-amber-500 font-sans not-italic font-black text-sm tracking-[0.3em] uppercase align-middle ml-2">Internal News</span></h2>
                               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
                             </div>
                             
@@ -2295,7 +2392,7 @@ export default function App() {
                                 <select
                                   value={newsSentimentFilter}
                                   onChange={e => setNewsSentimentFilter(e.target.value)}
-                                  className="appearance-none bg-black/40 border border-white/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white/70 hover:text-white transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                  className="appearance-none bg-black/5 border border-black/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 hover:text-black transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
                                 >
                                   <option value="ALL">ALL SENTIMENTS</option>
                                   <option value="Positive">POSITIVE ONLY</option>
@@ -2303,7 +2400,7 @@ export default function App() {
                                   <option value="Negative">NEGATIVE ONLY</option>
                                 </select>
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                  <Activity size={14} className={newsSentimentFilter === 'ALL' ? 'text-white/30' : 'text-amber-500'} />
+                                  <Activity size={14} className={newsSentimentFilter === 'ALL' ? 'text-black/30' : 'text-amber-500'} />
                                 </div>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                                   <ChevronDown size={14} />
@@ -2314,14 +2411,14 @@ export default function App() {
                                 <select
                                   value={newsDateFilter}
                                   onChange={e => setNewsDateFilter(e.target.value)}
-                                  className="appearance-none bg-black/40 border border-white/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white/70 hover:text-white transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                  className="appearance-none bg-black/5 border border-black/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 hover:text-black transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
                                 >
                                   <option value="ALL">ALL TIME</option>
                                   <option value="TODAY">LAST 24H</option>
                                   <option value="OLDER">OLDER THAN 24H</option>
                                 </select>
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                  <Calendar size={14} className={newsDateFilter === 'ALL' ? 'text-white/30' : 'text-amber-500'} />
+                                  <Calendar size={14} className={newsDateFilter === 'ALL' ? 'text-black/30' : 'text-amber-500'} />
                                 </div>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                                   <ChevronDown size={14} />
@@ -2330,9 +2427,9 @@ export default function App() {
 
                               <button 
                                 onClick={() => fetchNews(true)}
-                                className={`flex items-center justify-center p-2.5 rounded-lg border transition-all ${newsLoading ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/40 border-white/10 hover:border-amber-500/40 hover:bg-neutral-900'}`}
+                                className={`flex items-center justify-center p-2.5 rounded-lg border transition-all ${newsLoading ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/5 border-black/10 hover:border-amber-500/40 hover:bg-neutral-900'}`}
                               >
-                                <RefreshCcw size={16} className={`${newsLoading ? 'text-amber-500 animate-spin' : 'text-white/40 group-hover:text-amber-500'}`} />
+                                <RefreshCcw size={16} className={`${newsLoading ? 'text-amber-500 animate-spin' : 'text-black/40 group-hover:text-amber-500'}`} />
                               </button>
                             </div>
                           </div>
@@ -2340,7 +2437,7 @@ export default function App() {
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Intelligence Sources</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-black/30">Intelligence Sources</span>
                                 {newsSourceFilter.length > 0 && (
                                   <button 
                                     onClick={() => setNewsSourceFilter([])}
@@ -2350,7 +2447,7 @@ export default function App() {
                                   </button>
                                 )}
                               </div>
-                              <span className="text-[9px] font-mono text-white/20 uppercase">
+                              <span className="text-[9px] font-mono text-black/20 uppercase">
                                 {newsSourceFilter.length === 0 ? 'Showing All' : `${newsSourceFilter.length} Active Filters`}
                               </span>
                             </div>
@@ -2371,11 +2468,11 @@ export default function App() {
                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-mono border transition-all duration-200 ${
                                       isActive 
                                         ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.05)]' 
-                                        : 'bg-black/40 border-white/5 text-white/40 hover:border-white/20 hover:text-white/80'
+                                        : 'bg-black/5 border-black/5 text-black/40 hover:border-black/20 hover:text-black/80'
                                     }`}
                                   >
                                     <span>{source}</span>
-                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-white/5'}`}></span>
+                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-black/5'}`}></span>
                                     <span className={isActive ? 'text-amber-400 font-bold' : 'text-amber-500/60'}>
                                       {sourceCounts[source] || 0}
                                     </span>
@@ -2407,27 +2504,27 @@ export default function App() {
                             <div 
                               key={idx} 
                               onClick={() => setSelectedNews({...item, displayDesc: desc, displayTickers: tickers, displaySentiment: sentiment})}
-                              className="flex flex-col h-full p-6 bg-[#0D0D11] border border-white/5 rounded-xl hover:border-amber-500/40 hover:bg-[#111115] hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
+                              className="flex flex-col h-full p-6 bg-white border border-black/5 rounded-xl hover:border-amber-500/40 hover:bg-neutral-100 hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
                             >
                               <div className="absolute top-0 right-0 p-8 opacity-0 group-hover/news:opacity-[0.03] transition-opacity duration-500 delay-100 pointer-events-none">
                                 <Zap size={100} />
                               </div>
                               <div className="flex-1 flex flex-col z-10 pointer-events-none">
-                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-white/5 pb-4">
+                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-black/5 pb-4">
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500">
                                       {getDisplaySource(item.source)}
                                     </span>
-                                    <span className="text-white/20 text-[9px]">•</span>
+                                    <span className="text-black/20 text-[9px]">•</span>
                                     {sentiment && (
                                       <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${getSentimentStyle(sentiment)}`}>
                                         {sentiment}
                                       </span>
                                     )}
                                   </div>
-                                  <span className="text-[9px] text-white/30 font-mono font-medium whitespace-nowrap">{item.date}</span>
+                                  <span className="text-[9px] text-black/30 font-mono font-medium whitespace-nowrap">{item.date}</span>
                                 </div>
-                                <h3 className="text-lg font-serif font-medium text-white group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
+                                <h3 className="text-lg font-serif font-medium text-black group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
                                   {item.title}
                                 </h3>
                                 <div className="relative mt-auto">
@@ -2470,7 +2567,7 @@ export default function App() {
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="bg-[#0A0B0E] border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.8)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh]"
+                                className="bg-white border border-black/20 shadow-[0_20px_60px_rgba(0,0,0,0.8)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh]"
                               >
                                 <div className="absolute top-0 right-0 opacity-5 pointer-events-none transform translate-x-1/4 -translate-y-1/4">
                                   <Zap size={300} />
@@ -2478,17 +2575,17 @@ export default function App() {
                                 
                                 <button
                                   onClick={() => setSelectedNews(null)}
-                                  className="absolute top-6 right-6 p-2 text-white/40 hover:text-white rounded-full hover:bg-white/10 transition-colors z-50 bg-black/20"
+                                  className="absolute top-6 right-6 p-2 text-black/40 hover:text-black rounded-full hover:bg-black/10 transition-colors z-50 bg-black/20"
                                 >
                                   <X size={20} />
                                 </button>
                                 
                                 <div className="overflow-y-auto custom-scrollbar pr-2 mt-4">
-                                  <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
+                                  <div className="flex items-center gap-3 mb-6 border-b border-black/5 pb-4">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500 shrink-0">
                                       {getDisplaySource(selectedNews.source)}
                                     </span>
-                                    <span className="text-white/20 text-[10px]">•</span>
+                                    <span className="text-black/20 text-[10px]">•</span>
                                   {selectedNews.displaySentiment && (
                                      <span 
                                        className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest ${
@@ -2501,17 +2598,17 @@ export default function App() {
                                        {selectedNews.displaySentiment}
                                      </span>
                                   )}
-                                  <span className="ml-auto text-[10px] text-white/30 font-mono font-medium">{selectedNews.date}</span>
+                                  <span className="ml-auto text-[10px] text-black/30 font-mono font-medium">{selectedNews.date}</span>
                                 </div>
                                 
-                                <h2 className="text-2xl md:text-3xl font-serif font-medium text-white leading-tight mb-8">
+                                <h2 className="text-2xl md:text-3xl font-serif font-medium text-black leading-tight mb-8">
                                   {selectedNews.title}
                                 </h2>
                                 
                                 <div className="space-y-6">
                                   <div>
                                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-amber-500/50 mb-3">General Summary</h4>
-                                    <p className="text-base text-white/80 leading-relaxed font-light">
+                                    <p className="text-base text-black/80 leading-relaxed font-light">
                                       {selectedNews.displayDesc}
                                     </p>
                                   </div>
@@ -2522,14 +2619,14 @@ export default function App() {
                                       href={selectedNews.url} 
                                       target="_blank" 
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#234bd8] hover:bg-[#1a38a3] text-white rounded-lg text-sm font-medium transition-colors"
+                                      className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#234bd8] hover:bg-[#1a38a3] text-black rounded-lg text-sm font-medium transition-colors"
                                     >
                                       Read Full Article <ExternalLink size={16} />
                                     </a>
                                   </div>
                                   
                                   <div>
-                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mb-3 border-b border-white/10 pb-2 mt-8">Affected Tickers</h4>
+                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/40 mb-3 border-b border-black/10 pb-2 mt-8">Affected Tickers</h4>
                                     <div className="flex gap-3">
                                       {(selectedNews.displayTickers || []).map((ticker: string) => (
                                         <span key={ticker} className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs font-mono">
@@ -2554,7 +2651,7 @@ export default function App() {
                       <div className="bg-white border border-black/10 p-8 rounded-sm shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div>
                           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-2">Institutional Playbook</div>
-                          <h2 className="text-4xl font-serif italic text-black">Trading Strategies</h2>
+                          <h2 className="text-4xl font-serif italic text-black title-elegant bg-gradient-to-r from-emerald-600 via-teal-600 to-transparent bg-clip-text text-transparent">Institutional Strategies</h2>
                           <p className="text-neutral-500 text-sm mt-1">Deep dives into professional execution models and systematic frameworks.</p>
                         </div>
                         <div className="flex gap-3">
@@ -2584,7 +2681,7 @@ export default function App() {
                                      setActiveStrategyId(newStrat.id);
                                      setActiveStepIndex(0);
                                    }}
-                                   className="flex items-center gap-2 px-6 py-2.5 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all rounded-sm"
+                                   className="flex items-center gap-2 px-6 py-2.5 bg-black text-black text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all rounded-sm"
                                  >
                                    <Plus size={14} />
                                    Deploy New Strategy
@@ -2611,7 +2708,7 @@ export default function App() {
                                    setActiveStrategyId(strat.id);
                                    setActiveStepIndex(0);
                                  }}
-                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-black text-white border-black shadow-xl ring-2 ring-[#64A0E6]/20' : 'bg-white text-black border-black/5 hover:border-black/20 hover:shadow-md'}`}
+                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-black text-black border-black shadow-xl ring-2 ring-[#64A0E6]/20' : 'bg-white text-black border-black/5 hover:border-black/20 hover:shadow-md'}`}
                                >
                                  <div className="relative z-10">
                                    <div className="flex justify-between items-start mb-4">
@@ -2631,8 +2728,8 @@ export default function App() {
                                          }}
                                          className={`p-2 rounded-full transition-all border ${
                                            activeStrategyId === strat.id 
-                                             ? 'bg-rose-500/20 border-white/10 text-rose-400 hover:bg-rose-500 hover:text-white' 
-                                             : 'bg-white border-black/5 text-rose-500 hover:bg-rose-500 hover:text-white shadow-sm'
+                                             ? 'bg-rose-500/20 border-black/10 text-rose-500 hover:bg-rose-500 hover:text-black' 
+                                             : 'bg-white border-black/5 text-rose-600 hover:bg-rose-500 hover:text-black shadow-sm'
                                          }`}
                                          title="Delete Strategy"
                                        >
@@ -2641,7 +2738,7 @@ export default function App() {
                                      )}
                                    </div>
                                    <h4 className="font-serif italic text-2xl leading-tight mb-4">{strat.title}</h4>
-                                   <p className={`text-xs line-clamp-6 leading-relaxed ${activeStrategyId === strat.id ? 'text-white/60' : 'text-black/40'}`}>
+                                   <p className={`text-xs line-clamp-6 leading-relaxed ${activeStrategyId === strat.id ? 'text-black/60' : 'text-black/40'}`}>
                                      {strat.description}
                                    </p>
                                  </div>
@@ -2671,7 +2768,7 @@ export default function App() {
                               <div className="p-10 border-b border-black/5 bg-[#FAFAFA]">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                                   <div className="flex items-center gap-6">
-                                    <div className="w-14 h-14 rounded-full bg-black text-white flex items-center justify-center font-serif text-2xl italic shadow-2xl ring-4 ring-black/5">
+                                    <div className="w-14 h-14 rounded-full bg-black text-black flex items-center justify-center font-serif text-2xl italic shadow-2xl ring-4 ring-black/5">
                                       {strategies.indexOf(activeStrategy) + 1}
                                     </div>
                                     <div className="flex-1 min-w-[300px]">
@@ -2736,7 +2833,7 @@ export default function App() {
                                       onClick={() => setActiveStepIndex(idx)}
                                       className={`flex items-center gap-3 px-6 py-4 border transition-all relative ${
                                         activeStepIndex === idx 
-                                          ? 'bg-black text-white border-black font-bold shadow-lg -translate-y-0.5 z-10' 
+                                          ? 'bg-black text-black border-black font-bold shadow-lg -translate-y-0.5 z-10' 
                                           : 'bg-white text-neutral-400 border-black/5 hover:border-black/20 hover:text-black'
                                       }`}
                                     >
@@ -2764,7 +2861,7 @@ export default function App() {
                                             setActiveStepIndex(Math.max(0, activeS.steps.length - 1));
                                           }
                                         }}
-                                        className="absolute -top-1 -right-1 p-1 bg-white border border-black shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white text-rose-500"
+                                        className="absolute -top-1 -right-1 p-1 bg-white border border-black shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-black text-rose-600"
                                       >
                                         <X size={10} />
                                       </button>
@@ -2882,7 +2979,7 @@ export default function App() {
                                               onClick={() => setZoomedImage(activeStrategy.steps[activeStepIndex].image!)}
                                             />
                                             <div className="absolute top-4 right-4 opacity-0 group-hover/image:opacity-100 transition-opacity pointer-events-none">
-                                              <div className="bg-black/50 backdrop-blur-sm text-white p-2 rounded-full">
+                                              <div className="bg-black/50 backdrop-blur-sm text-black p-2 rounded-full">
                                                 <Maximize2 size={14} />
                                               </div>
                                             </div>
@@ -2909,7 +3006,7 @@ export default function App() {
                                                      });
                                                      saveStrategies(updated);
                                                    }}
-                                                   className="p-3 bg-rose-500 text-white hover:bg-rose-600 transition-colors"
+                                                   className="p-3 bg-rose-500 text-black hover:bg-rose-600 transition-colors"
                                                  >
                                                    <X size={18} />
                                                  </button>
@@ -2977,7 +3074,7 @@ export default function App() {
                                               if (activeStepIndex < activeStrategy.steps.length - 1) setActiveStepIndex(activeStepIndex + 1);
                                             }}
                                             disabled={activeStepIndex === activeStrategy.steps.length - 1}
-                                            className="flex-1 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-20 transition-all"
+                                            className="flex-1 py-3 bg-black text-black text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-20 transition-all"
                                           >
                                             Next Phase
                                           </button>
@@ -3003,11 +3100,11 @@ export default function App() {
               {/* Sidebar Info/Status */}
               {activeModule === 'vip-alpha' ? (
                 <div className="lg:col-span-4 space-y-6">
-                   <div className="p-6 border border-amber-500/20 bg-[#0D0D11] rounded-xl relative overflow-hidden shadow-[0_4px_20px_rgba(245,158,11,0.05)]">
+                   <div className="p-6 border border-amber-500/20 bg-white rounded-xl relative overflow-hidden shadow-[0_4px_20px_rgba(245,158,11,0.05)]">
                       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
                       <div className="flex items-center gap-2 mb-4">
                         <Cpu size={14} className="text-amber-500" />
-                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-white">AI Overall Sentiment Analysis</h3>
+                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-black">AI Overall Sentiment Analysis</h3>
                       </div>
                       
                       {(() => {
@@ -3021,7 +3118,7 @@ export default function App() {
                          }
 
                          const validNews = filteredNews.filter(n => n.sentiment && ['Positive', 'Negative', 'Neutral'].includes(n.sentiment));
-                         if (validNews.length === 0) return <div className="text-xs text-white/40 py-4">Awaiting intelligence...</div>;
+                         if (validNews.length === 0) return <div className="text-xs text-black/40 py-4">Awaiting intelligence...</div>;
                          
                          const pos = validNews.filter(n => n.sentiment === 'Positive').length;
                          const neg = validNews.filter(n => n.sentiment === 'Negative').length;
@@ -3040,7 +3137,7 @@ export default function App() {
                            <>
                              <div className="mb-5">
                                <div className={`text-xl font-serif italic mb-1 ${dominantColor}`}>{dominant}</div>
-                               <div className="text-[10px] text-white/40 uppercase tracking-widest">{total} Market Drivers Analyzed</div>
+                               <div className="text-[10px] text-black/40 uppercase tracking-widest">{total} Market Drivers Analyzed</div>
                              </div>
                              
                              <div className="space-y-3 mb-5">
@@ -3049,21 +3146,21 @@ export default function App() {
                                     <span className="text-emerald-400">Positive ({Math.round(posPct)}%)</span>
                                     <span className="text-emerald-400">{pos}</span>
                                   </div>
-                                  <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-emerald-500/80" style={{width: `${posPct}%`}}></div></div>
+                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-emerald-500/80" style={{width: `${posPct}%`}}></div></div>
                                </div>
                                <div>
                                   <div className="flex justify-between text-[9px] font-mono mb-1">
                                     <span className="text-red-400">Negative ({Math.round(negPct)}%)</span>
                                     <span className="text-red-400">{neg}</span>
                                   </div>
-                                  <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-red-500/80" style={{width: `${negPct}%`}}></div></div>
+                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-red-500/80" style={{width: `${negPct}%`}}></div></div>
                                </div>
                                <div>
                                   <div className="flex justify-between text-[9px] font-mono mb-1">
                                     <span className="text-neutral-400">Neutral ({Math.round(neuPct)}%)</span>
                                     <span className="text-neutral-400">{neu}</span>
                                   </div>
-                                  <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-neutral-500/80" style={{width: `${neuPct}%`}}></div></div>
+                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-neutral-500/80" style={{width: `${neuPct}%`}}></div></div>
                                </div>
                              </div>
                              
