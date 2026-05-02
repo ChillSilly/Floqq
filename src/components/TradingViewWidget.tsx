@@ -12,10 +12,8 @@ export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', theme = 'dark', heigh
   useEffect(() => {
     if (!containerRef.current) return;
     
-    // Clear the container first in case it re-renders
     containerRef.current.innerHTML = '';
     
-    // Use a unique ID so we can have multiple widgets if needed
     const uniqueId = `tv_widget_${Math.random().toString(36).substring(7)}`;
     containerRef.current.id = uniqueId;
 
@@ -24,18 +22,22 @@ export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', theme = 'dark', heigh
         new window.TradingView.widget({
           autosize: true,
           symbol: symbol,
-          interval: "15",
+          interval: "5",
           timezone: "Etc/UTC",
           theme: theme,
-          style: "1", // 1 = Candle, 2 = Line, 3 = Area
+          style: "1",
           locale: "en",
           enable_publishing: false,
-          backgroundColor: theme === 'dark' ? "transparent" : "#ffffff",
-          gridColor: theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0,0,0,0.05)",
-          hide_top_toolbar: false,
-          hide_legend: false,
+          backgroundColor: theme === 'dark' ? "#1a1a1a" : "transparent",
+          gridColor: theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0,0,0,0.03)",
+          hide_top_toolbar: true,
+          hide_legend: true,
           save_image: false,
           container_id: containerRef.current.id,
+          toolbar_bg: "transparent",
+          studies: [
+            "Volume@tv-basicstudies"
+          ]
         });
       }
     };
@@ -57,7 +59,6 @@ export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', theme = 'dark', heigh
     }
     
     return () => {
-      // Just clean the container contents on unmount
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
       }
@@ -71,7 +72,6 @@ export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', theme = 'dark', heigh
   );
 }
 
-// Add type definition for window.TradingView to avoid TS errors
 declare global {
   interface Window {
     TradingView: any;

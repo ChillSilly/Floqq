@@ -1,8 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
@@ -45,49 +43,53 @@
   }
 }
 
-:root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --border-subtle: rgba(0, 0, 0, 0.05);
-}
-
-.dark {
-  --bg-primary: #0F1219;
-  --bg-secondary: #161B22;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-}
-
-html {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-}
-
 body {
   font-family: var(--font-sans);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  transition: background-color 0.5s ease, color 0.5s ease;
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(210,100%,98%,1) 0, transparent 50%), 
+    radial-gradient(at 50% 0%, hsla(220,100%,97%,1) 0, transparent 50%), 
+    radial-gradient(at 100% 0%, hsla(230,100%,98%,1) 0, transparent 50%);
+  color: #1A1A1A;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Base View Transition Overrides */
+::selection {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1A1A1A;
+}
+
+/* View Transition API */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
+  animation-duration: 0.4s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-::view-transition-group(root) {
-  animation-duration: 0.8s;
+::view-transition-old(root) {
+  opacity: 1;
 }
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+::view-transition-new(root) {
+  opacity: 0;
 }
 
+.dark-theme::view-transition-old(root) {
+  opacity: 0;
+}
+
+.dark-theme::view-transition-new(root) {
+  opacity: 1;
+}
+
+html.dark-theme {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #FDFCFB; /* ensure the html has a bg to invert */
+}
+
+html.dark-theme img,
+html.dark-theme video,
+html.dark-theme iframe,
+html.dark-theme .preserve-dark {
+  filter: invert(1) hue-rotate(180deg);
+}

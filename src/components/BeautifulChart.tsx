@@ -1,10 +1,14 @@
-import React, { useMemo } from 'react';
-import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import React, { useEffect, useRef } from 'react';
+import { createChart, ColorType, CandlestickSeries, IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
 interface ChartDataPoint {
-  time: number | string;
-  price: number;
+  time: number | Time;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
   netGex: number;
+  volume?: number;
 }
 
 interface BeautifulChartProps {
@@ -13,184 +17,185 @@ interface BeautifulChartProps {
   lineColor: string;
   secondaryLineColor: string;
   areaColor: string;
-  positiveGexColor?: string;
-  negativeGexColor?: string;
 }
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    let timeStr = label;
-    if (typeof label === 'number') {
-       timeStr = new Date(label * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    }
-    
-    const priceP = payload.find((p: any) => p.dataKey === 'price');
-    const gexP = payload.find((p: any) => p.dataKey === 'netGex');
-
-    return (
-      <div className="p-4 bg-white dark:bg-neutral-900 border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl">
-        <p className="text-[10px] text-neutral-500 dark:text-white/50 uppercase tracking-[0.2em] mb-4 font-bold">{timeStr}</p>
-        <div className="flex flex-col gap-3">
-          {priceP && (
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-[10px] uppercase font-bold text-neutral-400 dark:text-white/60 tracking-wider">SPOT</span>
-              <span className="font-mono text-base font-bold text-neutral-900 dark:text-white">
-                ${Number(priceP.value).toFixed(2)}
-              </span>
-            </div>
-          )}
-          {gexP && (
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-[10px] uppercase font-bold text-neutral-400 dark:text-white/60 tracking-wider">NET GEX</span>
-              <span className="font-mono text-base font-bold" style={{ color: gexP.value >= 0 ? '#10B981' : '#F43F5E' }}>
-                ${Number(gexP.value).toFixed(2)}B
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-};
 
 export const BeautifulChart: React.FC<BeautifulChartProps> = ({ 
   data, 
   height = 300, 
-  lineColor, 
-  secondaryLineColor,
-  areaColor,
-  positiveGexColor = '#00E5A0',
-  negativeGexColor = '#fb7185'
 }) => {
-  const chartData = useMemo(() => {
-    return data.map(d => ({
-      ...d,
-      timeVal: d.time
-    }));
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const lastDataLength = useRef<number>(0);
+  const dataRef = useRef<ChartDataPoint[]>([]);
+
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: 'rgba(0, 0, 0, 0.4)',
+        fontFamily: 'JetBrains Mono, monospace',
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { color: 'rgba(0, 0, 0, 0.03)' },
+      },
+      timeScale: {
+        borderColor: 'transparent',
+        timeVisible: true,
+      },
+      rightPriceScale: {
+        borderColor: 'transparent',
+        autoScale: true,
+      },
+      crosshair: {
+        vertLine: {
+          color: 'rgba(0, 0, 0, 0.1)',
+          labelBackgroundColor: '#000000',
+        },
+        horzLine: {
+          color: 'rgba(0, 0, 0, 0.1)',
+          labelBackgroundColor: '#000000',
+        },
+      },
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#10b981',
+      downColor: '#ef4444',
+      borderVisible: false,
+      wickUpColor: '#10b981',
+      wickDownColor: '#ef4444',
+    });
+
+    chartRef.current = chart;
+    candleSeriesRef.current = candleSeries as any;
+
+    chart.subscribeCrosshairMove((param) => {
+      if (!tooltipRef.current || !chartContainerRef.current) return;
+      
+      const isOutOfBounds = 
+        !param.point || 
+        !param.time || 
+        param.point.x < 0 || 
+        param.point.x > chartContainerRef.current.clientWidth || 
+        param.point.y < 0 || 
+        param.point.y > chartContainerRef.current.clientHeight;
+
+      if (isOutOfBounds) {
+        tooltipRef.current.style.display = 'none';
+        return;
+      }
+
+      const csData = param.seriesData.get(candleSeries) as any;
+      if (!csData) return;
+
+      const price = csData.close !== undefined ? csData.close : csData.value;
+      
+      const timeMatch = param.time;
+      const dataPoint = dataRef.current.find(d => (d.time as any) === timeMatch);
+      const gex = dataPoint ? dataPoint.netGex : 0;
+      const volume = dataPoint?.volume || 0;
+      const volStr = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(0) + 'K';
+      
+      const intensityColor = gex >= 0 ? '#10b981' : '#ef4444';
+
+      tooltipRef.current.style.display = 'block';
+      tooltipRef.current.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+      tooltipRef.current.style.backdropFilter = 'blur(12px)';
+      (tooltipRef.current.style as any).webkitBackdropFilter = 'blur(12px)';
+      let leftPos = param.point.x + 15;
+      if (leftPos + 200 > chartContainerRef.current.clientWidth) {
+        leftPos = param.point.x - 215;
+      }
+      
+      tooltipRef.current.style.left = leftPos + 'px';
+      tooltipRef.current.style.top = param.point.y + 15 + 'px';
+      
+      const dateStr = new Date((param.time as number) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      tooltipRef.current.innerHTML = `
+        <div style="font-size: 10px; color: #888; font-weight: 700; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">${dateStr}</div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; justify-content: space-between; gap: 20px;">
+            <span style="color: #666; font-size: 10px; font-weight: 700;">PX</span>
+            <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #000; font-size: 12px;">$${price.toFixed(2)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 20px;">
+            <span style="color: #666; font-size: 10px; font-weight: 700;">VOL</span>
+            <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #000; font-size: 12px;">${volStr}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 20px;">
+            <span style="color: #666; font-size: 10px; font-weight: 700;">GEX</span>
+            <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: ${intensityColor}; font-size: 12px;">${gex >= 0 ? '+' : ''}${gex.toFixed(3)}</span>
+          </div>
+        </div>
+      `;
+    });
+
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    dataRef.current = data;
+    if (!seriesDataValid(data)) return;
+    
+    if (candleSeriesRef.current && chartRef.current) {
+      const candles = data.map(d => ({
+        time: d.time as any,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+      }));
+
+      candleSeriesRef.current.setData(candles);
+
+      if (lastDataLength.current === 0) {
+         chartRef.current.timeScale().fitContent();
+      }
+      
+      lastDataLength.current = data.length;
+    }
   }, [data]);
 
-  const yDomainPrice = useMemo(() => {
-      if (!chartData.length) return ['auto', 'auto'];
-      const prices = chartData.map(d => d.price);
-      const min = Math.min(...prices);
-      const max = Math.max(...prices);
-      const padding = (max - min) * 0.1 || 1;
-      return [min - padding, max + padding];
-  }, [chartData]);
-  
-  const yDomainGex = useMemo(() => {
-      if (!chartData.length) return ['auto', 'auto'];
-      const gexs = chartData.map(d => d.netGex);
-      const min = Math.min(...gexs);
-      const max = Math.max(...gexs);
-      const padding = Math.max(Math.abs(max), Math.abs(min)) * 0.1 || 1;
-      return [min - padding, max + padding];
-  }, [chartData]);
-
-  const gradientOffset = useMemo(() => {
-    if (!chartData.length) return 0;
-    const gexs = chartData.map(d => d.netGex);
-    const min = Math.min(...gexs);
-    const max = Math.max(...gexs);
-    if (min >= 0) return 1;
-    if (max <= 0) return 0;
-    return max / (max - min);
-  }, [chartData]);
+  const seriesDataValid = (d: any[]) => {
+    return d && d.length > 0 && d[0].open !== undefined;
+  };
 
   return (
-    <div className="w-full relative group" style={{ height: `${height}px` }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart
-          data={chartData}
-          margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
-        >
-          <defs>
-            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={areaColor} stopOpacity={0.15}/>
-              <stop offset="95%" stopColor={areaColor} stopOpacity={0}/>
-            </linearGradient>
-            <linearGradient id="splitColorGex" x1="0" y1="0" x2="0" y2="1">
-              <stop offset={gradientOffset} stopColor={positiveGexColor} stopOpacity={0.8} />
-              <stop offset={gradientOffset} stopColor={negativeGexColor} stopOpacity={0.8} />
-            </linearGradient>
-            <linearGradient id="splitColorGexArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset={gradientOffset} stopColor={positiveGexColor} stopOpacity={0.2} />
-              <stop offset={gradientOffset} stopColor={negativeGexColor} stopOpacity={0.2} />
-            </linearGradient>
-          </defs>
-          <XAxis 
-            dataKey="timeVal" 
-            axisLine={false} 
-            tickLine={false} 
-            tick={{ fill: 'currentColor', fontSize: 10, fontFamily: 'monospace', opacity: 0.4 }}
-            tickFormatter={(val) => {
-               if (typeof val === 'number') {
-                  return new Date(val * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-               }
-               return String(val);
-            }}
-            minTickGap={40}
-            dy={10}
-          />
-          <YAxis 
-            yAxisId="left"
-            domain={yDomainPrice}
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: 'currentColor', fontSize: 10, fontFamily: 'monospace', opacity: 0.5 }}
-            tickFormatter={(val) => `$${val.toFixed(0)}`}
-            orientation="left"
-            dx={-10}
-          />
-          <YAxis 
-            yAxisId="right"
-            domain={yDomainGex}
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: 'currentColor', fontSize: 10, fontFamily: 'monospace', opacity: 0.3 }}
-            tickFormatter={(val) => `${val > 0 ? '+' : ''}${val.toFixed(2)}B`}
-            orientation="right"
-            dx={10}
-          />
-          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.05} vertical={true} horizontal={true} />
-          
-          <Tooltip 
-            content={<CustomTooltip />} 
-            cursor={{ stroke: 'currentColor', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.3 }} 
-            isAnimationActive={true}
-          />
-          
-          <ReferenceLine y={0} yAxisId="right" stroke="currentColor" strokeOpacity={0.15} strokeDasharray="3 3" />
-
-          {/* Price Area */}
-          <Area 
-            yAxisId="left"
-            type="monotone" 
-            dataKey="price" 
-            stroke={lineColor} 
-            strokeWidth={1.5}
-            fillOpacity={1} 
-            fill="url(#colorPrice)" 
-            isAnimationActive={false}
-            activeDot={{ r: 4, fill: lineColor, strokeWidth: 0 }}
-          />
-
-          {/* Net GEX Line/Area */}
-          <Area 
-            yAxisId="right"
-            type="monotone" 
-            dataKey="netGex" 
-            stroke="url(#splitColorGex)"
-            strokeWidth={2}
-            fillOpacity={1}
-            fill="url(#splitColorGexArea)"
-            isAnimationActive={false}
-            activeDot={{ r: 4, fill: "url(#splitColorGex)", strokeWidth: 0 }}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+    <div className="w-full h-full relative" style={{ height: `${height}px` }}>
+      <div ref={chartContainerRef} className="w-full h-full" />
+      <div 
+        ref={tooltipRef} 
+        className="absolute z-50 pointer-events-none hidden bg-white/90 backdrop-blur-md border border-neutral-200 rounded p-3 shadow-xl"
+        style={{ minWidth: '120px' }}
+      />
     </div>
   );
 };
