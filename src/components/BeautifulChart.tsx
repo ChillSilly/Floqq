@@ -28,21 +28,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     const gexP = payload.find((p: any) => p.dataKey === 'netGex');
 
     return (
-      <div className="p-4 bg-black/80 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl">
-        <p className="text-[10px] text-white/50 uppercase tracking-[0.2em] mb-4 font-bold">{timeStr}</p>
+      <div className="p-4 bg-white dark:bg-neutral-900 border border-black/5 dark:border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl">
+        <p className="text-[10px] text-neutral-500 dark:text-white/50 uppercase tracking-[0.2em] mb-4 font-bold">{timeStr}</p>
         <div className="flex flex-col gap-3">
           {priceP && (
             <div className="flex items-center justify-between gap-6">
-              <span className="text-[10px] uppercase font-bold text-white/60 tracking-wider">SPOT</span>
-              <span className="font-mono text-base font-bold" style={{ color: priceP.color }}>
+              <span className="text-[10px] uppercase font-bold text-neutral-400 dark:text-white/60 tracking-wider">SPOT</span>
+              <span className="font-mono text-base font-bold text-neutral-900 dark:text-white">
                 ${Number(priceP.value).toFixed(2)}
               </span>
             </div>
           )}
           {gexP && (
             <div className="flex items-center justify-between gap-6">
-              <span className="text-[10px] uppercase font-bold text-white/60 tracking-wider">NET GEX</span>
-              <span className="font-mono text-base font-bold" style={{ color: gexP.value >= 0 ? '#00E5A0' : '#fb7185' }}>
+              <span className="text-[10px] uppercase font-bold text-neutral-400 dark:text-white/60 tracking-wider">NET GEX</span>
+              <span className="font-mono text-base font-bold" style={{ color: gexP.value >= 0 ? '#10B981' : '#F43F5E' }}>
                 ${Number(gexP.value).toFixed(2)}B
               </span>
             </div>
@@ -124,7 +124,7 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
             dataKey="timeVal" 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10, fontFamily: 'monospace' }}
+            tick={{ fill: 'currentColor', fontSize: 10, fontFamily: 'monospace', opacity: 0.4 }}
             tickFormatter={(val) => {
                if (typeof val === 'number') {
                   return new Date(val * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -139,7 +139,7 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
             domain={yDomainPrice}
             axisLine={false}
             tickLine={false}
-            tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontFamily: 'monospace' }}
+            tick={{ fill: 'currentColor', fontSize: 10, fontFamily: 'monospace', opacity: 0.5 }}
             tickFormatter={(val) => `$${val.toFixed(0)}`}
             orientation="left"
             dx={-10}
@@ -149,20 +149,20 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
             domain={yDomainGex}
             axisLine={false}
             tickLine={false}
-            tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontFamily: 'monospace' }}
+            tick={{ fill: 'currentColor', fontSize: 10, fontFamily: 'monospace', opacity: 0.3 }}
             tickFormatter={(val) => `${val > 0 ? '+' : ''}${val.toFixed(2)}B`}
             orientation="right"
             dx={10}
           />
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={true} horizontal={true} />
+          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.05} vertical={true} horizontal={true} />
           
           <Tooltip 
             content={<CustomTooltip />} 
-            cursor={{ stroke: 'rgba(255,255,255,0.3)', strokeWidth: 1, strokeDasharray: '4 4' }} 
+            cursor={{ stroke: 'currentColor', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.3 }} 
             isAnimationActive={true}
           />
           
-          <ReferenceLine y={0} yAxisId="right" stroke="rgba(255,255,255,0.15)" strokeDasharray="3 3" />
+          <ReferenceLine y={0} yAxisId="right" stroke="currentColor" strokeOpacity={0.15} strokeDasharray="3 3" />
 
           {/* Price Area */}
           <Area 

@@ -5,6 +5,7 @@ import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, Che
 import { TradingViewWidget } from './components/TradingViewWidget';
 import { BeautifulChart } from './components/BeautifulChart';
 import { GexDashboardChart } from './components/GexDashboardChart';
+import { AnimatedThemeToggler } from './components/ui/animated-theme-toggler';
 
 import { bs_gamma, bs_delta, bs_vega, implied_vol } from './lib/blackScholes';
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from './lib/firebase';
@@ -94,7 +95,12 @@ type InstitutionalStrategy = {
 
 export default function App() {
   const [activeModule, setActiveModule] = useState('module-1');
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return false;
+  });
   const [isVIPOpen, setIsVIPOpen] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   
@@ -107,6 +113,20 @@ export default function App() {
       setUser(u);
     });
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const updateTheme = () => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
   }, []);
 
   const handleLogin = async () => {
@@ -807,14 +827,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark-theme');
-    } else {
-      document.documentElement.classList.remove('dark-theme');
-    }
-  }, [isDark]);
-
-  useEffect(() => {
     const handleScroll = () => {
       const sections = MODULES.map((m) => document.getElementById(m.id));
       let currentActive = activeModule;
@@ -846,11 +858,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-[#1A1A1A] flex font-sans scroll-smooth">
+    <div className="min-h-screen bg-white dark:bg-[#0F1219] text-neutral-900 dark:text-neutral-50 flex font-sans scroll-smooth">
       {/* Sidebar Navigation */}
-      <nav className="fixed hidden md:flex flex-col w-64 h-screen border-r border-black/5 bg-[#f8fafc]/50 backdrop-blur-3xl p-6 z-10">
+      <nav className="fixed hidden md:flex flex-col w-64 h-screen border-r border-black/5 dark:border-white/10 bg-[#f8fafc]/50 dark:bg-[#0F1219]/80 backdrop-blur-3xl p-6 z-10">
         <div className="mb-10 flex items-baseline gap-3">
-          <h1 className="font-serif font-black text-3xl tracking-tight uppercase title-elegant text-indigo-900 drop-shadow-sm">FloQ</h1>
+          <h1 className="font-serif font-black text-3xl tracking-tight uppercase title-elegant text-indigo-900 dark:text-indigo-400 drop-shadow-sm">FloQ</h1>
         </div>
         
         <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4">
@@ -860,7 +872,7 @@ export default function App() {
         {!hasAccess && (
           <button
             onClick={() => setIsVIPOpen(true)}
-            className="flex items-center gap-3 px-3 py-3 text-left transition-all mb-4 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm group relative overflow-hidden"
+            className="flex items-center gap-3 px-3 py-3 text-left transition-all mb-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-sm group relative overflow-hidden"
           >
             <div className="absolute inset-0 bg-linear-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
             <Crown size={14} className="text-amber-500 fill-amber-500/20" />
@@ -880,7 +892,7 @@ export default function App() {
                   else scrollToModule(mod.id);
                 }}
                 className={`flex items-center gap-3 px-3 py-3 text-left transition-all ${
-                  isActive ? 'border-b border-black text-black' : 'opacity-40 hover:opacity-100 hover:border-b hover:border-black text-black'
+                  isActive ? 'border-b border-black text-black dark:text-white' : 'opacity-40 hover:opacity-100 hover:border-b hover:border-black text-black dark:text-white'
                 }`}
               >
                 <span className="font-serif italic text-xs">0{idx + 1}</span>
@@ -894,7 +906,7 @@ export default function App() {
         {!hasAccess && (
           <button
             onClick={() => setIsKeyModalOpen(true)}
-            className="flex items-center gap-3 px-3 py-3 text-left transition-all mt-6 border border-dashed border-black/20 hover:border-black/40 rounded-sm group opacity-60 hover:opacity-100"
+            className="flex items-center gap-3 px-3 py-3 text-left transition-all mt-6 border border-dashed border-black/20 dark:border-white/20 hover:border-black/40 dark:hover:border-white/40 dark:border-white/40 rounded-sm group opacity-60 hover:opacity-100"
           >
             <Key size={14} className="group-hover:rotate-45 transition-transform" />
             <span className="text-[10px] font-bold uppercase tracking-widest flex-1">Decrypt Access</span>
@@ -910,17 +922,17 @@ export default function App() {
 
         <div className="mt-auto px-1 py-4 mb-2">
             {user ? (
-                <div id="user-profile-section" className="flex flex-col gap-3 p-3 bg-black/5 border border-black/5 rounded-sm">
+                <div id="user-profile-section" className="flex flex-col gap-3 p-3 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-sm">
                     <div className="flex items-center gap-3">
                         {user.photoURL ? (
-                            <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-black/10" />
+                            <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-black/10 dark:border-white/10" />
                         ) : (
-                            <div className="w-8 h-8 rounded-full bg-black/10 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center">
                                 <UserIcon size={14} className="opacity-40" />
                             </div>
                         )}
                         <div className="flex flex-col min-w-0">
-                            <span className="text-[11px] font-bold truncate text-black leading-none mb-1">
+                            <span className="text-[11px] font-bold truncate text-black dark:text-white leading-none mb-1">
                                 {user.displayName || 'Anonymous'}
                             </span>
                             <span className="text-[9px] font-medium opacity-40 truncate">
@@ -930,7 +942,7 @@ export default function App() {
                     </div>
                     <button 
                         onClick={handleLogout}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-white border border-black/10 hover:bg-black/5 transition-all text-[9px] font-bold uppercase tracking-widest"
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5 transition-all text-[9px] font-bold uppercase tracking-widest"
                     >
                         <LogOut size={12} />
                         Logout
@@ -952,27 +964,23 @@ export default function App() {
             )}
         </div>
         
-        <div className="pt-6 border-t border-black/10 flex items-center justify-between">
+        <div className="pt-6 border-t border-black/10 dark:border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest opacity-40 font-bold mt-1">
             Vol. 01 — Journal
           </div>
-          <button 
-            onClick={() => setIsDark(!isDark)}
-            className="p-2 border border-black/10 hover:bg-black/5 transition-colors bg-white shadow-sm"
-            aria-label="Toggle theme"
-          >
-            {isDark ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
+          <AnimatedThemeToggler 
+            className="p-2 border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5 transition-colors bg-white dark:bg-[#0F1219] shadow-sm"
+          />
         </div>
       </nav>
 
       {/* Main Content */}
       <main className="flex-1 md:ml-64 relative overflow-x-hidden">
         {/* Mobile Header */}
-        <div className="md:hidden sticky top-0 bg-white/70 backdrop-blur-xl border-b border-black/5 p-4 flex items-center justify-between z-20">
+        <div className="md:hidden sticky top-0 bg-white/70 dark:bg-[#0F1219]/70 backdrop-blur-xl border-b border-black/5 dark:border-white/10 p-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3">
-            <h1 className="font-serif font-black text-lg tracking-tight uppercase title-elegant text-indigo-900">FloQ</h1>
-            <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">{hasAccess ? 'Enterprise' : 'Academy'}</span>
+            <h1 className="font-serif font-black text-lg tracking-tight uppercase title-elegant text-indigo-900 dark:text-indigo-400">FloQ</h1>
+            <span className="text-[10px] uppercase tracking-widest font-bold opacity-40 text-black dark:text-white">{hasAccess ? 'Enterprise' : 'Academy'}</span>
           </div>
           <div className="flex items-center gap-2">
             {!hasAccess && (
@@ -984,13 +992,9 @@ export default function App() {
                 <Crown size={14} className="text-amber-600 fill-amber-600/10" />
               </button>
             )}
-            <button 
-              onClick={() => setIsDark(!isDark)}
-              className="p-2 border border-black/10 hover:bg-black/5 transition-colors bg-white shadow-sm"
-              aria-label="Toggle theme"
-            >
-              {isDark ? <Sun size={14} /> : <Moon size={14} />}
-            </button>
+            <AnimatedThemeToggler 
+              className="p-2 border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5 transition-colors bg-white dark:bg-[#0F1219] shadow-sm"
+            />
           </div>
         </div>
 
@@ -1008,12 +1012,12 @@ export default function App() {
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="space-y-6 max-w-2xl pb-12 border-b border-black/10"
+                className="space-y-6 max-w-2xl pb-12 border-b border-black/10 dark:border-white/10"
               >
                 <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 flex items-center gap-2">
                   Journal
                 </div>
-                <h1 className="text-5xl md:text-7xl font-serif font-light leading-[1.1] text-black title-elegant drop-shadow-sm">
+                <h1 className="text-5xl md:text-7xl font-serif font-light leading-[1.1] text-black dark:text-white title-elegant drop-shadow-sm">
                   The <span className="text-indigo-600 font-black not-italic relative">Options Flow<div className="absolute -bottom-2 left-0 w-full h-1 bg-indigo-200/50 blur-[2px] rounded-full" /></span> <br />
                   <span className="text-rose-500 font-serif italic italic">Trading Guide</span>
                 </h1>
@@ -1031,7 +1035,7 @@ export default function App() {
             
             <div className="space-y-12">
               <div className="max-w-3xl">
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 border-b border-black/10 pb-2">Why Traditional Technical Analysis is No Longer Enough</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 border-b border-black/10 dark:border-white/10 pb-2">Why Traditional Technical Analysis is No Longer Enough</h3>
                 <p className="text-neutral-600 leading-relaxed text-lg">
                   The global financial ecosystem has experienced a fundamental transition in its underlying price discovery mechanisms. 
                   Since 2021, options trading volumes have systematically surpassed the volumes of the underlying cash equity markets. 
@@ -1041,12 +1045,12 @@ export default function App() {
               </div>
 
               <div className="grid md:grid-cols-2 gap-8">
-                <div className="bg-white p-8 border border-black/5 shadow-sm group">
+                <div className="bg-white dark:bg-[#0F1219] p-8 border border-black/5 dark:border-white/5 shadow-sm group">
                   <h3 className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 mb-4 bg-emerald-50 inline-block px-2 py-1">Mechanism</h3>
                   <h4 className="text-2xl font-serif italic mb-3">The Role of the Market Maker and Delta Hedging</h4>
                   <p className="text-neutral-600 leading-relaxed text-sm">
                     Market makers are not in the business of taking directional bets; their goal is to provide liquidity and collect the spread. 
-                    To protect themselves from market movements, they use a strategy called <strong className="font-bold text-black">delta hedging</strong>. 
+                    To protect themselves from market movements, they use a strategy called <strong className="font-bold text-black dark:text-white">delta hedging</strong>. 
                     This means they constantly buy or sell the underlying asset (or futures) to keep their directional exposure neutral. 
                   </p>
                 </div>
@@ -1062,8 +1066,8 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-[#F5F2EF] border border-black/5 p-8 md:p-10">
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-black/10 flex items-center justify-between">
+              <div className="bg-[#F5F2EF] border border-black/5 dark:border-white/5 p-8 md:p-10">
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-black/10 dark:border-white/10 flex items-center justify-between">
                   <span>Positive vs. Negative Gamma Regimes</span>
                   <Activity size={16} className="opacity-50" />
                 </h3>
@@ -1075,7 +1079,7 @@ export default function App() {
                   <div className="flex gap-4">
                     <div className="w-1 bg-emerald-800"></div>
                     <div>
-                      <h4 className="text-xl font-serif italic text-black mb-1">Position Gamma (Low Volatility / Mean Reverting)</h4>
+                      <h4 className="text-xl font-serif italic text-black dark:text-white mb-1">Position Gamma (Low Volatility / Mean Reverting)</h4>
                       <p className="text-neutral-600 text-sm leading-relaxed">
                         When the market is in positive gamma, market makers hedge by buying when the price drops and selling when it rises. 
                         This dampens volatility, keeping the market trapped in a range and creating choppy, sideways movement.
@@ -1086,7 +1090,7 @@ export default function App() {
                   <div className="flex gap-4">
                     <div className="w-1 bg-red-800"></div>
                     <div>
-                      <h4 className="text-xl font-serif italic text-black mb-1">Negative Gamma (High Volatility / Directional)</h4>
+                      <h4 className="text-xl font-serif italic text-black dark:text-white mb-1">Negative Gamma (High Volatility / Directional)</h4>
                       <p className="text-neutral-600 text-sm leading-relaxed">
                         When the market is in negative gamma, dealers must sell when the price drops and buy when it rises. 
                         This pro-cyclical hedging amplifies market moves, creating fast, aggressive trends and massive intraday swings.
@@ -1172,7 +1176,7 @@ export default function App() {
             </div>
 
             <div className="space-y-6">
-              <div className="bg-white border text-black border-black/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
+              <div className="bg-white dark:bg-[#0F1219] border text-black dark:text-white border-black/10 dark:border-white/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
                 <div className="md:w-1/3">
                   <h3 className="text-2xl font-serif italic mb-2">Blind Spots Levels</h3>
                   <div className="w-12 h-1 bg-black my-4"></div>
@@ -1184,7 +1188,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white border text-black border-black/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
+              <div className="bg-white dark:bg-[#0F1219] border text-black dark:text-white border-black/10 dark:border-white/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
                 <div className="md:w-1/3">
                   <h3 className="text-2xl font-serif italic mb-2">Dark Pool Anomalies</h3>
                   <div className="w-12 h-1 bg-black my-4"></div>
@@ -1196,7 +1200,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white border text-black border-black/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
+              <div className="bg-white dark:bg-[#0F1219] border text-black dark:text-white border-black/10 dark:border-white/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
                 <div className="md:w-1/3">
                   <h3 className="text-2xl font-serif italic mb-2">Absolute Liquidity Voids</h3>
                   <div className="w-12 h-1 bg-black my-4"></div>
@@ -1269,14 +1273,14 @@ export default function App() {
 
             <div className="grid md:grid-cols-2 gap-10">
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-black/10">Supported Platforms</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-black/10 dark:border-white/10">Supported Platforms</h3>
                 <p className="text-neutral-600 mb-6 text-sm">FlowDynamics natively integrates into the industry's best software:</p>
                 <ul className="space-y-4">
                   {[
                     ['MotiveWave', 'Imports Gamma Levels, Blind Spots, and Expected Moves natively.'],
                     ['Quantower', 'Overlays options liquidity data right onto advanced order-flow software.']
                   ].map(([p, desc]) => (
-                    <li key={p} className="flex gap-4 p-4 border border-black/10 bg-white shadow-sm">
+                    <li key={p} className="flex gap-4 p-4 border border-black/10 dark:border-white/10 bg-white dark:bg-[#0F1219] shadow-sm">
                       <div className="mt-1"><Target size={18} className="opacity-50" /></div>
                       <div>
                         <div className="font-serif italic text-lg mb-1">{p}</div>
@@ -1293,7 +1297,7 @@ export default function App() {
                 </div>
                 <h3 className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-4 bg-white/10 inline-block px-2 py-1 self-start">Feature</h3>
                 <h3 className="text-2xl font-serif italic mb-4 relative z-10">The Power of Levels Conversion</h3>
-                <div className="w-12 h-1 bg-white my-6 relative z-10"></div>
+                <div className="w-12 h-1 bg-white dark:bg-[#0F1219] my-6 relative z-10"></div>
                 <div className="text-neutral-300 leading-relaxed text-sm relative z-10 space-y-4 flex-1">
                   <p>
                     If you trade Futures (like ES or NQ), looking at futures volume alone is trading blind. FlowDynamics's "Levels Conversion" tool allows you to take the massive options data from indices (like SPX or NDX) and accurately overlay them onto your futures charts. 
@@ -1329,7 +1333,7 @@ export default function App() {
           </section>
 
           {/* Footer */}
-          <footer className="mt-10 pt-4 flex flex-col md:flex-row justify-between items-center text-[10px] pb-12 uppercase tracking-[0.2em] opacity-40 border-t border-black/10 gap-4">
+          <footer className="mt-10 pt-4 flex flex-col md:flex-row justify-between items-center text-[10px] pb-12 uppercase tracking-[0.2em] opacity-40 border-t border-black/10 dark:border-white/10 gap-4">
             <span>© {new Date().getFullYear()} OptionsFlow Quantitative Research</span>
             <span>Confidential Institutional Models</span>
             <span>Page 042</span>
@@ -1343,7 +1347,7 @@ export default function App() {
           transition={{ duration: 0.6, ease: "easeOut" }}
           className="min-h-screen bg-transparent"
         >
-          <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 space-y-12 bg-white/40 shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-black/5">
+          <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 space-y-12 bg-white/40 shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-black/5 dark:border-white/5">
 
 
             {/* VIP Content Switcher */}
@@ -1360,7 +1364,7 @@ export default function App() {
                           <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#64A0E6]/70 uppercase">Internal Engine Live</span>
                         </div>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                          <h2 className="text-3xl font-bold tracking-tighter text-black/80 title-elegant">GEX TERMINAL</h2>
+                          <h2 className="text-3xl font-bold tracking-tighter text-black/80 dark:text-white/80 title-elegant">GEX TERMINAL</h2>
                           <div className="flex items-center gap-2">
                             {TICKERS.map(t => (
                               <button 
@@ -1368,8 +1372,8 @@ export default function App() {
                                 onClick={() => setActiveTicker(t)}
                                 className={`px-3 py-1 text-xs font-mono font-bold rounded-md uppercase tracking-widest transition-colors ${
                                   activeTicker === t 
-                                    ? 'bg-black/80 text-white shadow-sm' 
-                                    : 'bg-black/5 text-black/50 hover:bg-black/10'
+                                    ? 'bg-black/80 dark:bg-white/80 text-white shadow-sm' 
+                                    : 'bg-black/5 dark:bg-white/5 text-black/5 dark:text-white/50 hover:bg-black/10 dark:hover:bg-white/10 dark:bg-white/10'
                                 }`}
                               >
                                 {t}
@@ -1379,9 +1383,9 @@ export default function App() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3 pb-1">
-                        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-black/[0.02] border border-black/5 rounded-lg hover:bg-black/[0.04] transition-colors cursor-help group relative">
-                           <Info size={12} className="text-black/30" />
-                           <span className="text-[9px] font-mono font-bold text-black/50 tracking-wider">SYSTEM STATUS: OPTIMAL</span>
+                        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-black/[0.02] border border-black/5 dark:border-white/5 rounded-lg hover:bg-black/[0.04] transition-colors cursor-help group relative">
+                           <Info size={12} className="text-black/30 dark:text-white/30" />
+                           <span className="text-[9px] font-mono font-bold text-black/5 dark:text-white/50 tracking-wider">SYSTEM STATUS: OPTIMAL</span>
                         </div>
                       </div>
                     </div>
@@ -1400,7 +1404,7 @@ export default function App() {
                           label: 'Spot Reference', 
                           val: gexMetrics.spot.toFixed(2), 
                           sub: `${activeTicker} Last Consolidated Price`,
-                          color: 'text-black',
+                          color: 'text-black dark:text-white',
                           labelColor: 'text-indigo-500/60',
                           icon: Crosshair
                         },
@@ -1421,7 +1425,7 @@ export default function App() {
                           icon: BarChart2
                         }
                       ].map(stat => (
-                        <div key={stat.label} className={`p-5 bg-white/80 backdrop-blur-sm border border-black/5 rounded-2xl relative overflow-hidden group hover:bg-white transition-all duration-500 flex flex-col justify-between h-36 shadow-sm hover:shadow-md border-b-2 ${
+                        <div key={stat.label} className={`p-5 bg-white/80 backdrop-blur-sm border border-black/5 dark:border-white/5 rounded-2xl relative overflow-hidden group hover:bg-white dark:bg-[#0F1219] transition-all duration-500 flex flex-col justify-between h-36 shadow-sm hover:shadow-md border-b-2 ${
                           stat.label.includes('Net') ? 'border-b-emerald-500/10' : 
                           stat.label.includes('Spot') ? 'border-b-indigo-500/10' : 
                           stat.label.includes('Flip') ? 'border-b-amber-500/10' : 'border-b-blue-500/10'
@@ -1434,7 +1438,7 @@ export default function App() {
                           }`} />
                           
                           <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-10 group-hover:scale-105 transition-all duration-700">
-                            <stat.icon size={56} className="text-black/40" />
+                            <stat.icon size={56} className="text-black/40 dark:text-white/40" />
                           </div>
                           <div className="relative z-10">
                             <div className={`text-xs font-mono font-bold ${stat.labelColor} uppercase tracking-[0.15em] mb-1`}>{stat.label}</div>
@@ -1447,17 +1451,18 @@ export default function App() {
 
                     {/* Chart & Secondary Data */}
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                      <div className="lg:col-span-3 bg-white border border-black/5 rounded-3xl p-2 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.1)] h-[550px] relative">
+                      <div className="lg:col-span-3 bg-white dark:bg-[#0F1219] border border-black/5 dark:border-white/5 rounded-3xl p-2 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.1)] h-[550px] relative">
                         <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/10 via-transparent to-rose-50/10 pointer-events-none" />
                         <GexDashboardChart 
                           data={combinedLiveChartData} 
                           activeTicker={activeTicker}
+                          theme={isDark ? 'dark' : 'light'}
                         />
                       </div>
                       
                       <div className="space-y-6">
                         {/* Volatility Regime Card */}
-                        <div className="p-6 bg-white border border-black/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
+                        <div className="p-6 bg-white dark:bg-[#0F1219] border border-black/5 dark:border-white/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
                           <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl opacity-[0.03] ${gexMetrics.netGex >= 0 ? 'bg-[#00E5A0]' : 'bg-rose-500'}`} />
                           
                           <div className="flex items-center gap-3 mb-6 relative z-10">
@@ -1472,7 +1477,7 @@ export default function App() {
                               <div className={`text-2xl font-mono font-bold mb-2 tracking-tighter ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'} drop-shadow-sm`}>
                                 {gexMetrics.netGex >= 0 ? 'STABLE' : 'VOLATILE'}
                               </div>
-                              <div className="text-xs text-black/40 font-sans leading-relaxed">
+                              <div className="text-xs text-black/40 dark:text-white/40 font-sans leading-relaxed">
                                 {gexMetrics.netGex >= 0 
                                   ? 'Mechanically suppressing volatility through counter-cyclical liquidity provision.' 
                                   : 'Negative gamma accelerants detected. High probability of expanding ATR.'}
@@ -1480,17 +1485,17 @@ export default function App() {
                             </div>
                             
                             <div className="flex justify-between items-center px-2">
-                              <span className="text-[10px] font-mono font-bold text-black/20 uppercase tracking-widest">Live Sync</span>
+                              <span className="text-[10px] font-mono font-bold text-black/20 dark:text-white/20 uppercase tracking-widest">Live Sync</span>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[11px] font-mono font-bold text-black/60">{lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span className="text-[11px] font-mono font-bold text-black/60 dark:text-white/60">{lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                               </div>
                             </div>
                           </div>
                         </div>
 
                         {/* Inventory Card */}
-                        <div className="p-6 bg-white border border-black/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
+                        <div className="p-6 bg-white dark:bg-[#0F1219] border border-black/5 dark:border-white/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
                           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400 blur-3xl opacity-[0.03]" />
                           
                           <div className="flex items-center gap-3 mb-6 relative z-10">
@@ -1502,8 +1507,8 @@ export default function App() {
 
                           <div className="space-y-5 relative z-10">
                              <div className="flex justify-between items-end mb-1 px-1">
-                                <span className="text-xs font-mono font-bold text-black/30 uppercase tracking-wider">C/P Dominance</span>
-                                <span className="font-mono text-base text-black/80 font-bold">{(gexMetrics.callGex / Math.abs(gexMetrics.putGex || 1)).toFixed(2)}x</span>
+                                <span className="text-xs font-mono font-bold text-black/30 dark:text-white/30 uppercase tracking-wider">C/P Dominance</span>
+                                <span className="font-mono text-base text-black/80 dark:text-white/80 font-bold">{(gexMetrics.callGex / Math.abs(gexMetrics.putGex || 1)).toFixed(2)}x</span>
                              </div>
                              <div className="h-3 w-full bg-black/[0.03] rounded-full overflow-hidden flex border border-black/[0.03] p-0.5">
                                <div 
@@ -1520,12 +1525,12 @@ export default function App() {
                                <span className="text-rose-500">Bearish</span>
                              </div>
 
-                             <div className="pt-5 border-t border-black/5 mt-5">
+                             <div className="pt-5 border-t border-black/5 dark:border-white/5 mt-5">
                                <div className="flex items-center gap-2 mb-3">
                                  <Activity size={12} className="text-blue-400 animate-pulse" />
-                                 <span className="text-[10px] font-mono font-bold text-black/40 uppercase tracking-widest">Flow Intelligence</span>
+                                 <span className="text-[10px] font-mono font-bold text-black/40 dark:text-white/40 uppercase tracking-widest">Flow Intelligence</span>
                                </div>
-                               <p className="text-xs text-black/30 font-sans italic leading-relaxed">
+                               <p className="text-xs text-black/30 dark:text-white/30 font-sans italic leading-relaxed">
                                  Cross-exchange institutional positioning synchronized. Zero-lag feed active.
                                </p>
                              </div>
@@ -1538,18 +1543,18 @@ export default function App() {
 
                 {activeModule === 'vip-conversion' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                    <div className="relative p-6 bg-white text-neutral-700 border border-black/10 shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
+                    <div className="relative p-6 bg-white dark:bg-[#0F1219] text-neutral-700 border border-black/10 dark:border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
                        {/* Hardware/terminal accents */}
                        <div className="absolute top-0 left-0 w-full h-1 bg-neutral-100 flex">
                          <div className="w-1/3 h-full bg-[#3B82F6] shadow-[0_0_15px_rgba(59,130,246,0.8)]" />
                        </div>
                        
                        {/* Header */}
-                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 border-b border-black/10 pb-6">
+                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 border-b border-black/10 dark:border-white/10 pb-6">
                          <div className="relative flex items-center gap-4">
                            <div className="w-3 h-3 rounded-sm bg-[#3B82F6] shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse" />
                            <div>
-                             <h2 className="text-2xl font-mono tracking-tighter font-bold text-black uppercase">Macro Analyst AI // Nexus</h2>
+                             <h2 className="text-2xl font-mono tracking-tighter font-bold text-black dark:text-white uppercase">Macro Analyst AI // Nexus</h2>
                              <p className="text-[10px] text-blue-600 uppercase tracking-[0.2em] mt-1 font-bold">Autonomous Regime Classification & Yield Analysis</p>
                            </div>
                          </div>
@@ -1558,7 +1563,7 @@ export default function App() {
                              <Cpu size={14} className="text-blue-600" />
                              <span className="text-[10px] text-blue-600 tracking-wider font-bold">MODEL: V-PREDICT-7</span>
                            </div>
-                           <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 border border-black/10 rounded-md">
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 border border-black/10 dark:border-white/10 rounded-md">
                               <RefreshCcw size={12} className="text-neutral-600 animate-spin" />
                               <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">Syncing Fed Funds</span>
                            </div>
@@ -1567,31 +1572,31 @@ export default function App() {
 
                        <div className="grid lg:grid-cols-3 gap-6">
                          {/* Left Sidebar: AI Analysis */}
-                         <div className="lg:col-span-1 border border-black/10 bg-white p-5 flex flex-col gap-4 rounded-md relative overflow-hidden">
+                         <div className="lg:col-span-1 border border-black/10 dark:border-white/10 bg-white dark:bg-[#0F1219] p-5 flex flex-col gap-4 rounded-md relative overflow-hidden">
                            <div className="absolute top-0 right-0 p-2 opacity-10">
                               <Search size={100} />
                            </div>
-                           <div className="text-[10px] text-neutral-500 tracking-widest uppercase border-b border-black/10 pb-3 font-bold z-10">Synthesis Report</div>
+                           <div className="text-[10px] text-neutral-500 tracking-widest uppercase border-b border-black/10 dark:border-white/10 pb-3 font-bold z-10">Synthesis Report</div>
                            <div className="text-xs leading-relaxed text-neutral-700 font-mono z-10">
                              <p className="mb-3"><span className="text-blue-600 font-bold">» REGIME FLIP DETECTED:</span> Transitioning from positive gamma stabilization to high-volatility negative gamma.</p>
                              <p className="mb-3"><span className="text-blue-600 font-bold">» YIELD CURVE:</span> 2Y/10Y inversion steepening. Watch for liquidity drain at 14:00 EST.</p>
                              <p className="mb-3 text-[#F59E0B]"><span className="font-bold">» ACTION_REQ:</span> Reduce directional delta exposure. Increase vol arb positions.</p>
                            </div>
-                           <div className="mt-auto pt-4 border-t border-black/10 grid grid-cols-2 gap-4 z-10 bg-white">
+                           <div className="mt-auto pt-4 border-t border-black/10 dark:border-white/10 grid grid-cols-2 gap-4 z-10 bg-white dark:bg-[#0F1219]">
                              <div>
                                <div className="text-[9px] text-neutral-500 tracking-widest mb-1">PROBABILITY</div>
-                               <div className="text-xl text-black font-bold">87.4%</div>
+                               <div className="text-xl text-black dark:text-white font-bold">87.4%</div>
                              </div>
                              <div>
                                <div className="text-[9px] text-neutral-500 tracking-widest mb-1">IMPACT ETA</div>
-                               <div className="text-xl text-black font-bold">~4.2h</div>
+                               <div className="text-xl text-black dark:text-white font-bold">~4.2h</div>
                              </div>
                            </div>
                          </div>
 
                          {/* Center/Right: Data Chart */}
-                         <div className="lg:col-span-2 relative bg-neutral-50 border border-black/10 rounded-md h-[300px] flex flex-col">
-                            <div className="p-4 flex justify-between w-full border-b border-black/5">
+                         <div className="lg:col-span-2 relative bg-neutral-50 border border-black/10 dark:border-white/10 rounded-md h-[300px] flex flex-col">
+                            <div className="p-4 flex justify-between w-full border-b border-black/5 dark:border-white/5">
                                <div className="flex flex-col">
                                  <span className="text-[11px] uppercase tracking-widest font-bold text-blue-600">Yield & Volatility Matrix</span>
                                  <span className="text-[9px] text-neutral-500 uppercase tracking-widest mt-1">Cross-Asset Correlated Pricing</span>
@@ -1599,7 +1604,7 @@ export default function App() {
                                <div className="text-right flex items-center gap-4">
                                  <div>
                                     <div className="text-[9px] text-neutral-500 tracking-wider">DXY INDEX</div>
-                                    <span className="text-sm font-mono text-black">104.32</span>
+                                    <span className="text-sm font-mono text-black dark:text-white">104.32</span>
                                  </div>
                                  <div className="w-px h-6 bg-neutral-200"></div>
                                  <div>
@@ -1611,9 +1616,11 @@ export default function App() {
                             <div className="flex-1 p-2">
                                <BeautifulChart 
                                  data={combinedLiveChartData} 
-                                 lineColor="#3B82F6"
+                                 lineColor={isDark ? "#60A5FA" : "#3B82F6"}
                                  secondaryLineColor="#F59E0B"
-                                 areaColor="#3B82F6"
+                                 areaColor={isDark ? "#60A5FA" : "#3B82F6"}
+                                 positiveGexColor={isDark ? "#10B981" : "#00E5A0"}
+                                 negativeGexColor={isDark ? "#F43F5E" : "#fb7185"}
                                  height={200}
                                />
                             </div>
@@ -1622,13 +1629,13 @@ export default function App() {
                     </div>
 
                     <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
-                        <div className="relative p-8 bg-white border border-black/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black overflow-hidden group hover:border-black/10 transition-colors">
+                        <div className="relative p-8 bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black dark:text-white overflow-hidden group hover:border-black/10 dark:hover:border-white/10 dark:border-white/10 transition-colors">
                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#00E5A0]/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                            <div className="flex items-center gap-3 mb-2">
                               <div className="p-2.5 bg-[#00E5A0]/10 rounded-xl border border-[#00E5A0]/20 shadow-inner"><Calculator size={18} className="text-[#00E5A0]" /></div>
                               <h3 className="text-xl font-bold tracking-tight text-black/90">SPY → ES Converter</h3>
                            </div>
-                           <p className="text-sm text-black/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
+                           <p className="text-sm text-black/40 dark:text-white/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
                            
                            <div className="flex items-center gap-2 mb-6 text-[#00E5A0] text-xs font-medium tracking-wide uppercase">
                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
@@ -1636,26 +1643,26 @@ export default function App() {
 
                            <div className="grid grid-cols-2 gap-4 mb-6">
                               <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">SPY Spot</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 dark:text-white/40 mb-2">SPY Spot</div>
                                  <div className="text-2xl font-mono text-black/90 drop-shadow-sm">{typeof conversionRatios['SPY']?.spotPrice === 'number' ? conversionRatios['SPY']?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
                               <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">ES Future</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 dark:text-white/40 mb-2">ES Future</div>
                                  <div className="text-2xl font-mono text-[#00E5A0] drop-shadow-sm">{typeof conversionRatios['SPY']?.futurePrice === 'number' ? conversionRatios['SPY']?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
                            </div>
 
-                           <div className="p-5 bg-white border border-black/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-black/60 font-medium">Conversion Ratio (ES / SPY)</span>
+                           <div className="p-5 bg-white dark:bg-[#0F1219] border border-black/5 dark:border-white/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                              <span className="text-sm text-black/60 dark:text-white/60 font-medium">Conversion Ratio (ES / SPY)</span>
                               <span className="text-lg font-mono font-bold text-[#00E5A0] drop-shadow-[0_0_8px_rgba(0,229,160,0.3)]">{conversionRatios['SPY']?.ratio?.toFixed(4) || '---'}</span>
                            </div>
 
                            <div className="space-y-4">
-                              <div className="flex items-center gap-2 text-sm text-black/80 font-medium tracking-wide">
+                              <div className="flex items-center gap-2 text-sm text-black/80 dark:text-white/80 font-medium tracking-wide">
                                  <ChevronRight size={16} className="text-[#00E5A0]" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-white border border-black/10 rounded-xl py-4 px-5 text-sm font-mono text-black focus:outline-none focus:border-[#00E5A0]/50 transition-colors placeholder:text-black/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 rounded-xl py-4 px-5 text-sm font-mono text-black dark:text-white focus:outline-none focus:border-[#00E5A0]/50 transition-colors placeholder:text-black/20 dark:text-white/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
                                     const box = document.getElementById('spy-result');
                                     if (box) {
@@ -1664,19 +1671,19 @@ export default function App() {
                                  }} />
                               </div>
                               <div className="flex flex-col mt-4 bg-[#00E5A0]/5 rounded-xl border border-[#00E5A0]/10 p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-1">Estimated ES Level</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 dark:text-white/40 mb-1">Estimated ES Level</div>
                                  <div className="text-3xl font-mono font-bold text-[#00E5A0] drop-shadow-md" id="spy-result">0.00</div>
                               </div>
                            </div>
                         </div>
 
-                        <div className="relative p-8 bg-white border border-black/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black overflow-hidden group hover:border-[#F5A623]/30 transition-colors">
+                        <div className="relative p-8 bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black dark:text-white overflow-hidden group hover:border-[#F5A623]/30 transition-colors">
                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#F5A623]/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                            <div className="flex items-center gap-3 mb-2">
                               <div className="p-2.5 bg-[#F5A623]/10 rounded-xl border border-[#F5A623]/20 shadow-inner"><Calculator size={18} className="text-[#F5A623]" /></div>
                               <h3 className="text-xl font-bold tracking-tight text-black/90">QQQ → NQ Converter</h3>
                            </div>
-                           <p className="text-sm text-black/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
+                           <p className="text-sm text-black/40 dark:text-white/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
                            
                            <div className="flex items-center gap-2 mb-6 text-[#00E5A0] text-xs font-medium tracking-wide uppercase">
                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
@@ -1684,26 +1691,26 @@ export default function App() {
 
                            <div className="grid grid-cols-2 gap-4 mb-6">
                               <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">QQQ Spot</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 dark:text-white/40 mb-2">QQQ Spot</div>
                                  <div className="text-2xl font-mono text-black/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
                               <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">NQ Future</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 dark:text-white/40 mb-2">NQ Future</div>
                                  <div className="text-2xl font-mono text-[#F5A623] drop-shadow-sm">{typeof conversionRatios['QQQ']?.futurePrice === 'number' ? conversionRatios['QQQ']?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
                            </div>
 
-                           <div className="p-5 bg-white border border-black/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-black/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
+                           <div className="p-5 bg-white dark:bg-[#0F1219] border border-black/5 dark:border-white/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                              <span className="text-sm text-black/60 dark:text-white/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
                               <span className="text-lg font-mono font-bold text-[#F5A623] drop-shadow-[0_0_8px_rgba(245,166,35,0.3)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '---'}</span>
                            </div>
 
                            <div className="space-y-4">
-                              <div className="flex items-center gap-2 text-sm text-black/80 font-medium tracking-wide">
+                              <div className="flex items-center gap-2 text-sm text-black/80 dark:text-white/80 font-medium tracking-wide">
                                  <ChevronRight size={16} className="text-[#F5A623]" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-white border border-black/10 rounded-xl py-4 px-5 text-sm font-mono text-black focus:outline-none focus:border-[#F5A623]/50 transition-colors placeholder:text-black/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 rounded-xl py-4 px-5 text-sm font-mono text-black dark:text-white focus:outline-none focus:border-[#F5A623]/50 transition-colors placeholder:text-black/20 dark:text-white/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
                                     const box = document.getElementById('qqq-result');
                                     if (box) {
@@ -1712,15 +1719,15 @@ export default function App() {
                                  }} />
                               </div>
                               <div className="flex flex-col mt-4 bg-[#F5A623]/5 rounded-xl border border-[#F5A623]/10 p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-1">Estimated NQ Level</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-black/40 dark:text-white/40 mb-1">Estimated NQ Level</div>
                                  <div className="text-3xl font-mono font-bold text-[#F5A623] drop-shadow-md" id="qqq-result">0.00</div>
                               </div>
                            </div>
                         </div>
                     </div>
 
-                    <div className="p-0 border border-black/5 bg-[#FAFAFA] text-black rounded-sm overflow-hidden shadow-sm">
-                       <div className="p-6 border-b border-black/5 bg-[#F4F5F7] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="p-0 border border-black/5 dark:border-white/5 bg-[#FAFAFA] text-black dark:text-white rounded-sm overflow-hidden shadow-sm">
+                       <div className="p-6 border-b border-black/5 dark:border-white/5 bg-[#F4F5F7] flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-600 flex items-center gap-2">
                              <Target size={14} className="text-emerald-600" />
                              Chain Decomposition ({activeTicker})
@@ -1743,7 +1750,7 @@ export default function App() {
                        <div className="overflow-x-auto">
                           <table className="w-full text-right font-mono text-[11px]">
                              <thead className="bg-[#F8F9FA] text-[10px] uppercase tracking-wider text-neutral-500">
-                               <tr className="border-b border-black/5">
+                               <tr className="border-b border-black/5 dark:border-white/5">
                                  <th className="py-4 px-6 text-left font-semibold">Strike</th>
                                  <th className="py-4 px-6 font-semibold">{activeTicker === 'SPY' ? 'ES' : activeTicker === 'QQQ' ? 'NQ1!' : 'FUT'}</th>
                                  <th className="py-4 px-6 font-semibold">Net GEX</th>
@@ -1836,7 +1843,7 @@ export default function App() {
                                    };
 
                                    return (
-                                     <tr key={strike} className={`border-b border-black/5 last:border-0 hover:bg-black/[0.02] transition-colors ${isClosest ? 'bg-indigo-50/50' : (i % 2 === 0 ? 'bg-white' : 'bg-[#FAFAFA]')}`}>
+                                     <tr key={strike} className={`border-b border-black/5 dark:border-white/5 last:border-0 hover:bg-black/[0.02] transition-colors ${isClosest ? 'bg-indigo-50/50' : (i % 2 === 0 ? 'bg-white dark:bg-[#0F1219]' : 'bg-[#FAFAFA]')}`}>
                                        <td className={`py-3 px-6 text-left font-bold ${isClosest ? 'text-indigo-600' : 'text-neutral-900'}`}>
                                           <div className="flex items-center gap-2">
                                              {isClosest && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>}
@@ -1867,7 +1874,7 @@ export default function App() {
 
                 {activeModule === 'vip-journal' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="bg-white border border-black/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black p-8 md:p-10 rounded-2xl relative overflow-hidden group">
+                    <div className="bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black dark:text-white p-8 md:p-10 rounded-2xl relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-12 opacity-5 translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-1000 pointer-events-none">
                         <Book size={240} />
                       </div>
@@ -1878,10 +1885,10 @@ export default function App() {
                         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8">
                            <div>
                               <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#64A0E6] mb-2">Trade Analytics</div>
-                              <h2 className="text-4xl font-serif italic text-black">Journal</h2>
-                              <p className="text-black/40 text-xs mt-2">Log institutional executions — equity curve, session stats & alpha metrics</p>
+                              <h2 className="text-4xl font-serif italic text-black dark:text-white">Journal</h2>
+                              <p className="text-black/40 dark:text-white/40 text-xs mt-2">Log institutional executions — equity curve, session stats & alpha metrics</p>
                            </div>
-                           <div className="flex bg-neutral-100 border border-black/10 p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
+                           <div className="flex bg-neutral-100 border border-black/10 dark:border-white/10 p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
                               {[
                                 { id: 'journal', label: 'Journal', icon: Book },
                                 { id: 'curve', label: 'Equity Curve', icon: TrendingUp },
@@ -1892,7 +1899,7 @@ export default function App() {
                                 <button
                                   key={tab.id}
                                   onClick={() => setJournalSubTab(tab.id as any)}
-                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${journalSubTab === tab.id ? 'bg-[#00E5A0] text-[#0A0B0E] shadow-[0_0_15px_rgba(0,229,160,0.3)]' : 'text-black/40 hover:text-black/80 hover:bg-black/5'}`}
+                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${journalSubTab === tab.id ? 'bg-[#00E5A0] text-[#0A0B0E] shadow-[0_0_15px_rgba(0,229,160,0.3)]' : 'text-black/40 dark:text-white/40 hover:text-black/80 dark:hover:text-white/80 dark:text-white/80 hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5'}`}
                                 >
                                    <tab.icon size={14} />
                                    <span className="hidden sm:inline">{tab.label}</span>
@@ -1911,10 +1918,10 @@ export default function App() {
                              { label: 'Total P&L', value: `$${journalStats.totalPnl.toLocaleString()}`, sub: 'Net Bottom Line', color: journalStats.totalPnl >= 0 ? 'text-[#00E5A0]' : 'text-rose-500' },
                              { label: 'Streak', value: journalStats.maxStreak, sub: 'Consistency', color: 'text-amber-400' }
                            ].map(stat => (
-                             <div key={stat.label} className="p-5 bg-white/[0.02] border border-black/5 rounded-xl text-center hover:bg-white/[0.04] transition-colors">
+                             <div key={stat.label} className="p-5 bg-white/[0.02] border border-black/5 dark:border-white/5 rounded-xl text-center hover:bg-white/[0.04] transition-colors">
                                 <div className="text-[9px] font-bold uppercase tracking-widest text-[#64A0E6]/70 mb-2">{stat.label}</div>
-                                <div className={`text-2xl font-mono font-bold ${stat.color || 'text-black'}`}>{stat.value}</div>
-                                <div className="text-[9px] text-black/20 font-bold uppercase mt-1">{stat.sub}</div>
+                                <div className={`text-2xl font-mono font-bold ${stat.color || 'text-black dark:text-white'}`}>{stat.value}</div>
+                                <div className="text-[9px] text-black/20 dark:text-white/20 font-bold uppercase mt-1">{stat.sub}</div>
                              </div>
                            ))}
                         </div>
@@ -1925,69 +1932,69 @@ export default function App() {
                               <motion.div key="journal" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-8">
                                  {/* LOG A TRADE SECTION */}
                              <div>
-                                <h3 className="text-[10px] font-bold uppercase tracking-widest text-black/40 mb-4 border-b border-black/5 pb-2">Log A Trade</h3>
+                                <h3 className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40 mb-4 border-b border-black/5 dark:border-white/5 pb-2">Log A Trade</h3>
                                 
                                 <div className="space-y-4">
                                    {/* Drag & Drop Area */}
-                                   <div className="relative border-2 border-dashed border-black/10 rounded-lg p-6 bg-white/[0.02] hover:bg-white/[0.04] transition-colors flex items-center gap-4 cursor-pointer">
+                                   <div className="relative border-2 border-dashed border-black/10 dark:border-white/10 rounded-lg p-6 bg-white/[0.02] hover:bg-white/[0.04] transition-colors flex items-center gap-4 cursor-pointer">
                                       <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                      <div className="w-10 h-10 rounded bg-black/5 flex items-center justify-center border border-black/10">
-                                         <Plus size={16} className="text-black/40" />
+                                      <div className="w-10 h-10 rounded bg-black/5 dark:bg-white/5 flex items-center justify-center border border-black/10 dark:border-white/10">
+                                         <Plus size={16} className="text-black/40 dark:text-white/40" />
                                       </div>
                                       <div>
-                                         <p className="text-sm font-bold text-black/80">Paste or drop a position screenshot <span className="font-normal text-black/30 italic">— stored with trade</span></p>
-                                         <p className="text-[10px] text-black/30 truncate mt-1">Ctrl+V to paste &middot; drag & drop image &middot; future: AI auto-fill</p>
+                                         <p className="text-sm font-bold text-black/80 dark:text-white/80">Paste or drop a position screenshot <span className="font-normal text-black/30 dark:text-white/30 italic">— stored with trade</span></p>
+                                         <p className="text-[10px] text-black/30 dark:text-white/30 truncate mt-1">Ctrl+V to paste &middot; drag & drop image &middot; future: AI auto-fill</p>
                                       </div>
                                    </div>
 
                                    {/* Fields Row */}
                                    <div className="grid grid-cols-2 md:grid-cols-11 gap-2">
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Date</div>
-                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-transparent border border-black/10 rounded grow py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Date</div>
+                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded grow py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Ticker</div>
-                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Ticker</div>
+                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Direction</div>
-                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30 appearance-none">
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Direction</div>
+                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30 appearance-none">
                                             <option value="long">Long</option>
                                             <option value="short">Short</option>
                                          </select>
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Entry Price</div>
-                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Entry Price</div>
+                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Stop Loss</div>
-                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Stop Loss</div>
+                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Exit Price</div>
-                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Exit Price</div>
+                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Contracts</div>
-                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Contracts</div>
+                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">MAE</div>
-                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">MAE</div>
+                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">MFE</div>
-                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">MFE</div>
+                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Setup Grade</div>
-                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Setup Grade</div>
+                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Outcome</div>
-                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30 appearance-none">
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Outcome</div>
+                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30 appearance-none">
                                             <option value="">-</option>
                                             <option value="win">Win</option>
                                             <option value="loss">Loss</option>
@@ -1995,19 +2002,19 @@ export default function App() {
                                          </select>
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">P&L ($)</div>
-                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">P&L ($)</div>
+                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-2 px-2 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30" />
                                       </div>
                                    </div>
 
                                    {/* Notes */}
                                    <div className="space-y-1 mt-4">
-                                      <div className="text-[9px] uppercase tracking-widest text-black/40">Notes</div>
+                                      <div className="text-[9px] uppercase tracking-widest text-black/40 dark:text-white/40">Notes</div>
                                       <textarea 
                                          value={tradeNotes} 
                                          onChange={(e) => setTradeNotes(e.target.value)} 
                                          placeholder="What did you see? What worked well? What would you do differently?"
-                                         className="w-full bg-transparent border border-black/10 rounded py-3 px-3 text-xs font-mono text-black outline-none focus:border-black/30 min-h-[80px]"
+                                         className="w-full bg-transparent border border-black/10 dark:border-white/10 rounded py-3 px-3 text-xs font-mono text-black dark:text-white outline-none focus:border-black/30 dark:border-white/30 min-h-[80px]"
                                       />
                                    </div>
 
@@ -2017,7 +2024,7 @@ export default function App() {
                                          <button onClick={logTrade} className="bg-[#00E5A0] hover:bg-[#00E5A0]/80 text-[#0A0B0E] font-bold text-[11px] uppercase tracking-wider py-2 px-6 rounded transition-colors">
                                            Add Trade
                                          </button>
-                                         <button onClick={exportCSV} className="bg-transparent border border-black/10 text-black/60 hover:text-black hover:border-black/30 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
+                                         <button onClick={exportCSV} className="bg-transparent border border-black/10 dark:border-white/10 text-black/60 dark:text-white/60 hover:text-black dark:text-white hover:border-black/30 dark:hover:border-white/30 dark:border-white/30 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
                                             Export CSV
                                          </button>
                                       </div>
@@ -2029,21 +2036,21 @@ export default function App() {
                              </div>
 
                              {/* TRADE LOG */}
-                             <div className="mt-8 border border-black/5 rounded-lg bg-white">
-                                <div className="flex items-center justify-between p-4 border-b border-black/5 bg-black/5">
-                                   <div className="text-[10px] font-bold uppercase tracking-widest text-black/40">Trade Log</div>
+                             <div className="mt-8 border border-black/5 dark:border-white/5 rounded-lg bg-white dark:bg-[#0F1219]">
+                                <div className="flex items-center justify-between p-4 border-b border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5">
+                                   <div className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40">Trade Log</div>
                                    <div className="flex gap-6">
                                       <button className="text-[#00E5A0] border border-[#00E5A0]/30 rounded px-3 py-1 text-[10px] uppercase font-bold bg-[#00E5A0]/5">All</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">Today</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">This Week</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">This Month</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">Pick Date</button>
+                                      <button className="text-black/40 dark:text-white/40 hover:text-black/80 dark:hover:text-white/80 dark:text-white/80 text-[10px] uppercase font-bold">Today</button>
+                                      <button className="text-black/40 dark:text-white/40 hover:text-black/80 dark:hover:text-white/80 dark:text-white/80 text-[10px] uppercase font-bold">This Week</button>
+                                      <button className="text-black/40 dark:text-white/40 hover:text-black/80 dark:hover:text-white/80 dark:text-white/80 text-[10px] uppercase font-bold">This Month</button>
+                                      <button className="text-black/40 dark:text-white/40 hover:text-black/80 dark:hover:text-white/80 dark:text-white/80 text-[10px] uppercase font-bold">Pick Date</button>
                                    </div>
                                 </div>
                                 <div className="overflow-x-auto">
                                    <table className="w-full text-left font-mono">
                                       <thead>
-                                         <tr className="bg-black/20 text-[9px] uppercase tracking-widest text-black/30">
+                                         <tr className="bg-black/20 dark:bg-white/20 text-[9px] uppercase tracking-widest text-black/30 dark:text-white/30">
                                             <th className="px-4 py-3 font-normal">Date</th>
                                             <th className="px-4 py-3 font-normal">TKR</th>
                                             <th className="px-4 py-3 font-normal">Dir</th>
@@ -2053,11 +2060,11 @@ export default function App() {
                                             <th className="px-4 py-3 font-normal">CTS</th>
                                             <th className="px-4 py-3 font-normal relative group cursor-help">
                                                Grade
-                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-neutral-100 border border-black/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                                                  <div className="text-[10px] space-y-1 text-black/70 normal-case tracking-normal">
+                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-neutral-100 border border-black/10 dark:border-white/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                                                  <div className="text-[10px] space-y-1 text-black/70 dark:text-white/70 normal-case tracking-normal">
                                                      <div className="flex justify-between"><span className="text-[#00E5A0] font-bold">A+</span><span>Perfect Execution</span></div>
-                                                     <div className="flex justify-between"><span className="text-black font-bold">A</span><span>Good Setup</span></div>
-                                                     <div className="flex justify-between"><span className="text-black/50 font-bold">B</span><span>Mediocre</span></div>
+                                                     <div className="flex justify-between"><span className="text-black dark:text-white font-bold">A</span><span>Good Setup</span></div>
+                                                     <div className="flex justify-between"><span className="text-black/5 dark:text-white/50 font-bold">B</span><span>Mediocre</span></div>
                                                      <div className="flex justify-between"><span className="text-rose-500 font-bold">C</span><span>Poor Context</span></div>
                                                      <div className="flex justify-between"><span className="text-rose-600 font-bold">D</span><span>Rule Break</span></div>
                                                   </div>
@@ -2065,11 +2072,11 @@ export default function App() {
                                             </th>
                                             <th className="px-4 py-3 font-normal relative group cursor-help">
                                                Outcome
-                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-3 bg-neutral-100 border border-black/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                                                  <div className="text-[10px] space-y-1 text-black/70 normal-case tracking-normal">
+                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-3 bg-neutral-100 border border-black/10 dark:border-white/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                                                  <div className="text-[10px] space-y-1 text-black/70 dark:text-white/70 normal-case tracking-normal">
                                                      <div className="flex justify-between"><span className="text-[#00E5A0] font-bold">Win</span><span>Target hit</span></div>
                                                      <div className="flex justify-between"><span className="text-rose-500 font-bold">Loss</span><span>Stop-out</span></div>
-                                                     <div className="flex justify-between"><span className="text-black/50 font-bold">BE</span><span>Break Even</span></div>
+                                                     <div className="flex justify-between"><span className="text-black/5 dark:text-white/50 font-bold">BE</span><span>Break Even</span></div>
                                                   </div>
                                                </div>
                                             </th>
@@ -2078,7 +2085,7 @@ export default function App() {
                                             <th className="px-4 py-3 font-normal">Notes</th>
                                          </tr>
                                       </thead>
-                                      <tbody className="divide-y divide-white/5 text-[11px] text-black/70">
+                                      <tbody className="divide-y divide-white/5 text-[11px] text-black/70 dark:text-white/70">
                                          {Object.entries(journalData).slice(-15).reverse().map(([date, day]: [string, any]) => (
                                             day.trades?.map((t: any, i: number) => {
                                                const rr = (parseFloat(t.entry) && parseFloat(t.stop) && parseFloat(t.exit)) 
@@ -2087,7 +2094,7 @@ export default function App() {
                                                return (
                                                <tr key={`${date}-${i}`} className="hover:bg-white/[0.02] transition-colors group">
                                                   <td className="px-4 py-3 opacity-50 group-hover:opacity-100 transition-opacity whitespace-nowrap">{date}</td>
-                                                  <td className="px-4 py-3 font-bold text-black">{t.sym}</td>
+                                                  <td className="px-4 py-3 font-bold text-black dark:text-white">{t.sym}</td>
                                                   <td className="px-4 py-3 capitalize">{t.dir}</td>
                                                   <td className="px-4 py-3">{t.entry || '-'}</td>
                                                   <td className="px-4 py-3">{t.stop || '-'}</td>
@@ -2097,7 +2104,7 @@ export default function App() {
                                                   <td className="px-4 py-3 capitalize">{t.outcome || '-'}</td>
                                                   <td className="px-4 py-3">{rr}</td>
                                                   <td className="px-4 py-3">
-                                                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${t.pnl > 0 ? 'bg-[#00E5A0]/10 text-[#00E5A0]' : t.pnl < 0 ? 'bg-rose-500/10 text-rose-500' : 'bg-black/5 text-black/70'}`}>
+                                                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${t.pnl > 0 ? 'bg-[#00E5A0]/10 text-[#00E5A0]' : t.pnl < 0 ? 'bg-rose-500/10 text-rose-500' : 'bg-black/5 dark:bg-white/5 text-black/70 dark:text-white/70'}`}>
                                                         {t.pnl === 0 ? '$0' : t.pnl > 0 ? `+$${t.pnl}` : `-$${Math.abs(t.pnl)}`}
                                                      </span>
                                                   </td>
@@ -2125,7 +2132,7 @@ export default function App() {
 
                        {journalSubTab === 'curve' && (
                           <motion.div key="curve" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} className="space-y-6">
-                             <div className="p-8 bg-white/[0.02] border border-black/5 hover:border-black/10 transition-colors rounded-2xl h-[400px]">
+                             <div className="p-8 bg-white/[0.02] border border-black/5 dark:border-white/5 hover:border-black/10 dark:hover:border-white/10 dark:border-white/10 transition-colors rounded-2xl h-[400px]">
                                 <div className="flex items-center justify-between mb-8">
                                    <div>
                                       <h3 className="text-lg font-serif italic text-black/90">Institutional Equity Curve</h3>
@@ -2133,7 +2140,7 @@ export default function App() {
                                    </div>
                                    <div className="text-right">
                                       <div className="text-[10px] font-bold uppercase tracking-widest text-[#00E5A0]/50">Total Net Balance</div>
-                                      <div className="text-2xl font-bold font-mono text-black">${journalStats.totalPnl.toLocaleString()}</div>
+                                      <div className="text-2xl font-bold font-mono text-black dark:text-white">${journalStats.totalPnl.toLocaleString()}</div>
                                    </div>
                                 </div>
                                 <div className="h-[250px]">
@@ -2153,8 +2160,8 @@ export default function App() {
                                               if (active && payload && payload.length) {
                                                 const data = payload[0].payload;
                                                 return (
-                                                  <div className="bg-white border border-black/10 p-3 rounded-lg shadow-xl shadow-black/50">
-                                                    <div className="text-[10px] text-black/50 uppercase tracking-widest mb-1">{data.date}</div>
+                                                  <div className="bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 p-3 rounded-lg shadow-xl shadow-black/50">
+                                                    <div className="text-[10px] text-black/5 dark:text-white/50 uppercase tracking-widest mb-1">{data.date}</div>
                                                     <div className="text-[#00E5A0] font-mono font-bold text-[15px] mb-1">${data.balance.toLocaleString()} Total</div>
                                                     <div className={`text-xs font-mono font-bold ${data.pnl >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'}`}>
                                                       {data.pnl >= 0 ? '+' : '-'}${Math.abs(data.pnl).toLocaleString()} Day P&L
@@ -2171,7 +2178,7 @@ export default function App() {
                                 </div>
                              </div>
 
-                             <div className="p-8 bg-white/[0.02] border border-black/5 hover:border-black/10 transition-colors rounded-2xl h-[400px]">
+                             <div className="p-8 bg-white/[0.02] border border-black/5 dark:border-white/5 hover:border-black/10 dark:hover:border-white/10 dark:border-white/10 transition-colors rounded-2xl h-[400px]">
                                 <div className="flex items-center justify-between mb-8">
                                    <div>
                                       <h3 className="text-lg font-serif italic text-black/90">Consistency Graph (Daily P&L)</h3>
@@ -2179,7 +2186,7 @@ export default function App() {
                                    </div>
                                    <div className="text-right">
                                       <div className="text-[10px] font-bold uppercase tracking-widest text-[#64A0E6]/50">Win Rate</div>
-                                      <div className="text-2xl font-bold font-mono text-black">{journalStats.winRate}%</div>
+                                      <div className="text-2xl font-bold font-mono text-black dark:text-white">{journalStats.winRate}%</div>
                                    </div>
                                 </div>
                                 <div className="h-[250px]">
@@ -2209,10 +2216,10 @@ export default function App() {
                        )}
 
                        {journalSubTab === 'calendar' && (
-                          <motion.div key="calendar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white border border-black/10 rounded-2xl overflow-hidden shadow-2xl">
-                            <div className="p-6 border-b border-black/10 flex items-center justify-between bg-black/20">
+                          <motion.div key="calendar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+                            <div className="p-6 border-b border-black/10 dark:border-white/10 flex items-center justify-between bg-black/20 dark:bg-white/20">
                               <div className="flex items-center gap-4">
-                                 <div className="p-2 bg-black/5 rounded-lg border border-black/10">
+                                 <div className="p-2 bg-black/5 dark:bg-white/5 rounded-lg border border-black/10 dark:border-white/10">
                                     <Calendar size={18} className="text-[#64A0E6]" />
                                  </div>
                                  <h2 className="text-xl font-serif italic text-black/90">
@@ -2223,25 +2230,25 @@ export default function App() {
                                  <button onClick={() => {
                                    if (journalMonth === 0) { setJournalMonth(11); setJournalYear(journalYear - 1); }
                                    else setJournalMonth(journalMonth - 1);
-                                 }} className="p-2 hover:bg-black/5 border border-black/10 rounded-lg text-black/60 transition-colors">
+                                 }} className="p-2 hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg text-black/60 dark:text-white/60 transition-colors">
                                    <ChevronRight size={18} className="rotate-180" />
                                  </button>
                                  <button onClick={() => {
                                    if (journalMonth === 11) { setJournalMonth(0); setJournalYear(journalYear + 1); }
                                    else setJournalMonth(journalMonth + 1);
-                                 }} className="p-2 hover:bg-black/5 border border-black/10 rounded-lg text-black/60 transition-colors">
+                                 }} className="p-2 hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg text-black/60 dark:text-white/60 transition-colors">
                                    <ChevronRight size={18} />
                                  </button>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-5 border-b border-black/10 bg-black/5">
+                            <div className="grid grid-cols-5 border-b border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
                               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(day => (
-                                <div key={day} className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-black/30 text-center border-r border-black/5 last:border-0">{day}</div>
+                                <div key={day} className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-black/30 dark:text-white/30 text-center border-r border-black/5 dark:border-white/5 last:border-0">{day}</div>
                               ))}
                             </div>
 
-                            <div className="grid grid-cols-5 bg-black/10">
+                            <div className="grid grid-cols-5 bg-black/10 dark:bg-white/10">
                               {(() => {
                                  const firstDay = new Date(journalYear, journalMonth, 1);
                                  const lastDay = new Date(journalYear, journalMonth + 1, 0);
@@ -2266,11 +2273,11 @@ export default function App() {
                                            setJournalSubTab('journal');
                                          }
                                        }}
-                                       className={`min-h-[120px] p-4 border-r border-b border-black/5 relative group cursor-pointer transition-all ${
+                                       className={`min-h-[120px] p-4 border-r border-b border-black/5 dark:border-white/5 relative group cursor-pointer transition-all ${
                                          !isThisMonth ? 'opacity-10 pointer-events-none' : 'hover:bg-white/[0.02]'
                                        } ${isToday ? 'bg-black/[0.03]' : ''}`}
                                      >
-                                       <div className={`text-[11px] font-mono font-bold mb-2 ${isToday ? 'text-[#64A0E6]' : 'text-black/40'}`}>
+                                       <div className={`text-[11px] font-mono font-bold mb-2 ${isToday ? 'text-[#64A0E6]' : 'text-black/40 dark:text-white/40'}`}>
                                          {current.getDate()}
                                        </div>
                                        
@@ -2283,7 +2290,7 @@ export default function App() {
                                             )}
                                             <div className="flex flex-wrap gap-1">
                                                {entry.accountType === 'challenge' && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]" />}
-                                               {entry.trades?.length > 0 && <div className="text-[9px] text-black/20 font-bold">{entry.trades.length}T</div>}
+                                               {entry.trades?.length > 0 && <div className="text-[9px] text-black/20 dark:text-white/20 font-bold">{entry.trades.length}T</div>}
                                             </div>
                                          </div>
                                        )}
@@ -2304,7 +2311,7 @@ export default function App() {
                           <motion.div key="gallery" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-2 md:grid-cols-4 gap-4">
                              {Object.entries(journalData).map(([date, day]: [string, any]) => (
                                 day.images?.map((img: string, i: number) => (
-                                   <div key={`${date}-${i}`} className="group relative aspect-video bg-black/5 border border-black/10 rounded-xl overflow-hidden cursor-zoom-in">
+                                   <div key={`${date}-${i}`} className="group relative aspect-video bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl overflow-hidden cursor-zoom-in">
                                       <img src={img} alt="Execution Evidence" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
                                          <div className="text-[10px] font-bold text-[#00E5A0] uppercase tracking-widest">{date}</div>
@@ -2320,28 +2327,28 @@ export default function App() {
 
                        {journalSubTab === 'stats' && (
                           <motion.div key="stats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                             <div className="p-8 bg-black/5 border border-black/10 rounded-2xl">
-                                <h3 className="text-sm font-bold text-black uppercase tracking-[0.2em] mb-6">Performance Distribution</h3>
+                             <div className="p-8 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl">
+                                <h3 className="text-sm font-bold text-black dark:text-white uppercase tracking-[0.2em] mb-6">Performance Distribution</h3>
                                 <div className="space-y-6">
                                    <div>
-                                      <div className="flex justify-between text-[10px] uppercase font-bold text-black/30 mb-2">
+                                      <div className="flex justify-between text-[10px] uppercase font-bold text-black/30 dark:text-white/30 mb-2">
                                          <span>Win / Loss Ratio</span>
-                                         <span className="text-black">{journalStats.winRate}%</span>
+                                         <span className="text-black dark:text-white">{journalStats.winRate}%</span>
                                       </div>
-                                      <div className="h-2 bg-black/5 rounded-full overflow-hidden flex">
+                                      <div className="h-2 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden flex">
                                          <div className="h-full bg-[#00E5A0]" style={{ width: `${journalStats.winRate}%` }} />
                                          <div className="h-full bg-rose-500/30" style={{ width: `${100 - parseFloat(journalStats.winRate)}%` }} />
                                       </div>
                                    </div>
                                    <div className="grid grid-cols-2 gap-4">
-                                      <div className="p-4 bg-black/5 rounded-xl border border-black/5">
-                                         <div className="text-[9px] uppercase font-bold text-black/20 mb-1">Expectancy</div>
-                                         <div className="text-lg font-mono font-bold text-black">
+                                      <div className="p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5">
+                                         <div className="text-[9px] uppercase font-bold text-black/20 dark:text-white/20 mb-1">Expectancy</div>
+                                         <div className="text-lg font-mono font-bold text-black dark:text-white">
                                             ${( (parseFloat(journalStats.winRate)/100 * parseFloat(journalStats.avgWin)) - ((1 - parseFloat(journalStats.winRate)/100) * parseFloat(journalStats.avgLoss)) ).toFixed(2)}
                                          </div>
                                       </div>
-                                      <div className="p-4 bg-black/5 rounded-xl border border-black/5">
-                                         <div className="text-[9px] uppercase font-bold text-black/20 mb-1">Profit Factor</div>
+                                      <div className="p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5">
+                                         <div className="text-[9px] uppercase font-bold text-black/20 dark:text-white/20 mb-1">Profit Factor</div>
                                          <div className="text-lg font-mono font-bold text-[#00E5A0]">
                                             {(parseFloat(journalStats.avgWin) / (parseFloat(journalStats.avgLoss) || 1)).toFixed(2)}
                                          </div>
@@ -2349,20 +2356,20 @@ export default function App() {
                                    </div>
                                 </div>
                              </div>
-                             <div className="p-8 bg-black/5 border border-black/10 rounded-2xl">
-                                <h3 className="text-sm font-bold text-black uppercase tracking-[0.2em] mb-6">System Extremes</h3>
+                             <div className="p-8 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl">
+                                <h3 className="text-sm font-bold text-black dark:text-white uppercase tracking-[0.2em] mb-6">System Extremes</h3>
                                 <div className="space-y-4">
-                                   <div className="flex justify-between items-center p-4 bg-black/5 rounded-xl border border-black/5">
-                                      <span className="text-[10px] uppercase font-bold text-black/30">Apex Session</span>
+                                   <div className="flex justify-between items-center p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5">
+                                      <span className="text-[10px] uppercase font-bold text-black/30 dark:text-white/30">Apex Session</span>
                                       <span className="text-sm font-mono font-bold text-[#00E5A0]">+${journalStats.best.toLocaleString()}</span>
                                    </div>
-                                   <div className="flex justify-between items-center p-4 bg-black/5 rounded-xl border border-black/5">
-                                      <span className="text-[10px] uppercase font-bold text-black/30">Nadir Session</span>
+                                   <div className="flex justify-between items-center p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5">
+                                      <span className="text-[10px] uppercase font-bold text-black/30 dark:text-white/30">Nadir Session</span>
                                       <span className="text-sm font-mono font-bold text-rose-500">-${Math.abs(journalStats.worst).toLocaleString()}</span>
                                    </div>
-                                   <div className="flex justify-between items-center p-4 bg-black/5 rounded-xl border border-black/5">
-                                      <span className="text-[10px] uppercase font-bold text-black/30">Max Consistency Streak</span>
-                                      <span className="text-sm font-mono font-bold text-black">{journalStats.maxStreak} Sessions</span>
+                                   <div className="flex justify-between items-center p-4 bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5">
+                                      <span className="text-[10px] uppercase font-bold text-black/30 dark:text-white/30">Max Consistency Streak</span>
+                                      <span className="text-sm font-mono font-bold text-black dark:text-white">{journalStats.maxStreak} Sessions</span>
                                    </div>
                                 </div>
                              </div>
@@ -2376,12 +2383,12 @@ export default function App() {
 
                 {activeModule === 'vip-alpha' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="bg-white border border-black/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black pb-12 pr-[15px] pl-[19px] pt-10 rounded-2xl relative overflow-hidden group">
+                    <div className="bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black dark:text-white pb-12 pr-[15px] pl-[19px] pt-10 rounded-2xl relative overflow-hidden group">
                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/80 to-transparent opacity-50">
                          <div className="absolute top-0 left-0 h-full w-24 bg-white/80 animate-[ping_3s_ease-in-out_infinite] blur-[2px]"></div>
                        </div>
                          <div className="flex flex-col gap-6 w-full">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-black/5 pb-8">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-black/5 dark:border-white/5 pb-8">
                             <div>
                               <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-black/90 title-elegant">Alpha Intelligence <span className="text-amber-500 font-sans not-italic font-black text-sm tracking-[0.3em] uppercase align-middle ml-2">Internal News</span></h2>
                               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
@@ -2392,7 +2399,7 @@ export default function App() {
                                 <select
                                   value={newsSentimentFilter}
                                   onChange={e => setNewsSentimentFilter(e.target.value)}
-                                  className="appearance-none bg-black/5 border border-black/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 hover:text-black transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                  className="appearance-none bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 dark:text-white/70 hover:text-black dark:text-white transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
                                 >
                                   <option value="ALL">ALL SENTIMENTS</option>
                                   <option value="Positive">POSITIVE ONLY</option>
@@ -2400,7 +2407,7 @@ export default function App() {
                                   <option value="Negative">NEGATIVE ONLY</option>
                                 </select>
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                  <Activity size={14} className={newsSentimentFilter === 'ALL' ? 'text-black/30' : 'text-amber-500'} />
+                                  <Activity size={14} className={newsSentimentFilter === 'ALL' ? 'text-black/30 dark:text-white/30' : 'text-amber-500'} />
                                 </div>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                                   <ChevronDown size={14} />
@@ -2411,14 +2418,14 @@ export default function App() {
                                 <select
                                   value={newsDateFilter}
                                   onChange={e => setNewsDateFilter(e.target.value)}
-                                  className="appearance-none bg-black/5 border border-black/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 hover:text-black transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                  className="appearance-none bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 dark:text-white/70 hover:text-black dark:text-white transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
                                 >
                                   <option value="ALL">ALL TIME</option>
                                   <option value="TODAY">LAST 24H</option>
                                   <option value="OLDER">OLDER THAN 24H</option>
                                 </select>
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                  <Calendar size={14} className={newsDateFilter === 'ALL' ? 'text-black/30' : 'text-amber-500'} />
+                                  <Calendar size={14} className={newsDateFilter === 'ALL' ? 'text-black/30 dark:text-white/30' : 'text-amber-500'} />
                                 </div>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                                   <ChevronDown size={14} />
@@ -2427,9 +2434,9 @@ export default function App() {
 
                               <button 
                                 onClick={() => fetchNews(true)}
-                                className={`flex items-center justify-center p-2.5 rounded-lg border transition-all ${newsLoading ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/5 border-black/10 hover:border-amber-500/40 hover:bg-neutral-900'}`}
+                                className={`flex items-center justify-center p-2.5 rounded-lg border transition-all ${newsLoading ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:border-amber-500/40 hover:bg-neutral-900'}`}
                               >
-                                <RefreshCcw size={16} className={`${newsLoading ? 'text-amber-500 animate-spin' : 'text-black/40 group-hover:text-amber-500'}`} />
+                                <RefreshCcw size={16} className={`${newsLoading ? 'text-amber-500 animate-spin' : 'text-black/40 dark:text-white/40 group-hover:text-amber-500'}`} />
                               </button>
                             </div>
                           </div>
@@ -2437,7 +2444,7 @@ export default function App() {
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-black/30">Intelligence Sources</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-black/30 dark:text-white/30">Intelligence Sources</span>
                                 {newsSourceFilter.length > 0 && (
                                   <button 
                                     onClick={() => setNewsSourceFilter([])}
@@ -2447,7 +2454,7 @@ export default function App() {
                                   </button>
                                 )}
                               </div>
-                              <span className="text-[9px] font-mono text-black/20 uppercase">
+                              <span className="text-[9px] font-mono text-black/20 dark:text-white/20 uppercase">
                                 {newsSourceFilter.length === 0 ? 'Showing All' : `${newsSourceFilter.length} Active Filters`}
                               </span>
                             </div>
@@ -2468,11 +2475,11 @@ export default function App() {
                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-mono border transition-all duration-200 ${
                                       isActive 
                                         ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.05)]' 
-                                        : 'bg-black/5 border-black/5 text-black/40 hover:border-black/20 hover:text-black/80'
+                                        : 'bg-black/5 dark:bg-white/5 border-black/5 dark:border-white/5 text-black/40 dark:text-white/40 hover:border-black/20 dark:hover:border-white/20 dark:border-white/20 hover:text-black/80 dark:hover:text-white/80 dark:text-white/80'
                                     }`}
                                   >
                                     <span>{source}</span>
-                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-black/5'}`}></span>
+                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-black/5 dark:bg-white/5'}`}></span>
                                     <span className={isActive ? 'text-amber-400 font-bold' : 'text-amber-500/60'}>
                                       {sourceCounts[source] || 0}
                                     </span>
@@ -2504,27 +2511,27 @@ export default function App() {
                             <div 
                               key={idx} 
                               onClick={() => setSelectedNews({...item, displayDesc: desc, displayTickers: tickers, displaySentiment: sentiment})}
-                              className="flex flex-col h-full p-6 bg-white border border-black/5 rounded-xl hover:border-amber-500/40 hover:bg-neutral-100 hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
+                              className="flex flex-col h-full p-6 bg-white dark:bg-[#0F1219] border border-black/5 dark:border-white/5 rounded-xl hover:border-amber-500/40 hover:bg-neutral-100 hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
                             >
                               <div className="absolute top-0 right-0 p-8 opacity-0 group-hover/news:opacity-[0.03] transition-opacity duration-500 delay-100 pointer-events-none">
                                 <Zap size={100} />
                               </div>
                               <div className="flex-1 flex flex-col z-10 pointer-events-none">
-                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-black/5 pb-4">
+                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-black/5 dark:border-white/5 pb-4">
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500">
                                       {getDisplaySource(item.source)}
                                     </span>
-                                    <span className="text-black/20 text-[9px]">•</span>
+                                    <span className="text-black/20 dark:text-white/20 text-[9px]">•</span>
                                     {sentiment && (
                                       <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${getSentimentStyle(sentiment)}`}>
                                         {sentiment}
                                       </span>
                                     )}
                                   </div>
-                                  <span className="text-[9px] text-black/30 font-mono font-medium whitespace-nowrap">{item.date}</span>
+                                  <span className="text-[9px] text-black/30 dark:text-white/30 font-mono font-medium whitespace-nowrap">{item.date}</span>
                                 </div>
-                                <h3 className="text-lg font-serif font-medium text-black group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
+                                <h3 className="text-lg font-serif font-medium text-black dark:text-white group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
                                   {item.title}
                                 </h3>
                                 <div className="relative mt-auto">
@@ -2559,7 +2566,7 @@ export default function App() {
                              initial={{ opacity: 0 }}
                              animate={{ opacity: 1 }}
                              exit={{ opacity: 0 }}
-                             className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/60"
+                             className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/60 dark:bg-white/60"
                              onClick={() => setSelectedNews(null)}
                            >
                               <motion.div
@@ -2567,7 +2574,7 @@ export default function App() {
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="bg-white border border-black/20 shadow-[0_20px_60px_rgba(0,0,0,0.8)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh]"
+                                className="bg-white dark:bg-[#0F1219] border border-black/20 dark:border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.8)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh]"
                               >
                                 <div className="absolute top-0 right-0 opacity-5 pointer-events-none transform translate-x-1/4 -translate-y-1/4">
                                   <Zap size={300} />
@@ -2575,17 +2582,17 @@ export default function App() {
                                 
                                 <button
                                   onClick={() => setSelectedNews(null)}
-                                  className="absolute top-6 right-6 p-2 text-black/40 hover:text-black rounded-full hover:bg-black/10 transition-colors z-50 bg-black/20"
+                                  className="absolute top-6 right-6 p-2 text-black/40 dark:text-white/40 hover:text-black dark:text-white rounded-full hover:bg-black/10 dark:hover:bg-white/10 dark:bg-white/10 transition-colors z-50 bg-black/20 dark:bg-white/20"
                                 >
                                   <X size={20} />
                                 </button>
                                 
                                 <div className="overflow-y-auto custom-scrollbar pr-2 mt-4">
-                                  <div className="flex items-center gap-3 mb-6 border-b border-black/5 pb-4">
+                                  <div className="flex items-center gap-3 mb-6 border-b border-black/5 dark:border-white/5 pb-4">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500 shrink-0">
                                       {getDisplaySource(selectedNews.source)}
                                     </span>
-                                    <span className="text-black/20 text-[10px]">•</span>
+                                    <span className="text-black/20 dark:text-white/20 text-[10px]">•</span>
                                   {selectedNews.displaySentiment && (
                                      <span 
                                        className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest ${
@@ -2598,17 +2605,17 @@ export default function App() {
                                        {selectedNews.displaySentiment}
                                      </span>
                                   )}
-                                  <span className="ml-auto text-[10px] text-black/30 font-mono font-medium">{selectedNews.date}</span>
+                                  <span className="ml-auto text-[10px] text-black/30 dark:text-white/30 font-mono font-medium">{selectedNews.date}</span>
                                 </div>
                                 
-                                <h2 className="text-2xl md:text-3xl font-serif font-medium text-black leading-tight mb-8">
+                                <h2 className="text-2xl md:text-3xl font-serif font-medium text-black dark:text-white leading-tight mb-8">
                                   {selectedNews.title}
                                 </h2>
                                 
                                 <div className="space-y-6">
                                   <div>
                                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-amber-500/50 mb-3">General Summary</h4>
-                                    <p className="text-base text-black/80 leading-relaxed font-light">
+                                    <p className="text-base text-black/80 dark:text-white/80 leading-relaxed font-light">
                                       {selectedNews.displayDesc}
                                     </p>
                                   </div>
@@ -2619,14 +2626,14 @@ export default function App() {
                                       href={selectedNews.url} 
                                       target="_blank" 
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#234bd8] hover:bg-[#1a38a3] text-black rounded-lg text-sm font-medium transition-colors"
+                                      className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#234bd8] hover:bg-[#1a38a3] text-black dark:text-white rounded-lg text-sm font-medium transition-colors"
                                     >
                                       Read Full Article <ExternalLink size={16} />
                                     </a>
                                   </div>
                                   
                                   <div>
-                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/40 mb-3 border-b border-black/10 pb-2 mt-8">Affected Tickers</h4>
+                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/40 dark:text-white/40 mb-3 border-b border-black/10 dark:border-white/10 pb-2 mt-8">Affected Tickers</h4>
                                     <div className="flex gap-3">
                                       {(selectedNews.displayTickers || []).map((ticker: string) => (
                                         <span key={ticker} className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-xs font-mono">
@@ -2648,10 +2655,10 @@ export default function App() {
                 {activeModule === 'vip-strategy' && (
                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
                       {/* Playbook Header */}
-                      <div className="bg-white border border-black/10 p-8 rounded-sm shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                      <div className="bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 p-8 rounded-sm shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div>
                           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-2">Institutional Playbook</div>
-                          <h2 className="text-4xl font-serif italic text-black title-elegant bg-gradient-to-r from-emerald-600 via-teal-600 to-transparent bg-clip-text text-transparent">Institutional Strategies</h2>
+                          <h2 className="text-4xl font-serif italic text-black dark:text-white title-elegant bg-gradient-to-r from-emerald-600 via-teal-600 to-transparent bg-clip-text text-transparent">Institutional Strategies</h2>
                           <p className="text-neutral-500 text-sm mt-1">Deep dives into professional execution models and systematic frameworks.</p>
                         </div>
                         <div className="flex gap-3">
@@ -2660,7 +2667,7 @@ export default function App() {
                              <div className="flex gap-3">
                                <button 
                                  onClick={() => setIsPlaybookEditor(!isPlaybookEditor)}
-                                 className={`flex items-center gap-2 px-4 py-2.5 border text-[10px] font-bold uppercase tracking-widest transition-all rounded-sm ${isPlaybookEditor ? 'bg-amber-500 border-amber-600 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white border-black/10 text-black hover:bg-black/5'}`}
+                                 className={`flex items-center gap-2 px-4 py-2.5 border text-[10px] font-bold uppercase tracking-widest transition-all rounded-sm ${isPlaybookEditor ? 'bg-amber-500 border-amber-600 text-black dark:text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white dark:bg-[#0F1219] border-black/10 dark:border-white/10 text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5'}`}
                                >
                                  {isPlaybookEditor ? <ShieldCheck size={14} /> : <Lock size={14} />}
                                  {isPlaybookEditor ? 'Lock Editor' : 'Author Mode'}
@@ -2681,7 +2688,7 @@ export default function App() {
                                      setActiveStrategyId(newStrat.id);
                                      setActiveStepIndex(0);
                                    }}
-                                   className="flex items-center gap-2 px-6 py-2.5 bg-black text-black text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all rounded-sm"
+                                   className="flex items-center gap-2 px-6 py-2.5 bg-black text-black dark:text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all rounded-sm"
                                  >
                                    <Plus size={14} />
                                    Deploy New Strategy
@@ -2708,11 +2715,11 @@ export default function App() {
                                    setActiveStrategyId(strat.id);
                                    setActiveStepIndex(0);
                                  }}
-                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-black text-black border-black shadow-xl ring-2 ring-[#64A0E6]/20' : 'bg-white text-black border-black/5 hover:border-black/20 hover:shadow-md'}`}
+                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-black text-black dark:text-white border-black shadow-xl ring-2 ring-[#64A0E6]/20' : 'bg-white dark:bg-[#0F1219] text-black dark:text-white border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/20 dark:border-white/20 hover:shadow-md'}`}
                                >
                                  <div className="relative z-10">
                                    <div className="flex justify-between items-start mb-4">
-                                     <div className={`text-[9px] font-bold uppercase tracking-[0.2em] ${activeStrategyId === strat.id ? 'text-[#64A0E6]' : 'text-black/30'}`}>
+                                     <div className={`text-[9px] font-bold uppercase tracking-[0.2em] ${activeStrategyId === strat.id ? 'text-[#64A0E6]' : 'text-black/30 dark:text-white/30'}`}>
                                        {strat.category}
                                      </div>
                                      {isPlaybookEditor && (
@@ -2728,8 +2735,8 @@ export default function App() {
                                          }}
                                          className={`p-2 rounded-full transition-all border ${
                                            activeStrategyId === strat.id 
-                                             ? 'bg-rose-500/20 border-black/10 text-rose-500 hover:bg-rose-500 hover:text-black' 
-                                             : 'bg-white border-black/5 text-rose-600 hover:bg-rose-500 hover:text-black shadow-sm'
+                                             ? 'bg-rose-500/20 border-black/10 dark:border-white/10 text-rose-500 hover:bg-rose-500 hover:text-black dark:text-white' 
+                                             : 'bg-white dark:bg-[#0F1219] border-black/5 dark:border-white/5 text-rose-600 hover:bg-rose-500 hover:text-black dark:text-white shadow-sm'
                                          }`}
                                          title="Delete Strategy"
                                        >
@@ -2738,7 +2745,7 @@ export default function App() {
                                      )}
                                    </div>
                                    <h4 className="font-serif italic text-2xl leading-tight mb-4">{strat.title}</h4>
-                                   <p className={`text-xs line-clamp-6 leading-relaxed ${activeStrategyId === strat.id ? 'text-black/60' : 'text-black/40'}`}>
+                                   <p className={`text-xs line-clamp-6 leading-relaxed ${activeStrategyId === strat.id ? 'text-black/60 dark:text-white/60' : 'text-black/40 dark:text-white/40'}`}>
                                      {strat.description}
                                    </p>
                                  </div>
@@ -2763,12 +2770,12 @@ export default function App() {
                         {/* Main Content: Step by Step */}
                         <div className="lg:col-span-9 space-y-8">
                           {activeStrategy ? (
-                            <div className="bg-white border border-black/10 rounded-sm overflow-hidden shadow-sm">
+                            <div className="bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 rounded-sm overflow-hidden shadow-sm">
                               {/* Strategy Header */}
-                              <div className="p-10 border-b border-black/5 bg-[#FAFAFA]">
+                              <div className="p-10 border-b border-black/5 dark:border-white/5 bg-[#FAFAFA]">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                                   <div className="flex items-center gap-6">
-                                    <div className="w-14 h-14 rounded-full bg-black text-black flex items-center justify-center font-serif text-2xl italic shadow-2xl ring-4 ring-black/5">
+                                    <div className="w-14 h-14 rounded-full bg-black text-black dark:text-white flex items-center justify-center font-serif text-2xl italic shadow-2xl ring-4 ring-black/5">
                                       {strategies.indexOf(activeStrategy) + 1}
                                     </div>
                                     <div className="flex-1 min-w-[300px]">
@@ -2781,7 +2788,7 @@ export default function App() {
                                               const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, title: e.target.value } : s);
                                               saveStrategies(updated);
                                             }}
-                                            className="text-4xl font-serif italic text-black bg-transparent border-b border-dashed border-black/20 focus:border-black outline-none w-full"
+                                            className="text-4xl font-serif italic text-black dark:text-white bg-transparent border-b border-dashed border-black/20 dark:border-white/20 focus:border-black outline-none w-full"
                                             placeholder="Strategy Title"
                                           />
                                           <input 
@@ -2791,13 +2798,13 @@ export default function App() {
                                               const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, category: e.target.value } : s);
                                               saveStrategies(updated);
                                             }}
-                                            className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#64A0E6] bg-transparent border-b border-dashed border-black/10 focus:border-black outline-none w-full"
+                                            className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#64A0E6] bg-transparent border-b border-dashed border-black/10 dark:border-white/10 focus:border-black outline-none w-full"
                                             placeholder="Category"
                                           />
                                         </div>
                                       ) : (
                                         <div className="space-y-1">
-                                          <h3 className="text-4xl font-serif italic text-black">{activeStrategy.title}</h3>
+                                          <h3 className="text-4xl font-serif italic text-black dark:text-white">{activeStrategy.title}</h3>
                                           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#64A0E6]">
                                             {activeStrategy.category}
                                           </div>
@@ -2816,7 +2823,7 @@ export default function App() {
                                       const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, description: e.target.value } : s);
                                       saveStrategies(updated);
                                     }}
-                                    className="text-neutral-600 w-full bg-transparent border border-dashed border-black/10 p-4 rounded-sm italic outline-none focus:border-black/30 min-h-[100px]"
+                                    className="text-neutral-600 w-full bg-transparent border border-dashed border-black/10 dark:border-white/10 p-4 rounded-sm italic outline-none focus:border-black/30 dark:border-white/30 min-h-[100px]"
                                     placeholder="Describe the institutional framework..."
                                   />
                                 ) : (
@@ -2825,7 +2832,7 @@ export default function App() {
                               </div>
 
                               {/* Steps Timeline Navigation */}
-                              <div className="px-8 py-4 border-b border-black/5 bg-white flex items-center gap-2 overflow-x-auto custom-scrollbar active:cursor-grabbing">
+                              <div className="px-8 py-4 border-b border-black/5 dark:border-white/5 bg-white dark:bg-[#0F1219] flex items-center gap-2 overflow-x-auto custom-scrollbar active:cursor-grabbing">
                                 {activeStrategy.steps.map((step, idx) => (
                                   <div key={step.id} className="relative flex items-center group/step shrink-0">
                                     <button
@@ -2833,8 +2840,8 @@ export default function App() {
                                       onClick={() => setActiveStepIndex(idx)}
                                       className={`flex items-center gap-3 px-6 py-4 border transition-all relative ${
                                         activeStepIndex === idx 
-                                          ? 'bg-black text-black border-black font-bold shadow-lg -translate-y-0.5 z-10' 
-                                          : 'bg-white text-neutral-400 border-black/5 hover:border-black/20 hover:text-black'
+                                          ? 'bg-black text-black dark:text-white border-black font-bold shadow-lg -translate-y-0.5 z-10' 
+                                          : 'bg-white dark:bg-[#0F1219] text-neutral-400 border-black/5 dark:border-white/5 hover:border-black/20 dark:hover:border-white/20 dark:border-white/20 hover:text-black dark:text-white'
                                       }`}
                                     >
                                       <span className={`text-[10px] font-mono ${activeStepIndex === idx ? 'text-[#64A0E6]' : 'opacity-20'}`}>
@@ -2861,7 +2868,7 @@ export default function App() {
                                             setActiveStepIndex(Math.max(0, activeS.steps.length - 1));
                                           }
                                         }}
-                                        className="absolute -top-1 -right-1 p-1 bg-white border border-black shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-black text-rose-600"
+                                        className="absolute -top-1 -right-1 p-1 bg-white dark:bg-[#0F1219] border border-black shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-black dark:text-white text-rose-600"
                                       >
                                         <X size={10} />
                                       </button>
@@ -2876,7 +2883,7 @@ export default function App() {
                                       saveStrategies(updated);
                                       setActiveStepIndex(activeStrategy.steps.length);
                                     }}
-                                    className="ml-4 shrink-0 p-3 border border-dashed border-black/20 text-neutral-400 hover:text-black hover:border-black/40 transition-colors rounded-sm bg-neutral-50/50"
+                                    className="ml-4 shrink-0 p-3 border border-dashed border-black/20 dark:border-white/20 text-neutral-400 hover:text-black dark:text-white hover:border-black/40 dark:hover:border-white/40 dark:border-white/40 transition-colors rounded-sm bg-neutral-50/50"
                                   >
                                     <Plus size={16} />
                                   </button>
@@ -2917,7 +2924,7 @@ export default function App() {
                                               });
                                               saveStrategies(updated);
                                             }}
-                                            className="text-4xl font-serif italic text-black leading-tight bg-transparent border-b border-dashed border-black/10 focus:border-black outline-none w-full"
+                                            className="text-4xl font-serif italic text-black dark:text-white leading-tight bg-transparent border-b border-dashed border-black/10 dark:border-white/10 focus:border-black outline-none w-full"
                                             placeholder="Phase Title"
                                           />
                                         </div>
@@ -2930,11 +2937,11 @@ export default function App() {
 
                                       {/* Metrics if any */}
                                       {activeStrategy.steps[activeStepIndex]?.metrics && (
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-6 border-y border-black/5">
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-6 border-y border-black/5 dark:border-white/5">
                                           {activeStrategy.steps[activeStepIndex].metrics.map((m, i) => (
                                             <div key={i} className="space-y-1">
                                               <div className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-40">{m.label}</div>
-                                              <div className="text-xl font-mono font-bold text-black">{m.value}</div>
+                                              <div className="text-xl font-mono font-bold text-black dark:text-white">{m.value}</div>
                                             </div>
                                           ))}
                                         </div>
@@ -2959,7 +2966,7 @@ export default function App() {
                                                 saveStrategies(updated);
                                               }}
                                               placeholder="Update strategy details..."
-                                              className="w-full bg-[#FAFAFA] border border-black/10 rounded-sm p-4 text-sm font-sans text-neutral-600 outline-none focus:border-black/20 min-h-[120px] transition-all"
+                                              className="w-full bg-[#FAFAFA] border border-black/10 dark:border-white/10 rounded-sm p-4 text-sm font-sans text-neutral-600 outline-none focus:border-black/20 dark:border-white/20 min-h-[120px] transition-all"
                                             />
                                           </div>
                                         </div>
@@ -2969,7 +2976,7 @@ export default function App() {
                                     <div className="md:col-span-12 lg:col-span-5 space-y-6">
                                       <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-2">Evidence / Visuals</div>
                                       
-                                      <div className="relative aspect-[4/3] bg-neutral-50 border border-black/5 group shadow-inner overflow-hidden">
+                                      <div className="relative aspect-[4/3] bg-neutral-50 border border-black/5 dark:border-white/5 group shadow-inner overflow-hidden">
                                         {activeStrategy.steps[activeStepIndex]?.image ? (
                                           <div className="relative group/image h-full w-full">
                                             <img 
@@ -2979,13 +2986,13 @@ export default function App() {
                                               onClick={() => setZoomedImage(activeStrategy.steps[activeStepIndex].image!)}
                                             />
                                             <div className="absolute top-4 right-4 opacity-0 group-hover/image:opacity-100 transition-opacity pointer-events-none">
-                                              <div className="bg-black/50 backdrop-blur-sm text-black p-2 rounded-full">
+                                              <div className="bg-black/5 dark:bg-white/50 backdrop-blur-sm text-black dark:text-white p-2 rounded-full">
                                                 <Maximize2 size={14} />
                                               </div>
                                             </div>
                                             {isPlaybookEditor && (
-                                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-4 transition-opacity">
-                                                 <label className="p-3 bg-white text-black cursor-pointer hover:bg-neutral-100 transition-colors">
+                                              <div className="absolute inset-0 bg-black/60 dark:bg-white/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-4 transition-opacity">
+                                                 <label className="p-3 bg-white dark:bg-[#0F1219] text-black dark:text-white cursor-pointer hover:bg-neutral-100 transition-colors">
                                                    <RefreshCcw size={18} />
                                                    <input 
                                                     type="file" 
@@ -3006,7 +3013,7 @@ export default function App() {
                                                      });
                                                      saveStrategies(updated);
                                                    }}
-                                                   className="p-3 bg-rose-500 text-black hover:bg-rose-600 transition-colors"
+                                                   className="p-3 bg-rose-500 text-black dark:text-white hover:bg-rose-600 transition-colors"
                                                  >
                                                    <X size={18} />
                                                  </button>
@@ -3017,9 +3024,9 @@ export default function App() {
                                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-50">
                                             {isPlaybookEditor ? (
                                               <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-black/[0.02] transition-colors w-full h-full">
-                                                <ImageIcon size={48} className="text-black/10 mb-4" />
-                                                <div className="text-[10px] font-bold uppercase tracking-widest text-black/40">Upload Strategy Visual</div>
-                                                <div className="text-[9px] text-black/20 mt-2">Historical chart, execution proof, or flow graph</div>
+                                                <ImageIcon size={48} className="text-black/10 dark:text-white/10 mb-4" />
+                                                <div className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40">Upload Strategy Visual</div>
+                                                <div className="text-[9px] text-black/20 dark:text-white/20 mt-2">Historical chart, execution proof, or flow graph</div>
                                                 <input 
                                                   type="file" 
                                                   className="hidden" 
@@ -3027,7 +3034,7 @@ export default function App() {
                                                 />
                                               </label>
                                             ) : (
-                                              <div className="flex flex-col items-center justify-center text-black/20">
+                                              <div className="flex flex-col items-center justify-center text-black/20 dark:text-white/20">
                                                 <ImageIcon size={48} className="mb-4 opacity-20" />
                                                 <div className="text-[10px] font-bold uppercase tracking-widest">No Visual Evidence Provided</div>
                                               </div>
@@ -3036,10 +3043,10 @@ export default function App() {
                                         )}
                                       </div>
 
-                                      <div className="bg-black/5 p-6 space-y-4">
+                                      <div className="bg-black/5 dark:bg-white/5 p-6 space-y-4">
                                         {isPlaybookEditor && (
                                           <div>
-                                            <div className="text-[9px] font-bold uppercase tracking-widest text-black/40 mb-2">Phase Title</div>
+                                            <div className="text-[9px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40 mb-2">Phase Title</div>
                                             <input 
                                               type="text" 
                                               value={activeStrategy.steps[activeStepIndex]?.title}
@@ -3055,7 +3062,7 @@ export default function App() {
                                                 });
                                                 saveStrategies(updated);
                                               }}
-                                              className="w-full bg-white border border-black/10 px-3 py-2 text-xs font-bold uppercase tracking-widest focus:border-black/30 outline-none transition-all shadow-sm"
+                                              className="w-full bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-widest focus:border-black/30 dark:border-white/30 outline-none transition-all shadow-sm"
                                             />
                                           </div>
                                         )}
@@ -3065,7 +3072,7 @@ export default function App() {
                                               if (activeStepIndex > 0) setActiveStepIndex(activeStepIndex - 1);
                                             }}
                                             disabled={activeStepIndex === 0}
-                                            className="flex-1 py-3 border border-black/10 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 disabled:opacity-20 transition-all"
+                                            className="flex-1 py-3 border border-black/10 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5 disabled:opacity-20 transition-all"
                                           >
                                             Prev Phase
                                           </button>
@@ -3074,7 +3081,7 @@ export default function App() {
                                               if (activeStepIndex < activeStrategy.steps.length - 1) setActiveStepIndex(activeStepIndex + 1);
                                             }}
                                             disabled={activeStepIndex === activeStrategy.steps.length - 1}
-                                            className="flex-1 py-3 bg-black text-black text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-20 transition-all"
+                                            className="flex-1 py-3 bg-black text-black dark:text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-20 transition-all"
                                           >
                                             Next Phase
                                           </button>
@@ -3086,9 +3093,9 @@ export default function App() {
                               </AnimatePresence>
                             </div>
                           ) : (
-                            <div className="h-[600px] flex flex-col items-center justify-center bg-white border border-dashed border-black/10 rounded-sm">
-                               <MapIcon size={48} className="text-black/5 mb-6" />
-                               <div className="text-xl font-serif italic text-black/20">Awaiting strategy deployment...</div>
+                            <div className="h-[600px] flex flex-col items-center justify-center bg-white dark:bg-[#0F1219] border border-dashed border-black/10 dark:border-white/10 rounded-sm">
+                               <MapIcon size={48} className="text-black/5 dark:text-white/5 mb-6" />
+                               <div className="text-xl font-serif italic text-black/20 dark:text-white/20">Awaiting strategy deployment...</div>
                             </div>
                           )}
                         </div>
@@ -3100,11 +3107,11 @@ export default function App() {
               {/* Sidebar Info/Status */}
               {activeModule === 'vip-alpha' ? (
                 <div className="lg:col-span-4 space-y-6">
-                   <div className="p-6 border border-amber-500/20 bg-white rounded-xl relative overflow-hidden shadow-[0_4px_20px_rgba(245,158,11,0.05)]">
+                   <div className="p-6 border border-amber-500/20 bg-white dark:bg-[#0F1219] rounded-xl relative overflow-hidden shadow-[0_4px_20px_rgba(245,158,11,0.05)]">
                       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
                       <div className="flex items-center gap-2 mb-4">
                         <Cpu size={14} className="text-amber-500" />
-                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-black">AI Overall Sentiment Analysis</h3>
+                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">AI Overall Sentiment Analysis</h3>
                       </div>
                       
                       {(() => {
@@ -3118,7 +3125,7 @@ export default function App() {
                          }
 
                          const validNews = filteredNews.filter(n => n.sentiment && ['Positive', 'Negative', 'Neutral'].includes(n.sentiment));
-                         if (validNews.length === 0) return <div className="text-xs text-black/40 py-4">Awaiting intelligence...</div>;
+                         if (validNews.length === 0) return <div className="text-xs text-black/40 dark:text-white/40 py-4">Awaiting intelligence...</div>;
                          
                          const pos = validNews.filter(n => n.sentiment === 'Positive').length;
                          const neg = validNews.filter(n => n.sentiment === 'Negative').length;
@@ -3137,7 +3144,7 @@ export default function App() {
                            <>
                              <div className="mb-5">
                                <div className={`text-xl font-serif italic mb-1 ${dominantColor}`}>{dominant}</div>
-                               <div className="text-[10px] text-black/40 uppercase tracking-widest">{total} Market Drivers Analyzed</div>
+                               <div className="text-[10px] text-black/40 dark:text-white/40 uppercase tracking-widest">{total} Market Drivers Analyzed</div>
                              </div>
                              
                              <div className="space-y-3 mb-5">
@@ -3146,21 +3153,21 @@ export default function App() {
                                     <span className="text-emerald-400">Positive ({Math.round(posPct)}%)</span>
                                     <span className="text-emerald-400">{pos}</span>
                                   </div>
-                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-emerald-500/80" style={{width: `${posPct}%`}}></div></div>
+                                  <div className="h-1 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-emerald-500/80" style={{width: `${posPct}%`}}></div></div>
                                </div>
                                <div>
                                   <div className="flex justify-between text-[9px] font-mono mb-1">
                                     <span className="text-red-400">Negative ({Math.round(negPct)}%)</span>
                                     <span className="text-red-400">{neg}</span>
                                   </div>
-                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-red-500/80" style={{width: `${negPct}%`}}></div></div>
+                                  <div className="h-1 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-red-500/80" style={{width: `${negPct}%`}}></div></div>
                                </div>
                                <div>
                                   <div className="flex justify-between text-[9px] font-mono mb-1">
                                     <span className="text-neutral-400">Neutral ({Math.round(neuPct)}%)</span>
                                     <span className="text-neutral-400">{neu}</span>
                                   </div>
-                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-neutral-500/80" style={{width: `${neuPct}%`}}></div></div>
+                                  <div className="h-1 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-neutral-500/80" style={{width: `${neuPct}%`}}></div></div>
                                </div>
                              </div>
                              
@@ -3174,7 +3181,7 @@ export default function App() {
                 </div>
               ) : !['vip-journal', 'vip-conversion', 'vip-gex', 'vip-strategy'].includes(activeModule) && (
                 <div className="lg:col-span-4 space-y-6">
-                   <div className="p-6 bg-white border border-black/5 shadow-sm rounded-sm">
+                   <div className="p-6 bg-white dark:bg-[#0F1219] border border-black/5 dark:border-white/5 shadow-sm rounded-sm">
                       <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4 opacity-40">System Diagnostics</h3>
                       <div className="space-y-4">
                          {[
@@ -3196,7 +3203,7 @@ export default function App() {
                         <Globe size={14} className="text-amber-600" />
                         <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Market Regime</h3>
                       </div>
-                      <div className="p-3 bg-white border border-amber-200 rounded-sm mb-4">
+                      <div className="p-3 bg-white dark:bg-[#0F1219] border border-amber-200 rounded-sm mb-4">
                          <div className="text-2xl font-serif italic text-amber-900 mb-1">Low Volatility Drift</div>
                          <div className="text-[10px] text-amber-700/60 font-bold uppercase">Positive Gamma Regime (72%)</div>
                       </div>
@@ -3226,7 +3233,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+              className="absolute inset-0 bg-black/60 dark:bg-white/60 backdrop-blur-md"
               onClick={() => !isVerifying && setIsKeyModalOpen(false)}
             />
             <motion.div
@@ -3280,7 +3287,7 @@ export default function App() {
                 <button 
                   type="submit"
                   disabled={isVerifying || accessKey.length < 8}
-                  className="w-full py-4 bg-white text-black font-bold uppercase text-[10px] tracking-widest hover:bg-neutral-200 transition-all disabled:opacity-20 disabled:cursor-not-allowed group relative overflow-hidden"
+                  className="w-full py-4 bg-white dark:bg-[#0F1219] text-black dark:text-white font-bold uppercase text-[10px] tracking-widest hover:bg-neutral-200 transition-all disabled:opacity-20 disabled:cursor-not-allowed group relative overflow-hidden"
                 >
                   <span className="relative z-10">{isVerifying ? 'Verifying Protocol...' : 'Authenticate'}</span>
                   {isVerifying && (
@@ -3316,21 +3323,21 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setIsVIPOpen(false)}
-                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/40 dark:bg-white/40 backdrop-blur-sm"
               />
               <motion.div
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 300, ease: "easeOut" }}
-                className="relative bg-[#FDFCFB] w-full max-w-xl shadow-2xl border border-black/10 overflow-hidden"
+                className="relative bg-[#FDFCFB] w-full max-w-xl shadow-2xl border border-black/10 dark:border-white/10 overflow-hidden"
               >
                 {/* Decorative Amber Bar */}
                 <div className="h-1.5 w-full bg-linear-to-r from-amber-200 via-amber-500 to-amber-200" />
                 
                 <button
                   onClick={() => setIsVIPOpen(false)}
-                  className="absolute top-4 right-4 p-2 hover:bg-black/5 transition-colors rounded-full z-10"
+                  className="absolute top-4 right-4 p-2 hover:bg-black/5 dark:hover:bg-white/5 dark:bg-white/5 transition-colors rounded-full z-10"
                 >
                   <X size={20} className="opacity-40" />
                 </button>
@@ -3449,15 +3456,15 @@ function GlossaryCard({ title, subtitle, def, impact, color = 'black', idx = 0 }
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -4, transition: { duration: 0.3, ease: 'easeOut' } }}
-      className={`p-5 border-l-4 ${borderColors[color]} bg-white shadow-sm hover:shadow-md transition-shadow`}
+      className={`p-5 border-l-4 ${borderColors[color]} bg-white dark:bg-[#0F1219] shadow-sm hover:shadow-md transition-shadow`}
     >
       <div className="flex justify-between items-baseline mb-3">
-        <h4 className="font-serif italic text-xl text-black">{title}</h4>
+        <h4 className="font-serif italic text-xl text-black dark:text-white">{title}</h4>
         <span className={`font-mono text-xs ${textColors[color]}`}>"{subtitle}"</span>
       </div>
       <div className="space-y-3">
         <p className="text-[13px] leading-snug text-neutral-600"><strong>Def:</strong> {def}</p>
-        <p className="text-[13px] leading-snug text-neutral-600 border-t border-black/5 pt-2 italic transition-colors"><strong>Impact:</strong> {impact}</p>
+        <p className="text-[13px] leading-snug text-neutral-600 border-t border-black/5 dark:border-white/5 pt-2 italic transition-colors"><strong>Impact:</strong> {impact}</p>
       </div>
     </motion.div>
   );
@@ -3483,7 +3490,7 @@ function InteractiveGlossary() {
   return (
     <div className="grid md:grid-cols-12 gap-10 items-start">
       <div className="md:col-span-5 flex flex-col">
-        <div className="relative border-b border-black/20 pb-2 mb-4">
+        <div className="relative border-b border-black/20 dark:border-white/20 pb-2 mb-4">
           <Search size={14} className="absolute left-0 top-1/2 -translate-y-1/2 opacity-40" />
           <input 
             type="text" 
@@ -3518,14 +3525,14 @@ function InteractiveGlossary() {
                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   />
                 )}
-                <div className={`font-bold text-xs uppercase tracking-wider transition-colors ${activeTerm.term === t.term ? 'text-black' : 'text-neutral-500 hover:text-black'}`}>{t.term}</div>
+                <div className={`font-bold text-xs uppercase tracking-wider transition-colors ${activeTerm.term === t.term ? 'text-black dark:text-white' : 'text-neutral-500 hover:text-black dark:text-white'}`}>{t.term}</div>
                 {t.subtitle && <div className="text-[10px] opacity-50 mt-1 italic font-serif">{t.subtitle}</div>}
               </motion.button>
             ))}
           </AnimatePresence>
         </div>
       </div>
-      <div className="md:col-span-7 bg-white border border-black/10 p-8 shadow-sm relative group">
+      <div className="md:col-span-7 bg-white dark:bg-[#0F1219] border border-black/10 dark:border-white/10 p-8 shadow-sm relative group">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTerm.term}
@@ -3564,7 +3571,7 @@ function InteractiveGlossary() {
               </div>
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-2 border-l-2 pl-2 border-black">Market Impact</div>
-                <p className="text-black font-medium leading-relaxed">{activeTerm.impact}</p>
+                <p className="text-black dark:text-white font-medium leading-relaxed">{activeTerm.impact}</p>
               </div>
             </div>
           </motion.div>
@@ -3576,7 +3583,7 @@ function InteractiveGlossary() {
 
 function StrategyCard({ num, title, env, play, color = 'black' }: { num: string, title: string, env: string, play: string, color?: 'black' | 'emerald' | 'red' }) {
   const numberColors = {
-    black: 'text-black/10',
+    black: 'text-black/10 dark:text-white/10',
     emerald: 'text-emerald-900/10',
     red: 'text-red-900/10'
   }
@@ -3585,7 +3592,7 @@ function StrategyCard({ num, title, env, play, color = 'black' }: { num: string,
       <div className={`absolute left-0 top-0 text-[50px] font-serif italic ${numberColors[color]}`}>
         {num}
       </div>
-      <h5 className="font-bold text-xs uppercase border-b border-black/10 pb-2 mb-4 tracking-wider">{title}</h5>
+      <h5 className="font-bold text-xs uppercase border-b border-black/10 dark:border-white/10 pb-2 mb-4 tracking-wider">{title}</h5>
       <div className="grid md:grid-cols-2 gap-8">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-2 border-l-2 pl-2 border-black">Environment</div>
@@ -3593,7 +3600,7 @@ function StrategyCard({ num, title, env, play, color = 'black' }: { num: string,
         </div>
         <div>
            <div className="text-[10px] font-bold uppercase tracking-widest mb-2 border-l-2 pl-2 border-black">Strategy</div>
-          <p className="text-black font-medium text-[13px] leading-relaxed">{play}</p>
+          <p className="text-black dark:text-white font-medium text-[13px] leading-relaxed">{play}</p>
         </div>
       </div>
     </div>

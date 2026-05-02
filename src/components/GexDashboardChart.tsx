@@ -12,9 +12,10 @@ import {
 interface GexDashboardChartProps {
   data: any[]; // Kept for signature compatibility but ignored
   activeTicker: string;
+  theme?: 'light' | 'dark';
 }
 
-export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTicker }) => {
+export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTicker, theme = 'light' }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -23,6 +24,29 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
   
   const [activeTimeframe, setActiveTimeframe] = useState('15m');
   const [useCandles, setUseCandles] = useState(true);
+
+  const colors = {
+    light: {
+      bg: 'transparent',
+      text: '#525252',
+      grid: 'rgba(0, 0, 0, 0.05)',
+      border: 'rgba(0, 0, 0, 0.1)',
+      crosshair: 'rgba(0, 0, 0, 0.2)',
+      tooltipBg: 'rgba(255, 255, 255, 0.95)',
+      spot: '#171717',
+    },
+    dark: {
+      bg: 'transparent',
+      text: '#94a3b8',
+      grid: 'rgba(255, 255, 255, 0.04)',
+      border: 'rgba(255, 255, 255, 0.1)',
+      crosshair: 'rgba(255, 255, 255, 0.15)',
+      tooltipBg: 'rgba(15, 18, 25, 0.98)',
+      spot: '#f8fafc',
+    }
+  };
+
+  const themeColors = colors[theme as keyof typeof colors];
 
   const lastDataPointRef = useRef<{ ohlc: any, gex: any } | null>(null);
 
@@ -35,37 +59,37 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#525252',
+        background: { type: ColorType.Solid, color: themeColors.bg },
+        textColor: themeColors.text,
       },
       grid: {
-        vertLines: { color: 'rgba(0, 0, 0, 0.05)', style: 1 },
-        horzLines: { color: 'rgba(0, 0, 0, 0.05)', style: 1 },
+        vertLines: { color: themeColors.grid, style: 1 },
+        horzLines: { color: themeColors.grid, style: 1 },
       },
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        borderColor: 'rgba(0, 0, 0, 0.1)',
+        borderColor: themeColors.border,
         rightOffset: 12,
         barSpacing: 10,
       },
       rightPriceScale: {
-        borderColor: 'rgba(0, 0, 0, 0.1)',
+        borderColor: themeColors.border,
         autoScale: true,
       },
       crosshair: {
         mode: 1, // Normal mode
         vertLine: {
-          color: 'rgba(0, 0, 0, 0.2)',
+          color: themeColors.crosshair,
           width: 1,
           style: 3,
-          labelBackgroundColor: '#ffffff',
+          labelBackgroundColor: theme === 'dark' ? '#171717' : '#ffffff',
         },
         horzLine: {
-          color: 'rgba(0, 0, 0, 0.2)',
+          color: themeColors.crosshair,
           width: 1,
           style: 3,
-          labelBackgroundColor: '#ffffff',
+          labelBackgroundColor: theme === 'dark' ? '#171717' : '#ffffff',
         },
       },
       handleScroll: {
@@ -141,16 +165,21 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
       tooltipRef.current.style.left = param.point.x + 15 + 'px';
       tooltipRef.current.style.top = param.point.y + 15 + 'px';
       
+      const themeColorsCurrent = colors[document.documentElement.classList.contains('dark') ? 'dark' : 'light'];
+      tooltipRef.current.style.backgroundColor = themeColorsCurrent.tooltipBg;
+      tooltipRef.current.style.borderColor = themeColorsCurrent.border;
+      
       const dateStr = new Date((param.time as number) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const isDark = document.documentElement.classList.contains('dark');
 
       tooltipRef.current.innerHTML = `
-        <div style="font-size: 11px; color: #737373; margin-bottom: 4px;">${dateStr}</div>
+        <div style="font-size: 11px; color: ${isDark ? '#a3a3a3' : '#737373'}; margin-bottom: 4px;">${dateStr}</div>
         <div style="display: flex; justify-content: space-between; gap: 12px;">
-          <span style="color: #171717;">Price</span>
-          <span style="font-weight: 600; font-family: monospace; color: #171717;">$${price.toFixed(2)}</span>
+          <span style="color: ${isDark ? '#f5f5f5' : '#171717'};">Price</span>
+          <span style="font-weight: 600; font-family: monospace; color: ${isDark ? '#f5f5f5' : '#171717'};">$${price.toFixed(2)}</span>
         </div>
         <div style="display: flex; justify-content: space-between; gap: 12px; margin-top: 2px;">
-          <span style="color: #737373;">Net GEX</span>
+          <span style="color: ${isDark ? '#a3a3a3' : '#737373'};">Net GEX</span>
           <span style="font-weight: 600; font-family: monospace; color: ${gex >= 0 ? '#10b981' : '#ef4444'};">${gex > 0 ? '+' : ''}${typeof gex === 'number' ? gex.toFixed(2) : gex}</span>
         </div>
       `;
@@ -174,6 +203,55 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
       chart.remove();
     };
   }, [activeTicker]); // Re-create ONLY on ticker change
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = chartRef.current;
+    
+    chart.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: themeColors.bg },
+        textColor: themeColors.text,
+      },
+      grid: {
+        vertLines: { color: themeColors.grid },
+        horzLines: { color: themeColors.grid },
+      },
+      timeScale: {
+        borderColor: themeColors.border,
+      },
+      rightPriceScale: {
+        borderColor: themeColors.border,
+      },
+      crosshair: {
+        vertLine: {
+          color: themeColors.crosshair,
+          labelBackgroundColor: theme === 'dark' ? '#171717' : '#ffffff',
+        },
+        horzLine: {
+          color: themeColors.crosshair,
+          labelBackgroundColor: theme === 'dark' ? '#171717' : '#ffffff',
+        },
+      },
+    });
+    
+    // Also update spot line color
+    if (seriesRef.current && spotLineRef.current) {
+      if (lastDataPointRef.current) {
+        const lastClose = lastDataPointRef.current.ohlc.close;
+        const spotParams = {
+          price: lastClose,
+          color: themeColors.spot,
+          lineWidth: 1 as const,
+          lineStyle: 0 as const,
+          axisLabelVisible: true,
+          title: `Spot $${lastClose.toFixed(2)}`,
+        };
+        seriesRef.current.removePriceLine(spotLineRef.current);
+        spotLineRef.current = seriesRef.current.createPriceLine(spotParams);
+      }
+    }
+  }, [theme, themeColors]);
 
   // Fetch real data on timeframe change
   useEffect(() => {
@@ -317,28 +395,28 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
   const TimeframeBtn = ({ label }: { label: string }) => (
     <button 
       onClick={() => setActiveTimeframe(label)}
-      className={`px-2 py-1 text-[10px] font-mono transition-all border-r border-black/10 last:border-r-0 ${activeTimeframe === label ? 'bg-black text-white font-bold' : 'bg-transparent text-black/50 hover:bg-black/5'}`}
+      className={`px-2 py-1 text-[10px] font-mono transition-all border-r border-black/10 dark:border-white/10 last:border-r-0 ${activeTimeframe === label ? 'bg-black dark:bg-white text-white dark:text-black font-bold' : 'bg-transparent text-black/50 dark:text-white/50 hover:bg-black/5 dark:hover:bg-white/5'}`}
     >
       {label}
     </button>
   );
 
   return (
-    <div className="w-full h-full flex flex-col bg-white relative z-10 overflow-hidden" style={{ borderRadius: '2px' }}>
+    <div className="w-full h-full flex flex-col bg-white dark:bg-neutral-900 relative z-10 overflow-hidden" style={{ borderRadius: '2px' }}>
       {/* Top Bar Navigation */}
-      <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-black/5 bg-white shrink-0">
+      <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="text-black/80 font-mono text-xs font-bold tracking-wider py-1 px-2 border border-black/10 rounded-sm">
-            {activeTicker} <span className="text-black/30 mx-1">|</span> {activeTimeframe}
+          <div className="text-black/80 dark:text-white/80 font-mono text-xs font-bold tracking-wider py-1 px-2 border border-black/10 dark:border-white/10 rounded-sm">
+            {activeTicker} <span className="text-black/30 dark:text-white/30 mx-1">|</span> {activeTimeframe}
           </div>
           <div className="hidden sm:flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[9px] font-mono text-black/40 uppercase tracking-[0.2em]">Live Stream</span>
+            <span className="text-[9px] font-mono text-black/40 dark:text-white/40 uppercase tracking-[0.2em]">Live Stream</span>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="flex items-center bg-white border border-black/10 rounded-sm overflow-hidden">
+          <div className="flex items-center bg-white dark:bg-neutral-900 border border-black/10 dark:border-white/10 rounded-sm overflow-hidden">
             <TimeframeBtn label="1m" />
             <TimeframeBtn label="5m" />
             <TimeframeBtn label="15m" />
@@ -346,11 +424,11 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
             <TimeframeBtn label="1d" />
           </div>
 
-          <div className="hidden xs:flex items-center gap-3 ml-2 pl-4 border-l border-black/5">
-             <span className="text-[9px] uppercase tracking-[0.1em] text-black/50 font-bold font-mono">View</span>
+          <div className="hidden xs:flex items-center gap-3 ml-2 pl-4 border-l border-black/5 dark:border-white/5">
+             <span className="text-[9px] uppercase tracking-[0.1em] text-black/50 dark:text-white/50 font-bold font-mono">View</span>
              <button 
                 onClick={() => setUseCandles(!useCandles)}
-                className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-all ${useCandles ? 'bg-emerald-500/80 shadow-inner' : 'bg-black/10'}`}
+                className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-all ${useCandles ? 'bg-emerald-500/80 shadow-inner' : 'bg-black/10 dark:bg-white/10'}`}
              >
                 <div className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform ${useCandles ? 'translate-x-4' : 'translate-x-0'}`} />
              </button>
@@ -364,7 +442,7 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
         {/* Absolute Floating Tooltip */}
         <div 
           ref={tooltipRef} 
-          className="absolute z-50 pointer-events-none hidden bg-white/95 backdrop-blur-md border border-black/10 rounded-sm shadow-xl"
+          className="absolute z-50 pointer-events-none hidden backdrop-blur-md border rounded-sm shadow-xl"
           style={{ padding: '10px 14px', minWidth: '160px' }}
         />
       </div>
