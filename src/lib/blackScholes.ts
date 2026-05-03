@@ -1,84 +1,132 @@
-export const normalPDF = (x: number) => Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+// ─────────────────────────────────────────────────────────────────────────────
+// BLACK-SCHOLES ENGINE
+// ─────────────────────────────────────────────────────────────────────────────
 
-export const normalCDF = (x: number) => {
-  const t = 1 / (1 + 0.2316419 * Math.abs(x));
-  const d = 0.3989423 * Math.exp(-x * x / 2);
-  const prob = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-  return x > 0 ? 1 - prob : prob;
-};
+export function normalPDF(x: number): number {
+  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+}
 
-export const _d1d2 = (S: number, K: number, T: number, r: number, q: number, sigma: number) => {
-  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return { d1: NaN, d2: NaN };
-  const d1 = (Math.log(S / K) + (r - q + 0.5 * Math.pow(sigma, 2)) * T) / (sigma * Math.sqrt(T));
+export function normalCDF(x: number): number {
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+  const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x) / Math.SQRT2;
+  const t = 1.0 / (1.0 + p * ax);
+  const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
+  return 0.5 * (1.0 + sign * y);
+}
+
+export function d1d2(S: number, K: number, T: number, r: number, q: number, sigma: number): [number, number] | null {
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return null;
+  const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
   const d2 = d1 - sigma * Math.sqrt(T);
-  return { d1, d2 };
-};
+  return [d1, d2];
+}
 
-export const bs_price = (S: number, K: number, T: number, r: number, q: number, sigma: number, flag: "C" | "P") => {
-  const { d1, d2 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  if (flag === "C") {
+export function bsPrice(S: number, K: number, T: number, r: number, q: number, sigma: number, flag: 'C' | 'P'): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  const [d1, d2] = dd;
+  if (flag === 'C') {
     return S * Math.exp(-q * T) * normalCDF(d1) - K * Math.exp(-r * T) * normalCDF(d2);
   }
   return K * Math.exp(-r * T) * normalCDF(-d2) - S * Math.exp(-q * T) * normalCDF(-d1);
-};
+}
 
-export const bs_gamma = (S: number, K: number, T: number, r: number, q: number, sigma: number) => {
-  const { d1 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  return Math.exp(-q * T) * normalPDF(d1) / (S * sigma * Math.sqrt(T));
-};
+export function bsGamma(S: number, K: number, T: number, r: number, q: number, sigma: number): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  return Math.exp(-q * T) * normalPDF(dd[0]) / (S * sigma * Math.sqrt(T));
+}
 
-export const bs_delta = (S: number, K: number, T: number, r: number, q: number, sigma: number, flag: "C" | "P") => {
-  const { d1 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  return flag === "C" ? Math.exp(-q * T) * normalCDF(d1) : -Math.exp(-q * T) * normalCDF(-d1);
-};
+export function bsDelta(S: number, K: number, T: number, r: number, q: number, sigma: number, flag: 'C' | 'P'): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  return flag === 'C'
+    ? Math.exp(-q * T) * normalCDF(dd[0])
+    : -Math.exp(-q * T) * normalCDF(-dd[0]);
+}
 
-export const bs_vega = (S: number, K: number, T: number, r: number, q: number, sigma: number) => {
-  const { d1 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  return S * Math.exp(-q * T) * normalPDF(d1) * Math.sqrt(T) / 100; // usually vega is divided by 100
-};
+export function bsVega(S: number, K: number, T: number, r: number, q: number, sigma: number): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  return S * Math.exp(-q * T) * normalPDF(dd[0]) * Math.sqrt(T);
+}
 
-export const bs_charm = (S: number, K: number, T: number, r: number, q: number, sigma: number, flag: "C" | "P") => {
-  const { d1, d2 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  const c = -Math.exp(-q * T) * normalPDF(d1) * (2 * (r - q) * T - d2 * sigma * Math.sqrt(T)) / (2 * T * sigma * Math.sqrt(T));
-  return flag === "C" ? c - q * Math.exp(-q * T) * normalCDF(d1) : c + q * Math.exp(-q * T) * normalCDF(-d1);
-};
-
-export const bs_vanna = (S: number, K: number, T: number, r: number, q: number, sigma: number) => {
-  const { d1, d2 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  return -Math.exp(-q * T) * normalPDF(d1) * d2 / sigma / 100;
-};
-
-export const bs_vomma = (S: number, K: number, T: number, r: number, q: number, sigma: number) => {
-  const { d1, d2 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  return (S * Math.exp(-q * T) * normalPDF(d1) * Math.sqrt(T)) * d1 * d2 / sigma / 10000;
-};
-
-export const bs_zomma = (S: number, K: number, T: number, r: number, q: number, sigma: number) => {
-  const { d1, d2 } = _d1d2(S, K, T, r, q, sigma);
-  if (isNaN(d1)) return 0.0;
-  return bs_gamma(S, K, T, r, q, sigma) * (d1 * d2 - 1) / sigma;
-};
-
-export const implied_vol = (market_price: number, S: number, K: number, T: number, r: number, q: number, flag: "C" | "P") => {
-  if (T <= 0 || market_price <= 0) return NaN;
-  const intrinsic = Math.max(0.0, flag === "C" ? S - K : K - S);
-  if (market_price <= intrinsic + 1e-4) return NaN;
-  
-  let sigma = 0.5; // initial guess
-  for (let i = 0; i < 100; i++) {
-    const price = bs_price(S, K, T, r, q, sigma, flag);
-    const vega = bs_vega(S, K, T, r, q, sigma) * 100; // Need exact derivative 
-    if (Math.abs(price - market_price) < 1e-6) return sigma;
-    if (Math.abs(vega) < 1e-8) break;
-    sigma = sigma - (price - market_price) / vega;
+export function bsTheta(S: number, K: number, T: number, r: number, q: number, sigma: number, flag: 'C' | 'P'): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  const [d1, d2] = dd;
+  const term1 = -(S * Math.exp(-q * T) * normalPDF(d1) * sigma) / (2 * Math.sqrt(T));
+  if (flag === 'C') {
+    return term1 + q * S * Math.exp(-q * T) * normalCDF(d1) - r * K * Math.exp(-r * T) * normalCDF(d2);
   }
-  
-  return (sigma > 0.005 && sigma < 5.0) ? sigma : NaN;
+  return term1 - q * S * Math.exp(-q * T) * normalCDF(-d1) + r * K * Math.exp(-r * T) * normalCDF(-d2);
+}
+
+export function bsCharm(S: number, K: number, T: number, r: number, q: number, sigma: number, flag: 'C' | 'P'): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  const [d1, d2] = dd;
+  const sqrtT = Math.sqrt(T);
+  const c = -Math.exp(-q * T) * normalPDF(d1) * (2 * (r - q) * T - d2 * sigma * sqrtT) / (2 * T * sigma * sqrtT);
+  return flag === 'C'
+    ? c - q * Math.exp(-q * T) * normalCDF(d1)
+    : c + q * Math.exp(-q * T) * normalCDF(-d1);
+}
+
+export function bsVanna(S: number, K: number, T: number, r: number, q: number, sigma: number): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  const [d1, d2] = dd;
+  return -Math.exp(-q * T) * normalPDF(d1) * d2 / sigma;
+}
+
+export function bsVomma(S: number, K: number, T: number, r: number, q: number, sigma: number): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  const [d1, d2] = dd;
+  return bsVega(S, K, T, r, q, sigma) * d1 * d2 / sigma;
+}
+
+export function bsZomma(S: number, K: number, T: number, r: number, q: number, sigma: number): number {
+  const dd = d1d2(S, K, T, r, q, sigma);
+  if (!dd) return 0;
+  const [d1, d2] = dd;
+  return bsGamma(S, K, T, r, q, sigma) * (d1 * d2 - 1) / sigma;
+}
+
+export function impliedVol(marketPrice: number, S: number, K: number, T: number, r: number, q: number, flag: 'C' | 'P'): number | null {
+  if (T <= 0 || marketPrice <= 0) return null;
+  const intrinsic = Math.max(0, flag === 'C' ? S - K : K - S);
+  if (marketPrice <= intrinsic + 0.0001) return null;
+  let lo = 0.001, hi = 10.0;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    const price = bsPrice(S, K, T, r, q, mid, flag);
+    if (Math.abs(price - marketPrice) < 0.0001) {
+      return mid > 0.005 && mid < 5.0 ? mid : null;
+    }
+    if (price > marketPrice) hi = mid;
+    else lo = mid;
+  }
+  const result = (lo + hi) / 2;
+  return result > 0.005 && result < 5.0 ? result : null;
+}
+
+// ── Constants ────────────────────────────────────────────────────────────────
+export const RISK_FREE_RATE = 0.043;
+export const DIV_YIELD: Record<string, number> = {
+  SPY: 0.013, QQQ: 0.006, IWM: 0.012,
+  GLD: 0.0, SLV: 0.0, TLT: 0.04,
+  XLF: 0.018, XLE: 0.035, IBIT: 0.0,
+  AAPL: 0.005, NVDA: 0.001, TSLA: 0.0,
+  AMZN: 0.0, MSFT: 0.007, META: 0.004,
+  GOOGL: 0.0, SPX: 0.013, NDX: 0.006, RUT: 0.012,
 };
+
+export const TICKERS = [
+  'SPY', 'QQQ', 'IWM', 'GLD', 'SLV', 'TLT', 'XLF', 'XLE', 'IBIT',
+  'AAPL', 'NVDA', 'TSLA', 'AMZN', 'MSFT', 'META', 'GOOGL',
+] as const;
+export type Ticker = (typeof TICKERS)[number];

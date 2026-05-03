@@ -58,9 +58,11 @@ interface MacroNexusProps {
   spotPrice: number;
   netGex: number;
   chartData: any[];
+  isDarkTheme?: boolean;
 }
 
-export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice, netGex, chartData }) => {
+export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice, netGex, chartData, isDarkTheme = false }) => {
+  const isDark = isDarkTheme;
   const [synthesis, setSynthesis] = useState<MacroSynthesis | null>(null);
   const [benchmarks, setBenchmarks] = useState<Record<string, BenchmarkData>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -90,11 +92,11 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
   }, []);
 
   const getStatusColor = (status: string) => {
-    if (!status) return 'text-neutral-400';
+    if (!status) return 'text-main-primary opacity-40';
     const s = status.toLowerCase();
-    if (['expansion', 'hot', 'bullish', 'strong', 'hawkish', 'accelerating', 'expanding', 'favorable', 'soft landing', 'stable', 'overweight', 'tightening', 'high conviction'].includes(s)) return 'text-emerald-500';
+    if (['expansion', 'hot', 'bullish', 'strong', 'hawkish', 'accelerating', 'expanding', 'favorable', 'soft landing', 'stable', 'overweight', 'tightening', 'high conviction'].includes(s)) return 'text-brand-emerald';
     if (['recession', 'bearish', 'weak', 'dovish', 'declining', 'cooling', 'contracting', 'unfavorable', 'underweight', 'widening', 'low conviction'].includes(s)) return 'text-rose-500';
-    return 'text-amber-500';
+    return 'text-brand-amber';
   };
 
   const getRegimeIcon = (regime: string) => {
@@ -119,16 +121,16 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
           { label: 'Bitcoin Spot', key: 'BTC', icon: Binary },
           { label: 'Copper % Gold', key: 'HG_GC_RATIO', icon: Zap },
         ].map((item) => (
-          <div key={item.key} className="bg-white border border-black/5 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group">
+          <div key={item.key} className={`bg-card-primary border border-main-primary p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group`}>
             <div className="flex items-center gap-2 mb-2">
-              <item.icon size={12} className="text-neutral-400 group-hover:text-blue-500 transition-colors" />
-              <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest">{item.label}</span>
+              <item.icon size={12} className="text-main-primary opacity-40 group-hover:text-brand-primary transition-colors" />
+              <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">{item.label}</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-lg font-mono font-bold text-black leading-none">
+              <span className={`text-lg font-mono font-bold text-main-primary leading-none`}>
                 {benchmarks[item.key]?.price ? benchmarks[item.key].price.toFixed(2) : '---'}
               </span>
-              <span className={`text-[10px] font-mono font-bold ${benchmarks[item.key]?.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <span className={`text-[10px] font-mono font-bold ${benchmarks[item.key]?.change >= 0 ? 'text-brand-emerald' : 'text-rose-500'}`}>
                 {benchmarks[item.key]?.changePercent ? `${benchmarks[item.key].changePercent > 0 ? '+' : ''}${benchmarks[item.key].changePercent.toFixed(2)}%` : ''}
               </span>
             </div>
@@ -139,33 +141,33 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
       <div className="grid lg:grid-cols-12 gap-6">
         {/* Left Column: AI Synthesis & Sentiment (4/12) */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white border border-black/10 rounded-2xl overflow-hidden shadow-sm flex flex-col h-full hover:border-blue-500/20 transition-colors">
-            <div className="p-4 border-b border-black/5 bg-[#fafafa] flex items-center justify-between">
+          <div className={`bg-card-primary border border-main-primary rounded-2xl overflow-hidden shadow-sm flex flex-col h-full hover:border-brand-primary/20 transition-colors`}>
+            <div className={`p-4 border-b border-main-primary bg-accent-surface flex items-center justify-between`}>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-neutral-500">Macro Analysis Nexus</span>
+                <div className="w-2 h-2 rounded-full bg-accent-primary animate-pulse" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-main-primary opacity-50">Macro Analysis Nexus</span>
               </div>
-              <Cpu size={14} className="text-neutral-300" />
+              <Cpu size={14} className="text-main-primary opacity-20" />
             </div>
 
             <div className="p-6 flex-1 flex flex-col">
               {isLoading ? (
                 <div className="flex-1 flex items-center justify-center p-12">
                    <div className="relative">
-                      <RefreshCcw size={48} className="text-blue-500/10 animate-spin" />
+                      <RefreshCcw size={48} className="text-brand-primary/10 animate-spin" />
                       <div className="absolute inset-0 flex items-center justify-center">
-                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping" />
+                         <div className="w-2 h-2 bg-brand-primary rounded-full animate-ping" />
                       </div>
                    </div>
                 </div>
               ) : synthesis ? (
                 <div className="space-y-6">
                   {/* Regime Badge */}
-                  <div className="p-4 bg-black/[0.02] border border-black/[0.03] rounded-xl relative overflow-hidden group">
-                     <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-2xl group-hover:bg-blue-500/10 transition-colors" />
+                  <div className="p-4 bg-accent-surface border border-main-primary rounded-xl relative overflow-hidden group">
+                     <div className="absolute top-0 right-0 w-24 h-24 bg-accent-primary/5 blur-2xl group-hover:bg-accent-primary/10 transition-colors" />
                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest">Economic Regime</span>
-                        <span className="text-xs font-mono font-bold px-2 py-0.5 bg-blue-500/10 text-blue-600 rounded">PROB: {synthesis.regimeScore}%</span>
+                        <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">Economic Regime</span>
+                        <span className={`text-xs font-mono font-bold px-2 py-0.5 bg-accent-primary/10 text-accent-primary rounded`}>PROB: {synthesis.regimeScore}%</span>
                      </div>
                      <div className="flex items-center gap-3">
                         {getRegimeIcon(synthesis.regime)}
@@ -173,33 +175,33 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                           {synthesis.regime}
                         </h3>
                      </div>
-                     <p className="text-xs text-neutral-500 mt-3 font-sans leading-relaxed italic">
+                     <p className="text-xs text-main-primary opacity-50 mt-3 font-sans leading-relaxed italic">
                         "{synthesis.narrative}"
                      </p>
                   </div>
 
                   {/* Policy Watch (Fed) */}
                   <div className="space-y-3">
-                    <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest">Policy Dashboard</span>
+                    <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">Policy Dashboard</span>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 border border-black/5 rounded-xl bg-white shadow-inner">
-                         <span className="text-[9px] font-mono font-bold text-neutral-400 uppercase tracking-widest block mb-1">Stance</span>
+                      <div className={`p-4 border border-main-primary bg-black/5 dark:bg-white/5 rounded-xl shadow-inner`}>
+                         <span className="text-[9px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest block mb-1">Stance</span>
                          <div className={`text-base font-bold font-mono ${getStatusColor(synthesis.policyWatch.fed)}`}>{synthesis.policyWatch.fed}</div>
                       </div>
-                      <div className="p-4 border border-black/5 rounded-xl bg-white shadow-inner">
-                         <span className="text-[9px] font-mono font-bold text-neutral-400 uppercase tracking-widest block mb-1">QT / QT (Flow)</span>
-                         <div className="text-xs font-bold font-mono text-black uppercase">{synthesis.policyWatch.quantTightening}</div>
+                      <div className={`p-4 border border-main-primary bg-black/5 dark:bg-white/5 rounded-xl shadow-inner`}>
+                         <span className="text-[9px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest block mb-1">QT / Flow</span>
+                         <div className={`text-xs font-bold font-mono text-main-primary uppercase`}>{synthesis.policyWatch.quantTightening}</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Asset Views */}
                   <div className="space-y-3">
-                    <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest">Structural Bias</span>
+                    <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">Structural Bias</span>
                     <div className="grid grid-cols-2 gap-2">
                        {Object.entries(synthesis.assetClassViews).map(([asset, view]) => (
-                         <div key={asset} className="flex items-center justify-between px-3 py-2 bg-black/[0.01] border border-black/5 rounded-lg">
-                           <span className="text-[10px] font-mono font-bold uppercase text-neutral-400 truncate mr-2">{asset.replace('_', ' ')}</span>
+                         <div key={asset} className="flex items-center justify-between px-3 py-2 bg-black/[0.01] dark:bg-white/[0.01] border border-main-primary rounded-lg">
+                           <span className="text-[10px] font-mono font-bold uppercase text-main-primary opacity-40 truncate mr-2">{asset.replace('_', ' ')}</span>
                            <span className={`text-[10px] font-bold font-mono whitespace-nowrap ${getStatusColor(view as string)}`}>{view as string}</span>
                          </div>
                        ))}
@@ -209,20 +211,20 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
               ) : null}
             </div>
 
-            <div className="p-4 border-t border-black/5 mt-auto bg-white flex justify-between items-center whitespace-nowrap overflow-hidden">
+            <div className="p-4 border-t border-main-primary mt-auto bg-card-primary flex justify-between items-center whitespace-nowrap overflow-hidden">
                <div className="flex items-center gap-4">
                   <div className="flex flex-col">
-                    <span className="text-[9px] text-neutral-400 uppercase font-bold tracking-tighter">Systemic Risk</span>
+                    <span className="text-[9px] text-main-primary opacity-40 uppercase font-bold tracking-tighter">Systemic Risk</span>
                     <span className="text-xs font-mono font-bold text-rose-500">ELEVATED</span>
                   </div>
-                  <div className="w-px h-6 bg-black/5" />
+                  <div className="w-px h-6 bg-main-primary" />
                   <div className="flex flex-col">
-                    <span className="text-[9px] text-neutral-400 uppercase font-bold tracking-tighter">M2 Cycle</span>
-                    <span className={`text-xs font-mono font-bold ${isLoading ? 'text-neutral-400' : 'text-emerald-500'}`}>EXPANDING</span>
+                    <span className="text-[9px] text-main-primary opacity-40 uppercase font-bold tracking-tighter">M2 Cycle</span>
+                    <span className="text-xs font-mono font-bold text-brand-emerald">EXPANDING</span>
                   </div>
                </div>
-               <div className="px-3 py-1 bg-black text-white text-[9px] font-mono font-bold rounded-sm tracking-widest animate-pulse">
-                NEXUS: ONLINE
+               <div className={`px-3 py-1 bg-accent-primary rounded-sm tracking-widest animate-pulse flex items-center justify-center shadow-[0_0_10px_var(--accent-glow)]`}>
+                <span className="text-white text-[9px] font-mono font-bold">NEXUS: ONLINE</span>
                </div>
             </div>
           </div>
@@ -230,19 +232,19 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
 
         {/* Right Column: Interactive Widgets (8/12) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          <div className="bg-white border border-black/10 rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden hover:border-blue-500/20 transition-colors">
-            <div className="flex p-0 border-b border-black/5 overflow-x-auto no-scrollbar">
+          <div className="bg-card-primary border border-main-primary rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden hover:border-brand-primary/20 transition-colors">
+            <div className="flex p-0 border-b border-main-primary overflow-x-auto no-scrollbar">
               {['technical', 'synthesis', 'indicators', 'yields', 'liquidity', 'sectors'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab as any)}
                   className={`flex-1 min-w-[80px] py-4 text-[10px] font-mono font-bold uppercase tracking-[0.2em] transition-all relative ${
-                    activeTab === tab ? 'text-blue-600 bg-blue-50/50' : 'text-neutral-400 hover:bg-black/[0.02]'
+                    activeTab === tab ? `text-accent-primary bg-accent-primary/5` : 'text-main-primary opacity-40 hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {tab}
                   {activeTab === tab && (
-                    <motion.div layoutId="nexus-tab" className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]" />
+                    <motion.div layoutId="nexus-tab" className="absolute bottom-0 left-0 w-full h-0.5 bg-accent-primary shadow-[0_0_8px_var(--accent-glow)]" />
                   )}
                 </button>
               ))}
@@ -260,16 +262,14 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                   >
                     <div className="mb-4 flex justify-between items-center px-2">
                        <div className="flex flex-col">
-                         <span className="text-[11px] uppercase tracking-widest font-bold text-blue-600">Cross-Asset Yield Sync Chart</span>
-                         <span className="text-[9px] text-neutral-500 uppercase tracking-widest mt-1">Real-time OHLC & Gamma Flow Intensity</span>
+                         <span className="text-[11px] uppercase tracking-widest font-bold text-accent-primary">Cross-Asset Yield Sync Chart</span>
+                         <span className="text-[9px] text-main-primary opacity-40 uppercase tracking-widest mt-1">Real-time OHLC & Gamma Flow Intensity</span>
                        </div>
                     </div>
-                    <div className="flex-1 bg-black/[0.01] rounded-xl overflow-hidden min-h-[350px]">
+                    <div className="flex-1 bg-accent-surface rounded-xl overflow-hidden min-h-[350px]">
                       <BeautifulChart 
                          data={chartData} 
-                         lineColor="#3B82F6"
-                         secondaryLineColor="#F59E0B"
-                         areaColor="#3B82F6"
+                         isDarkTheme={isDarkTheme}
                          height={350}
                        />
                     </div>
@@ -286,23 +286,23 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                   >
                      <div className="space-y-6">
                         <div className="space-y-4">
-                          <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-blue-600 flex items-center gap-2">
+                          <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-accent-primary flex items-center gap-2">
                             <Clock size={14} /> Economic Calendar
                           </h4>
                           <div className="space-y-2">
                              {synthesis?.economicCalendar?.map((event, i) => (
-                               <div key={i} className="p-3 border border-black/5 bg-white rounded-xl shadow-sm flex items-center justify-between group hover:border-blue-500/30 transition-colors">
+                               <div key={i} className="p-3 border border-main-primary bg-accent-surface rounded-xl shadow-sm flex items-center justify-between group hover:border-accent-primary/30 transition-colors">
                                   <div className="flex flex-col">
-                                     <span className="text-[10px] font-mono font-bold text-black uppercase">{event.event}</span>
-                                     <span className="text-[9px] text-neutral-400 font-mono mt-0.5">{event.date}</span>
+                                     <span className="text-[10px] font-mono font-bold text-main-primary uppercase">{event.event}</span>
+                                     <span className="text-[9px] text-main-primary opacity-40 font-mono mt-0.5">{event.date}</span>
                                   </div>
                                   <div className="flex items-center gap-6">
                                      <div className="flex flex-col items-end">
-                                        <span className="text-[9px] text-neutral-400 uppercase font-bold">Forecast</span>
-                                        <span className="text-[10px] font-mono font-bold text-blue-600">{event.forecast}</span>
+                                        <span className="text-[9px] text-main-primary opacity-40 uppercase font-bold">Forecast</span>
+                                        <span className="text-[10px] font-mono font-bold text-accent-primary">{event.forecast}</span>
                                      </div>
                                      <div className={`px-2 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-widest ${
-                                        event.impact === 'High' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'
+                                        event.impact === 'High' ? 'bg-rose-500/10 text-rose-500' : 'bg-brand-amber/10 text-brand-amber'
                                      }`}>
                                         {event.impact}
                                      </div>
@@ -313,14 +313,14 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                         </div>
 
                         <div className="space-y-4">
-                          <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-blue-600 flex items-center gap-2">
+                          <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-accent-primary flex items-center gap-2">
                             <Target size={14} /> Risk Audit Logs
                           </h4>
                           <div className="space-y-3">
                             {synthesis?.riskAudit.map((risk, i) => (
-                              <div key={i} className="flex gap-4 p-4 border border-rose-500/10 bg-rose-50/20 rounded-xl">
+                              <div key={i} className="flex gap-4 p-4 border border-rose-500/10 bg-rose-500/5 rounded-xl">
                                  <ShieldAlert size={16} className="text-rose-500 shrink-0 mt-0.5" />
-                                 <span className="text-xs text-neutral-600 font-sans leading-relaxed">{risk}</span>
+                                 <span className="text-xs text-main-primary opacity-70 font-sans leading-relaxed">{risk}</span>
                               </div>
                             ))}
                           </div>
@@ -329,25 +329,25 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                      
                      <div className="space-y-6">
                         <div className="space-y-4">
-                          <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-blue-600 flex items-center gap-2">
+                          <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-accent-primary flex items-center gap-2">
                             <Layers size={14} /> Structural Playbook
                           </h4>
-                          <div className="p-5 border border-black/5 rounded-2xl bg-white shadow-sm space-y-4 font-mono">
+                          <div className="p-5 border border-main-primary rounded-2xl bg-card-primary shadow-sm space-y-4 font-mono">
                              <div className="flex justify-between items-center text-[11px]">
-                               <span className="text-neutral-400">Yield Sync Mode</span>
-                               <span className="text-emerald-500 font-bold">OPTIMAL</span>
+                               <span className="text-main-primary opacity-40">Yield Sync Mode</span>
+                               <span className="text-brand-emerald font-bold">OPTIMAL</span>
                              </div>
                              <div className="flex justify-between items-center text-[11px]">
-                               <span className="text-neutral-400">Volatility Regime</span>
+                               <span className="text-main-primary opacity-40">Volatility Regime</span>
                                <span className="text-rose-500 font-bold">{netGex < 0 ? 'NEGATIVE GAMMA' : 'POSITIVE GAMMA'}</span>
                              </div>
                              <div className="flex justify-between items-center text-[11px]">
-                               <span className="text-neutral-400">Liquidity Window</span>
-                               <span className="text-blue-500 font-bold">NEUTRAL-OPEN</span>
+                               <span className="text-main-primary opacity-40">Liquidity Window</span>
+                               <span className="text-accent-primary font-bold">NEUTRAL-OPEN</span>
                              </div>
-                             <div className="pt-4 border-t border-black/5">
-                                <p className="text-[10px] text-neutral-400 uppercase mb-3 font-bold">Recommended Tactical Position</p>
-                                <div className="p-3 bg-black text-white rounded text-xs font-bold text-center tracking-widest">
+                             <div className="pt-4 border-t border-main-primary">
+                                <p className="text-[10px] text-main-primary opacity-40 uppercase mb-3 font-bold">Recommended Tactical Position</p>
+                                <div className="p-3 bg-black text-white rounded text-xs font-bold text-center tracking-widest border border-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
                                    {netGex < 0 ? 'DYNAMIC VOLATILITY LONG (VXM)' : 'YIELD CURVE NEUTRAL CARRY'}
                                 </div>
                              </div>
@@ -384,38 +384,38 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                      <div className="grid md:grid-cols-3 gap-6">
                         {(synthesis?.keyIndicators || []).length > 0 ? (
                           synthesis?.keyIndicators.map((ind) => (
-                            <div key={ind.name} className="p-6 border border-black/5 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
-                               <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/10 group-hover:bg-blue-500 transition-colors" />
+                            <div key={ind.name} className="p-6 border border-main-primary bg-card-primary rounded-2xl shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                               <div className="absolute top-0 left-0 w-1 h-full bg-accent-primary/10 group-hover:bg-accent-primary transition-colors" />
                                <div className="flex items-center justify-between mb-4">
-                                  <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest">{ind.name}</span>
-                                  <div className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${getStatusColor(ind.status)} bg-black/[0.02]`}>{ind.status}</div>
+                                  <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">{ind.name}</span>
+                                  <div className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${getStatusColor(ind.status)} bg-black/5 dark:bg-white/5`}>{ind.status}</div>
                                </div>
-                               <div className="text-3xl font-mono font-bold text-black mb-4 tracking-tighter tabular-nums">{ind.value}</div>
-                               <div className="p-4 bg-black/[0.02] border border-black/[0.03] rounded-xl flex items-start gap-3">
-                                  <Info size={14} className="text-blue-500 shrink-0 mt-0.5" />
-                                  <p className="text-[10px] text-neutral-500 leading-relaxed font-mono font-medium">
-                                     <span className="text-black/40 uppercase">IMPLICATION:</span> {ind.implication}
+                               <div className="text-3xl font-mono font-bold text-main-primary mb-4 tracking-tighter tabular-nums">{ind.value}</div>
+                               <div className="p-4 bg-accent-surface border border-main-primary/10 rounded-xl flex items-start gap-3">
+                                  <Info size={14} className="text-accent-primary shrink-0 mt-0.5" />
+                                  <p className="text-[10px] text-main-primary opacity-50 leading-relaxed font-mono font-medium">
+                                     <span className="text-main-primary/40 uppercase">IMPLICATION:</span> {ind.implication}
                                   </p>
                                </div>
                             </div>
                           ))
                         ) : (
                           [1, 2, 3].map(i => (
-                            <div key={i} className="p-6 border border-black/5 bg-white rounded-2xl h-48 animate-pulse flex flex-col justify-between">
-                               <div className="w-24 h-3 bg-black/5 rounded" />
-                               <div className="w-16 h-8 bg-black/5 rounded" />
-                               <div className="w-full h-12 bg-black/5 rounded" />
+                            <div key={i} className="p-6 border border-main-primary bg-card-primary rounded-2xl h-48 animate-pulse flex flex-col justify-between">
+                               <div className="w-24 h-3 bg-black/5 dark:bg-white/5 rounded" />
+                               <div className="w-16 h-8 bg-black/5 dark:bg-white/5 rounded" />
+                               <div className="w-full h-12 bg-black/5 dark:bg-white/5 rounded" />
                             </div>
                           ))
                         )}
                      </div>
-                     <div className="mt-8 p-6 bg-blue-50/50 border border-blue-100 rounded-3xl flex items-center gap-6">
-                        <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-lg">
+                     <div className="mt-8 p-6 bg-accent-surface border border-accent-primary/20 rounded-3xl flex items-center gap-6">
+                        <div className="w-12 h-12 rounded-2xl bg-accent-primary flex items-center justify-center text-white shrink-0 shadow-lg">
                            <Binary size={24} />
                         </div>
                         <div>
-                           <h5 className="text-sm font-mono font-bold text-blue-900 uppercase tracking-tight">Macro Indicator Convergence Analysis</h5>
-                           <p className="text-xs text-blue-800/60 mt-1 leading-relaxed">System-wide indicators show 82% correlation with early recovery signals. Cross-check against dark pool institutional flow for breakout validation.</p>
+                           <h5 className="text-sm font-mono font-bold text-main-primary uppercase tracking-tight">Macro Indicator Convergence Analysis</h5>
+                           <p className="text-xs text-main-primary opacity-60 mt-1 leading-relaxed">System-wide indicators show 82% correlation with early recovery signals. Cross-check against dark pool institutional flow for breakout validation.</p>
                         </div>
                      </div>
                   </motion.div>
@@ -486,8 +486,8 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                       className="h-full flex flex-col space-y-6"
                     >
                       <div className="grid md:grid-cols-2 gap-6">
-                         <div className="p-6 border border-black/10 rounded-2xl bg-white shadow-sm overflow-hidden relative">
-                            <h5 className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest mb-4">M2 Growth (Simulated Proxy)</h5>
+                         <div className="p-6 border border-main-primary rounded-2xl bg-card-primary shadow-sm overflow-hidden relative">
+                            <h5 className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest mb-4">M2 Growth (Simulated Proxy)</h5>
                             <div className="h-40">
                                <ResponsiveContainer width="100%" height="100%">
                                   <AreaChart data={[
@@ -499,15 +499,15 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                             </div>
                             <div className="mt-4 flex justify-between items-end">
                                <div>
-                                  <span className="text-2xl font-mono font-bold text-emerald-500">+1.2%</span>
-                                  <span className="text-[9px] text-neutral-400 font-bold block">YoY MOMENTUM</span>
+                                  <span className="text-2xl font-mono font-bold text-brand-emerald">+1.2%</span>
+                                  <span className="text-[9px] text-main-primary opacity-40 font-bold block">YoY MOMENTUM</span>
                                </div>
-                               <div className="text-[9px] font-mono font-bold px-2 py-1 bg-emerald-500/10 text-emerald-600 rounded">EXPANSIONARY</div>
+                               <div className="text-[9px] font-mono font-bold px-2 py-1 bg-brand-emerald/10 text-brand-emerald rounded">EXPANSIONARY</div>
                             </div>
                          </div>
 
-                         <div className="p-6 border border-black/10 rounded-2xl bg-white shadow-sm">
-                            <h5 className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest mb-4">Central Bank Assets (Aggregated)</h5>
+                         <div className="p-6 border border-main-primary rounded-2xl bg-card-primary shadow-sm">
+                            <h5 className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest mb-4">Central Bank Assets (Aggregated)</h5>
                             <div className="h-40">
                                <ResponsiveContainer width="100%" height="100%">
                                   <BarChart data={[
@@ -518,23 +518,23 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                                         <Cell fill="#10B981" opacity={0.8} />
                                         <Cell fill="#F59E0B" opacity={0.8} />
                                      </Bar>
-                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 700 }} />
+                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: 'var(--text-main)', opacity: 0.5, fontFamily: 'JetBrains Mono', fontWeight: 700 }} />
                                   </BarChart>
                                </ResponsiveContainer>
                             </div>
-                            <p className="text-[10px] text-neutral-400 font-mono mt-4 leading-relaxed">
+                            <p className="text-[10px] text-main-primary opacity-40 font-mono mt-4 leading-relaxed">
                                Central banks are currently in a <span className="text-rose-500 font-bold underline">Net Tightening</span> regime, pulling ~$95B/month from global markets through QT programs.
                             </p>
                          </div>
                       </div>
                       
-                      <div className="p-5 bg-blue-50 border border-blue-100 rounded-2xl flex items-center gap-4">
-                         <div className="p-3 bg-blue-600 rounded-xl text-white">
+                      <div className="p-5 bg-accent-surface border border-main-primary rounded-2xl flex items-center gap-4">
+                         <div className="p-3 bg-accent-primary rounded-xl text-white">
                             <RefreshCcw size={20} />
                          </div>
                          <div>
-                            <span className="text-xs font-mono font-bold text-blue-600 uppercase tracking-widest block">Reverse Repo (RRP) Dynamics</span>
-                            <p className="text-xs text-neutral-600 mt-1">RRP draining remains the primary buffer for liquidity. Estimated exhaustion window: Q3 2026. This typically precedes increased market sensitivity.</p>
+                            <span className="text-xs font-mono font-bold text-accent-primary uppercase tracking-widest block">Reverse Repo (RRP) Dynamics</span>
+                            <p className="text-xs text-main-primary opacity-60 mt-1">RRP draining remains the primary buffer for liquidity. Estimated exhaustion window: Q3 2026. This typically precedes increased market sensitivity.</p>
                          </div>
                       </div>
                     </motion.div>
@@ -580,24 +580,24 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                             
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mt-8">
                               {synthesis?.sectors?.map((sector, i) => (
-                                <div key={i} className="p-4 border border-black/5 rounded-2xl bg-white flex flex-col gap-2 items-center text-center shadow-sm hover:shadow-xl hover:border-blue-500 transition-all duration-300">
-                                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mb-2">
+                                <div key={i} className="p-4 border border-main-primary rounded-2xl bg-card-primary flex flex-col gap-2 items-center text-center shadow-sm hover:shadow-xl hover:border-accent-primary transition-all duration-300">
+                                  <div className="w-10 h-10 rounded-full bg-accent-primary/10 flex items-center justify-center text-accent-primary mb-2">
                                      <Layers size={18} />
                                   </div>
-                                  <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase truncate w-full tracking-tight">{sector.name}</span>
-                                  <span className={`text-sm font-mono font-bold ${sector.performance >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase truncate w-full tracking-tight">{sector.name}</span>
+                                  <span className={`text-sm font-mono font-bold ${sector.performance >= 0 ? 'text-brand-emerald' : 'text-rose-500'}`}>
                                     {sector.performance > 0 ? '+' : ''}{sector.performance}%
                                   </span>
-                                  <div className={`w-full h-1.5 mt-2 rounded-full overflow-hidden bg-black/[0.03]`}>
+                                  <div className={`w-full h-1.5 mt-2 rounded-full overflow-hidden bg-main-primary/5`}>
                                      <motion.div 
                                        initial={{ width: 0 }}
                                        animate={{ width: `${Math.min(Math.abs(sector.performance) * 20, 100)}%` }}
-                                       className={`h-full ${sector.performance >= 0 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`}
+                                       className={`h-full ${sector.performance >= 0 ? 'bg-brand-emerald shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`}
                                      />
                                   </div>
                                   <span className={`text-[8px] font-mono font-bold px-2 py-0.5 mt-2 rounded-full uppercase ${
-                                    sector.status === 'Leading' ? 'bg-emerald-100 text-emerald-700' : 
-                                    sector.status === 'Lagging' ? 'bg-rose-100 text-rose-700' : 'bg-neutral-100 text-neutral-600'
+                                    sector.status === 'Leading' ? 'bg-brand-emerald/10 text-brand-emerald' : 
+                                    sector.status === 'Lagging' ? 'bg-rose-100 text-rose-700' : 'bg-main-primary/5 text-main-primary opacity-60'
                                   }`}>
                                     {sector.status}
                                   </span>
@@ -634,10 +634,10 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white w-full max-w-3xl max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+              className="bg-card-primary w-full max-w-3xl max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-main-primary"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-8 border-b border-black/5 flex items-center justify-between bg-blue-600 text-white">
+              <div className="p-8 border-b border-white/10 flex items-center justify-between bg-accent-primary text-white">
                 <div className="flex items-center gap-3">
                   <Globe size={24} />
                   <div>
@@ -652,8 +652,8 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                   <RefreshCcw size={20} className="rotate-45" />
                 </button>
               </div>
-              <div className="p-8 overflow-y-auto no-scrollbar flex-1 prose prose-neutral max-w-none">
-                <div className="mockup-code bg-neutral-900 text-emerald-400 p-4 mb-8 font-mono text-xs rounded-xl shadow-inner">
+              <div className="p-8 overflow-y-auto no-scrollbar flex-1 prose prose-invert max-w-none">
+                <div className="mockup-code bg-black text-brand-emerald p-4 mb-8 font-mono text-xs rounded-xl shadow-inner border border-white/5">
                    <pre><code>{`CORE REGIME: ${synthesis.regime.toUpperCase()}`}</code></pre>
                    <pre><code>{`PROBABILITY: ${synthesis.regimeScore}%`}</code></pre>
                    <pre><code>{`STATUS: ANALYZING CROSS-ASSET CORRELATIONS...`}</code></pre>
@@ -662,10 +662,10 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                   <Markdown>{synthesis.detailedReport || synthesis.narrative}</Markdown>
                 </div>
               </div>
-              <div className="p-6 bg-neutral-50 border-t border-black/5 flex justify-end">
+              <div className="p-6 bg-main-primary/5 border-t border-main-primary flex justify-end">
                 <button 
                   onClick={() => setIsReportOpen(false)}
-                  className="px-6 py-2 bg-black text-white rounded-xl text-xs font-mono font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors"
+                  className="px-6 py-2 bg-accent-primary text-white rounded-xl text-xs font-mono font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-colors"
                 >
                   Close Analysis
                 </button>

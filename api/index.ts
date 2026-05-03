@@ -209,19 +209,36 @@ app.get('/api/yahoo/chart/:ticker', async (req, res) => {
     };
     
     const symbol = symbolMapping[ticker] || ticker;
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
     
-    const response = await axios.get(url, { 
-      headers: SYSTEM_HEADERS_B,
-      timeout: 8000,
-      validateStatus: (status) => status < 500
-    });
-
-    if (response.status !== 200) {
-      return res.status(response.status).json(response.data || { error: 'Yahoo API Error' });
+    let url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
+    let fetchHeaders: any = SYSTEM_HEADERS_B;
+    
+    let response;
+    try {
+      response = await axios.get(url, { 
+        headers: fetchHeaders,
+        timeout: 8000,
+        validateStatus: (status) => status < 500
+      });
+    } catch (e: any) {
+      console.warn(`Yahoo API failed (${e.message || 'Error'}) for ${symbol}`);
+      return res.status(500).json({ error: 'Yahoo API threw an exception', message: e.message });
     }
 
-    res.json(response.data);
+    if (typeof response.data === 'string' && response.data.trim().startsWith('<!')) {
+      return res.status(response.status !== 200 ? response.status : 502).json({ error: 'Returned HTML instead of JSON. Potential block or captcha.' });
+    }
+
+    if (response.status !== 200) {
+      return res.status(response.status).json(typeof response.data === 'object' ? response.data : { error: 'Yahoo API Error', status: response.status });
+    }
+    
+    let finalData = response.data;
+    if (typeof finalData === 'string' && finalData.trim().startsWith('{')) {
+      try { finalData = JSON.parse(finalData); } catch(e) {}
+    }
+
+    res.json(finalData);
   } catch (error: any) {
     res.status(500).json({ 
       error: 'Failed to fetch chart data',

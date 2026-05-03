@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
@@ -6,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import * as cheerio from 'cheerio';
+import { fetchGexData } from './src/lib/gexEngine';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,8 +35,8 @@ const SYSTEM_HEADERS_B = {
 const SYSTEM_HEADERS_A = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   'Accept': 'application/json, text/plain, */*',
-  'Referer': 'https://www.google.com/',
-  'Origin': 'https://www.google.com/',
+  'Referer': 'https://www.cboe.com/',
+  'Origin': 'https://www.cboe.com',
 };
 
 // --- API ROUTES ---
@@ -101,100 +103,65 @@ app.get('/api/chain/:symbol', async (req, res) => {
     return res.json(cache[cacheKey].data);
   }
 
+  const FLOQ_URL = (process.env.FLOQ_API_URL || 'https://api.floq.data').replace(/^['"]|['"]$/g, '').trim();
+
+  const symUpper = symbol.toUpperCase();
+  const variations = [symUpper];
+  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(symUpper)) {
+    variations.push(`^${symUpper}`);
+  }
+
   try {
-    // 1. Fetch spot price from Yahoo
-    let spotPrice = 0;
-    try {
-      const spotRes = await axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?interval=1m&range=1d`, { 
-        headers: { 'User-Agent': 'Mozilla/5.0' }, 
-        timeout: 10000 
-      });
-      const spotMeta = spotRes.data.chart.result[0].meta;
-      spotPrice = spotMeta.regularMarketPrice || spotMeta.previousClose;
-    } catch(err) {
-      console.warn("Could not fetch spot price for", symbol, "using fallback.");
-    }
-
-    // 2. Fetch options chain from Alpaca
-    const alpacaKey = process.env.APCA_API_KEY_ID || 'PKP6JPYFGE77PL32QB3DO6WVCH';
-    const alpacaSecret = process.env.APCA_API_SECRET_KEY || 'EVKt1FsFqJmWbMyZV4YekUVQYNgBqMPSoNm21b4emruR';
-    
-    let snapshots: Record<string, any> = {};
-    let pageToken = '';
-    
-    // Fetch up to 3 pages to get a solid chain chunk around the money
-    for (let i = 0; i < 3; i++) {
-        const url = `https://data.alpaca.markets/v1beta1/options/snapshots/${symbol.toUpperCase()}?feed=indicative&limit=1000` + (pageToken ? `&page_token=${pageToken}` : '');
+    let floqData = null;
+    if (process.env.FLOQ_API_KEY) {
+      for (const variant of variations) {
         try {
-           const response = await axios.get(url, {
-             headers: {
-               'APCA-API-KEY-ID': alpacaKey,
-               'APCA-API-SECRET-KEY': alpacaSecret
-             }
-           });
-           
-           if (response.data && response.data.snapshots) {
-               Object.assign(snapshots, response.data.snapshots);
-               pageToken = response.data.next_page_token;
-               if (!pageToken) break;
-           } else {
-               break;
-           }
-        } catch(e: any) {
-           console.error("Alpaca fetch error details:", e?.response?.data || e.message);
-           break;
-        }
-    }
-
-    const options = Object.entries(snapshots).map(([optSymbol, snap]: [string, any]) => {
-      return {
-         option: optSymbol,
-         open_interest: snap.dailyBar?.v || snap.latestTrade?.s || 100, // Alpaca doesn't stream OI in snapshots, fallback to volume
-         iv: snap.impliedVolatility,
-         gamma: snap.greeks?.gamma,
-         delta: snap.greeks?.delta,
-         vega: snap.greeks?.vega,
-         volume: snap.dailyBar?.v || 0,
-         mark: snap.latestQuote?.ap || 0
-      };
-    });
-
-    const data = {
-       data: {
-          current_price: spotPrice,
-          options: options
-       }
-    };
-
-    if (!options.length) {
-       throw new Error("No data from Alpaca");
-    }
-
-    cache[cacheKey] = { data, ts: Date.now() };
-    return res.json(data);
-  } catch (error) {
-    console.error('Chain Fetch Error (Alpaca):', error);
-    // FALLBACK TO CBOE if Alpaca fails entirely or keys are limited
-    try {
-      const urls = [
-        `https://cdn.cboe.com/api/global/delayed_quotes/options/${symbol.toUpperCase()}.json`,
-        `https://cdn.cboe.com/api/global/delayed_quotes/options/_${symbol.toUpperCase()}.json`
-      ];
-
-      for (const url of urls) {
-        try {
-          const response = await axios.get(url, { headers: SYSTEM_HEADERS_A, timeout: 15000 });
-          if (response.data && response.data.data && response.data.data.options) {
-             cache[cacheKey] = { data: response.data, ts: Date.now() };
-             return res.json(response.data);
+          const response = await axios.get(`${FLOQ_URL}/chain/${variant}`, {
+            headers: { 
+              'Authorization': `Bearer ${process.env.FLOQ_API_KEY}`,
+              'Accept': 'application/json' 
+            },
+            timeout: 10000
+          });
+          if (response.data && response.data.data) {
+            floqData = response.data;
+            break;
           }
-        } catch (e) {
-          continue;
+        } catch (e: any) {
+          if (e.response?.status !== 404) {
+            console.warn(`FLOQ API variation ${variant} failed:`, e.message);
+          }
         }
       }
-    } catch(fallbackErr) {}
+    }
+
+    if (floqData) {
+        cache[cacheKey] = { data: floqData, ts: Date.now() };
+        return res.json(floqData);
+    }
+    
+    // Fallback to CBOE
+    const urls = [
+      `https://cdn.cboe.com/api/global/delayed_quotes/options/${symbol.toUpperCase()}.json`,
+      `https://cdn.cboe.com/api/global/delayed_quotes/options/_${symbol.toUpperCase()}.json`
+    ];
+
+    for (const url of urls) {
+      try {
+        const response = await axios.get(url, { headers: SYSTEM_HEADERS_A, timeout: 15000 });
+        if (response.data && response.data.data && response.data.data.options) {
+             cache[cacheKey] = { data: response.data, ts: Date.now() };
+             return res.json(response.data);
+        }
+      } catch (e) {
+        continue;
+      }
+    }
     
     res.status(500).json({ error: 'Failed to fetch chain data' });
+  } catch (error) {
+    console.error('Chain Fetch Error (FLOQ/CBOE):', error);
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -206,7 +173,44 @@ app.get('/api/spot/:ticker', async (req, res) => {
     return res.json({ price: cache[cacheKey].data });
   }
 
+  const FLOQ_URL = (process.env.FLOQ_API_URL || 'https://api.floq.data').replace(/^['"]|['"]$/g, '').trim();
+
+  const symUpper = ticker.toUpperCase();
+  const variations = [symUpper];
+  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(symUpper)) {
+    variations.push(`^${symUpper}`);
+  }
+
+  let floqPrice = null;
+
   try {
+    if (process.env.FLOQ_API_KEY) {
+      for (const variant of variations) {
+        try {
+          const response = await axios.get(`${FLOQ_URL}/spot/${variant}`, {
+            headers: { 
+              'Authorization': `Bearer ${process.env.FLOQ_API_KEY}`,
+              'Accept': 'application/json' 
+            },
+            timeout: 8000
+          });
+          if (response.data && (response.data.current_price || response.data.price)) {
+            floqPrice = parseFloat(response.data.current_price || response.data.price);
+            break;
+          }
+        } catch (e: any) {
+           if (e.response?.status !== 404) {
+             console.warn(`FLOQ API spot variation ${variant} failed:`, e.message);
+           }
+        }
+      }
+    }
+    
+    if (floqPrice) {
+      cache[cacheKey] = { data: floqPrice, ts: Date.now() };
+      return res.json({ price: floqPrice });
+    }
+    
     const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A });
     const price = response.data.data.current_price;
     cache[cacheKey] = { data: price, ts: Date.now() };
@@ -241,35 +245,45 @@ app.get('/api/yahoo/chart/:ticker', async (req, res) => {
        return res.status(400).json({ error: 'Invalid ticker' });
     }
     
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?interval=${interval}&range=${range}`;
-    
-    // Rotate/Standardize headers for better reliability
-    const fetchHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    let url = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?interval=${interval}&range=${range}`;
+    let fetchHeaders: any = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       'Accept': 'application/json, text/plain, */*',
       'Cache-Control': 'no-cache'
     };
 
-    const response = await axios.get(url, { 
-      headers: fetchHeaders,
-      timeout: 10000,
-      validateStatus: (status) => status < 500
-    });
-
-    if (response.status !== 200) {
-      console.warn(`Yahoo API returned ${response.status} for ${symbol}`);
-      return res.status(response.status).json(response.data || { error: 'Yahoo API Error' });
+    let response;
+    try {
+      response = await axios.get(url, { 
+        headers: fetchHeaders,
+        timeout: 10000,
+        validateStatus: (status) => status < 500
+      });
+    } catch (e: any) {
+      console.warn(`Yahoo API failed (${e.message || 'Error'}) for ${symbol}`);
+      return res.status(500).json({ error: 'Yahoo API threw an exception', message: e.message });
     }
 
     if (typeof response.data === 'string' && response.data.trim().startsWith('<!')) {
-      console.error(`Yahoo API returned HTML instead of JSON for ${symbol}`);
-      return res.status(502).json({ error: 'Yahoo returned HTML instead of JSON. Potential block or captcha.' });
+      console.error(`Chart API returned HTML instead of JSON for ${symbol}`);
+      return res.status(response.status !== 200 ? response.status : 502).json({ error: 'Returned HTML instead of JSON. Potential block or captcha.' });
     }
 
-    cache[cacheKey] = { data: response.data, ts: Date.now() };
-    res.json(response.data);
+    if (response.status !== 200) {
+      console.warn(`Chart API returned ${response.status} for ${symbol}`);
+      return res.status(response.status).json(typeof response.data === 'object' ? response.data : { error: 'API Error', status: response.status });
+    }
+    
+    // Parse if it came as a string but looks like JSON
+    let finalData = response.data;
+    if (typeof finalData === 'string' && finalData.trim().startsWith('{')) {
+      try { finalData = JSON.parse(finalData); } catch(e) {}
+    }
+
+    cache[cacheKey] = { data: finalData, ts: Date.now() };
+    res.json(finalData);
   } catch (error: any) {
-    console.error('Yahoo Chart Fetch Error:', error.message);
+    console.error('Chart Fetch Error:', error.message);
     res.status(500).json({ 
       error: 'Failed to fetch chart data',
       message: error.message,
@@ -504,6 +518,26 @@ app.get('/api/macro/benchmarks', async (req, res) => {
     res.json(results);
   } catch (error) {
     res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.get('/api/gex', async (req, res) => {
+  const { ticker = 'SPY', exps = '1' } = req.query;
+  const cacheKey = `gex_data_${ticker}_${exps}`;
+
+  if (!ticker) return res.status(400).json({ error: 'Ticker is required' });
+
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
+    return res.json(cache[cacheKey].data);
+  }
+
+  try {
+    const data = await fetchGexData(ticker as string, parseInt(exps as string));
+    cache[cacheKey] = { data, ts: Date.now() };
+    res.json(data);
+  } catch (error: any) {
+    console.error('GEX Fetch Error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to fetch GEX data' });
   }
 });
 

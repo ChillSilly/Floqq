@@ -14,15 +14,15 @@ interface ChartDataPoint {
 interface BeautifulChartProps {
   data: ChartDataPoint[];
   height?: number;
-  lineColor: string;
-  secondaryLineColor: string;
-  areaColor: string;
+  isDarkTheme?: boolean;
 }
 
 export const BeautifulChart: React.FC<BeautifulChartProps> = ({ 
   data, 
   height = 300, 
+  isDarkTheme = false
 }) => {
+  const isDark = isDarkTheme;
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -36,7 +36,7 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: 'rgba(0, 0, 0, 0.4)',
+        textColor: isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
         fontFamily: 'JetBrains Mono, monospace',
       },
       handleScroll: {
@@ -52,7 +52,7 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: 'rgba(0, 0, 0, 0.03)' },
+        horzLines: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)' },
       },
       timeScale: {
         borderColor: 'transparent',
@@ -64,12 +64,12 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
       },
       crosshair: {
         vertLine: {
-          color: 'rgba(0, 0, 0, 0.1)',
-          labelBackgroundColor: '#000000',
+          color: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+          labelBackgroundColor: isDark ? '#1e293b' : '#000000',
         },
         horzLine: {
-          color: 'rgba(0, 0, 0, 0.1)',
-          labelBackgroundColor: '#000000',
+          color: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+          labelBackgroundColor: isDark ? '#1e293b' : '#000000',
         },
       },
     });
@@ -115,7 +115,9 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
       const intensityColor = gex >= 0 ? '#10b981' : '#ef4444';
 
       tooltipRef.current.style.display = 'block';
-      tooltipRef.current.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+      tooltipRef.current.style.backgroundColor = isDark ? 'rgba(8, 12, 23, 0.9)' : 'rgba(255, 255, 255, 0.9)';
+      tooltipRef.current.style.color = isDark ? '#f8fafc' : '#0f172a';
+      tooltipRef.current.style.border = isDark ? '1px solid rgba(248, 250, 252, 0.1)' : '1px solid rgba(0, 0, 0, 0.05)';
       tooltipRef.current.style.backdropFilter = 'blur(12px)';
       (tooltipRef.current.style as any).webkitBackdropFilter = 'blur(12px)';
       let leftPos = param.point.x + 15;
@@ -129,18 +131,18 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
       const dateStr = new Date((param.time as number) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       tooltipRef.current.innerHTML = `
-        <div style="font-size: 10px; color: #888; font-weight: 700; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">${dateStr}</div>
+        <div style="font-size: 10px; color: ${isDark ? '#94a3b8' : '#888'}; font-weight: 700; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">${dateStr}</div>
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <div style="display: flex; justify-content: space-between; gap: 20px;">
-            <span style="color: #666; font-size: 10px; font-weight: 700;">PX</span>
-            <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #000; font-size: 12px;">$${price.toFixed(2)}</span>
+            <span style="color: ${isDark ? '#64748b' : '#666'}; font-size: 10px; font-weight: 700;">PX</span>
+            <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: ${isDark ? '#f1f5f9' : '#000'}; font-size: 12px;">$${price.toFixed(2)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; gap: 20px;">
-            <span style="color: #666; font-size: 10px; font-weight: 700;">VOL</span>
-            <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #000; font-size: 12px;">${volStr}</span>
+            <span style="color: ${isDark ? '#64748b' : '#666'}; font-size: 10px; font-weight: 700;">VOL</span>
+            <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: ${isDark ? '#f1f5f9' : '#000'}; font-size: 12px;">${volStr}</span>
           </div>
           <div style="display: flex; justify-content: space-between; gap: 20px;">
-            <span style="color: #666; font-size: 10px; font-weight: 700;">GEX</span>
+            <span style="color: ${isDark ? '#64748b' : '#666'}; font-size: 10px; font-weight: 700;">GEX</span>
             <span style="font-weight: 700; font-family: 'JetBrains Mono', monospace; color: ${intensityColor}; font-size: 12px;">${gex >= 0 ? '+' : ''}${gex.toFixed(3)}</span>
           </div>
         </div>
@@ -193,7 +195,7 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
       <div ref={chartContainerRef} className="w-full h-full" />
       <div 
         ref={tooltipRef} 
-        className="absolute z-50 pointer-events-none hidden bg-white/90 backdrop-blur-md border border-neutral-200 rounded p-3 shadow-xl"
+        className="absolute z-50 pointer-events-none hidden bg-card-primary/90 backdrop-blur-md border border-main-primary rounded p-3 shadow-xl"
         style={{ minWidth: '120px' }}
       />
     </div>

@@ -262,6 +262,10 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
         const text = await res.text();
         let json;
         try {
+          if (text.trim().startsWith('<!')) {
+             console.error(`Received HTML instead of JSON from chart backend. Length: ${text.length}.`);
+             throw new Error('Received HTML instead of JSON from intelligence relay');
+          }
           json = JSON.parse(text);
         } catch (e) {
           console.error(`GEX Chart Fetch: Failed to parse JSON. Staus: ${res.status}. Sample: ${text.substring(0, 100)}`);

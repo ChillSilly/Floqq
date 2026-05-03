@@ -4,11 +4,16 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info } from 'lucide-react';
 import { TradingViewWidget } from './components/TradingViewWidget';
 import { BeautifulChart } from './components/BeautifulChart';
-import { GexDashboardChart } from './components/GexDashboardChart';
+import { GexDashboard } from './components/GexDashboard';
+import { GexRadarPremium } from './components/GexRadarPremium';
+import { BlackScholesCalculator } from './components/BlackScholesCalculator';
 import { MacroNexus } from './components/MacroNexus';
+import { GammaGauge } from './components/GammaGauge';
+import { HedgingAnimation } from './components/HedgingAnimation';
+import { THEMES } from './themes';
 
-import { bs_gamma, bs_delta, bs_vega, implied_vol } from './lib/blackScholes';
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from './lib/firebase';
+import { bsPrice, bsDelta, bsGamma, bsVega, impliedVol } from './lib/blackScholes';
 
 const RISK_FREE_RATE = 0.043;
 const DIV_YIELD: Record<string, number> = {
@@ -49,8 +54,10 @@ const MODULES = [
 ];
 
 const VIP_MODULES = [
+  { id: 'vip-gex-premium', title: 'GexRadar Premium', icon: Crown },
   { id: 'vip-gex', title: 'Live GEX Dashboard', icon: Activity },
-  { id: 'vip-conversion', title: 'Conversion Engine', icon: Calculator },
+  { id: 'vip-blackscholes', title: 'Black-Scholes Calculator', icon: Calculator },
+  { id: 'vip-conversion', title: 'Conversion Engine', icon: Cpu },
   { id: 'vip-journal', title: 'Journal', icon: Book },
   { id: 'vip-alpha', title: 'Alpha Intelligence', icon: Zap },
   { id: 'vip-strategy', title: 'Institutional Playbook', icon: ShieldCheck },
@@ -93,6 +100,7 @@ type InstitutionalStrategy = {
   updatedAt: string;
 };
 
+
 export default function App() {
   // View Transition Helper
   const transition = (fn: () => void) => {
@@ -106,29 +114,27 @@ export default function App() {
   const [activeModule, setActiveModule] = useState(() => {
     return localStorage.getItem('floq_active_module') || 'module-1';
   });
-  const [isDark, setIsDark] = useState(() => {
-    return localStorage.getItem('floq_theme') === 'dark';
+  const [activeTheme, setActiveTheme] = useState(() => {
+    return localStorage.getItem('floq_active_theme') || 'premium';
   });
+
+  const isDarkTheme = activeTheme !== 'light';
 
   useEffect(() => {
     localStorage.setItem('floq_active_module', activeModule);
   }, [activeModule]);
 
   useEffect(() => {
-    localStorage.setItem('floq_theme', isDark ? 'dark' : 'light');
-    if (isDark) {
-      document.documentElement.classList.add('dark-theme');
-    } else {
-      document.documentElement.classList.remove('dark-theme');
-    }
-  }, [isDark]);
+    localStorage.setItem('floq_active_theme', activeTheme);
+    document.documentElement.setAttribute('data-theme', activeTheme);
+  }, [activeTheme]);
 
   const handleSetModule = (modId: string) => {
     transition(() => setActiveModule(modId));
   };
 
-  const handleToggleTheme = () => {
-    transition(() => setIsDark(!isDark));
+  const handleSetActiveTheme = (themeId: string) => {
+    transition(() => setActiveTheme(themeId));
   };
 
   const [isVIPOpen, setIsVIPOpen] = useState(false);
@@ -733,7 +739,7 @@ export default function App() {
       
       if (t <= 0) return;
 
-      const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bs_gamma(spot, strike, t, r, q, iv);
+      const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bsGamma(spot, strike, t, r, q, iv);
       if (isNaN(gamma)) return;
       
       const gex = calculateGEX(gamma, oi, spot);
@@ -775,6 +781,10 @@ export default function App() {
         const text = await res.text();
         let json;
         try {
+          if (text.trim().startsWith('<!')) {
+             console.error(`Received HTML instead of JSON from chart backend. Length: ${text.length}. Check if the backend is matching the route or returning error pages.`);
+             return false;
+          }
           json = JSON.parse(text);
         } catch (e) {
           console.error(`Failed to parse Yahoo JSON. Length: ${text.length}. Sample: ${text.substring(0, 100)}`);
@@ -1001,14 +1011,14 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-[#1A1A1A] flex font-sans scroll-smooth">
+    <div className={`min-h-screen bg-app-primary text-main-primary flex font-sans scroll-smooth transition-colors duration-500 overflow-x-hidden`}>
       {/* Sidebar Navigation */}
-      <nav className="fixed hidden md:flex flex-col w-64 h-screen border-r border-black/5 bg-[#f8fafc]/50 backdrop-blur-3xl p-6 z-10">
+      <nav className={`fixed hidden md:flex flex-col w-64 h-screen border-r border-main-primary bg-sidebar p-6 z-10 transition-colors duration-500`}>
         <div className="mb-10 flex items-baseline gap-3">
-          <h1 className="font-serif font-black text-3xl tracking-tight uppercase title-elegant text-indigo-900 drop-shadow-sm">FloQ</h1>
+          <h1 className={`font-serif font-black text-3xl tracking-tight uppercase title-elegant ${isDarkTheme ? 'text-white' : 'text-indigo-900'} drop-shadow-sm`}>FloQ</h1>
         </div>
         
-        <div className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4">
+        <div className={`text-[10px] font-bold uppercase tracking-widest ${hasAccess ? 'opacity-20' : 'opacity-40'} mb-4`}>
           Trading Guide
         </div>
 
@@ -1018,9 +1028,9 @@ export default function App() {
             className="flex items-center gap-3 px-3 py-3 text-left transition-all mb-4 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm group relative overflow-hidden"
           >
             <div className="absolute inset-0 bg-linear-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-            <Crown size={14} className="text-amber-500 fill-amber-500/20" />
-            <span className="text-[11px] font-bold uppercase tracking-wider flex-1 text-amber-500">VIP Access</span>
-            <ChevronRight size={14} className="text-amber-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+            <Crown size={14} className="text-brand-amber fill-brand-amber/20" />
+            <span className="text-[11px] font-bold uppercase tracking-wider flex-1 text-brand-amber">VIP Access</span>
+            <ChevronRight size={14} className="text-brand-amber opacity-50 group-hover:opacity-100 transition-opacity" />
           </button>
         )}
         
@@ -1035,12 +1045,14 @@ export default function App() {
                   else scrollToModule(mod.id);
                 }}
                 className={`flex items-center gap-3 px-3 py-3 text-left transition-all ${
-                  isActive ? 'border-b border-black text-black' : 'opacity-40 hover:opacity-100 hover:border-b hover:border-black text-black'
+                  isActive 
+                    ? 'border-r-2 border-accent-primary text-accent-primary bg-accent-primary/5' 
+                    : 'opacity-40 hover:opacity-100 hover:border-r-2 hover:border-accent-primary/50 text-main-primary'
                 }`}
               >
-                <span className="font-serif italic text-xs">0{idx + 1}</span>
+                <span className={`font-serif italic text-xs ${isActive ? 'text-accent-primary' : 'text-main-primary opacity-40'}`}>0{idx + 1}</span>
                 <span className="text-[11px] font-bold uppercase tracking-wider flex-1">{mod.title}</span>
-                {isActive && <ChevronRight size={14} />}
+                {isActive && <ChevronRight size={14} className="text-accent-primary" />}
               </button>
             );
           })}
@@ -1049,7 +1061,7 @@ export default function App() {
         {!hasAccess && (
           <button
             onClick={() => setIsKeyModalOpen(true)}
-            className="flex items-center gap-3 px-3 py-3 text-left transition-all mt-6 border border-dashed border-black/20 hover:border-black/40 rounded-sm group opacity-60 hover:opacity-100"
+            className="flex items-center gap-3 px-3 py-3 text-left transition-all mt-6 border border-dashed border-main-primary/20 hover:border-main-primary/40 rounded-sm group opacity-60 hover:opacity-100 text-main-primary"
           >
             <Key size={14} className="group-hover:rotate-45 transition-transform" />
             <span className="text-[10px] font-bold uppercase tracking-widest flex-1">Decrypt Access</span>
@@ -1057,25 +1069,38 @@ export default function App() {
         )}
 
         {hasAccess && (
-           <div className="mt-6 flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-sm">
-             <ShieldCheck size={14} className="text-emerald-600" />
-             <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-700">Institutional Session</span>
+           <div className={`mt-6 flex items-center gap-2 px-3 py-2 bg-brand-emerald/5 border border-brand-emerald/20 rounded-sm`}>
+             <ShieldCheck size={14} className="text-brand-emerald" />
+             <span className={`text-[9px] font-bold uppercase tracking-widest text-brand-emerald`}>Institutional Session</span>
            </div>
+        )}
+
+
+        {hasAccess && (
+          <button 
+            onClick={() => setHasAccess(false)}
+            className="mt-4 flex items-center justify-center gap-2 w-full py-3 border border-main-primary/10 hover:border-rose-500/30 bg-main-primary/2 hover:bg-rose-500/5 transition-all group rounded-sm"
+          >
+            <Terminal size={12} className="text-main-primary opacity-40 group-hover:text-rose-500 transition-colors" />
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-main-primary opacity-40 group-hover:text-rose-500 transition-colors">
+              Terminate VIP Session
+            </span>
+          </button>
         )}
 
         <div className="mt-auto px-1 py-4 mb-2">
             {user ? (
-                <div id="user-profile-section" className="flex flex-col gap-3 p-3 bg-black/5 border border-black/5 rounded-sm">
+                <div id="user-profile-section" className="flex flex-col gap-3 p-3 bg-card-primary border border-main-primary/10 rounded-sm">
                     <div className="flex items-center gap-3">
                         {user.photoURL ? (
-                            <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-black/10" />
+                            <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-main-primary/10" />
                         ) : (
-                            <div className="w-8 h-8 rounded-full bg-black/10 flex items-center justify-center">
-                                <UserIcon size={14} className="opacity-40" />
+                            <div className="w-8 h-8 rounded-full bg-main-primary/10 flex items-center justify-center">
+                                <UserIcon size={14} className="text-main-primary opacity-40" />
                             </div>
                         )}
                         <div className="flex flex-col min-w-0">
-                            <span className="text-[11px] font-bold truncate text-black leading-none mb-1">
+                            <span className="text-[11px] font-bold truncate text-main-primary leading-none mb-1">
                                 {user.displayName || 'Anonymous'}
                             </span>
                             <span className="text-[9px] font-medium opacity-40 truncate">
@@ -1085,7 +1110,7 @@ export default function App() {
                     </div>
                     <button 
                         onClick={handleLogout}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-white border border-black/10 hover:bg-black/5 transition-all text-[9px] font-bold uppercase tracking-widest"
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-card-primary border border-main-primary hover:bg-accent-surface transition-all text-[9px] font-bold uppercase tracking-widest text-main-primary"
                     >
                         <LogOut size={12} />
                         Logout
@@ -1095,7 +1120,7 @@ export default function App() {
                 <button 
                     onClick={handleLogin}
                     disabled={isLoggingIn}
-                    className="flex items-center gap-3 w-full px-3 py-3 bg-black text-white hover:bg-neutral-800 transition-all rounded-sm group overflow-hidden relative shadow-lg"
+                    className="flex items-center gap-3 w-full px-3 py-3 bg-accent-primary text-app-primary hover:opacity-90 transition-all rounded-sm group overflow-hidden relative shadow-lg"
                 >
                     <div className="absolute inset-0 bg-white/10 -translate-x-full group-hover:translate-x-0 transition-transform duration-500"></div>
                     <LogIn size={14} className="relative z-10" />
@@ -1107,24 +1132,35 @@ export default function App() {
             )}
         </div>
         
-        <div className="pt-6 border-t border-black/10 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest opacity-40 font-bold mt-1">
-            Vol. 01 — Journal
+        <div className="pt-6 border-t border-main-primary space-y-4">
+          <div className="flex flex-col gap-3">
+            <span className="text-[10px] uppercase tracking-widest text-main-primary opacity-40 font-bold">Theme Engine</span>
+            <div className="flex flex-wrap gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleSetActiveTheme(t.id)}
+                  title={t.name}
+                  className={`px-3 py-1.5 rounded text-[10px] uppercase font-bold transition-all ${activeTheme === t.id ? 'bg-accent-primary text-app-primary' : 'bg-surface-primary text-main-primary hover:bg-surface-hover'}`}
+                >
+                  {t.id}
+                </button>
+              ))}
+            </div>
           </div>
-          <button 
-            onClick={handleToggleTheme}
-            className="p-2 border border-black/10 hover:bg-black/5 transition-colors bg-white shadow-sm"
-            aria-label="Toggle theme"
-          >
-            {isDark ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-main-primary opacity-40 font-bold mt-1">
+              Vol. 01 — Journal
+            </div>
+          </div>
         </div>
       </nav>
 
       {/* Main Content */}
       <main className="flex-1 md:ml-64 relative overflow-x-hidden">
         {/* Mobile Header */}
-        <div className="md:hidden sticky top-0 bg-white/70 backdrop-blur-xl border-b border-black/5 p-4 flex items-center justify-between z-20">
+        <div className="md:hidden sticky top-0 bg-card-primary/70 backdrop-blur-xl border-b border-main-primary p-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3">
             <h1 className="font-serif font-black text-lg tracking-tight uppercase title-elegant text-indigo-900">FloQ</h1>
             <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">{hasAccess ? 'Enterprise' : 'Academy'}</span>
@@ -1139,13 +1175,6 @@ export default function App() {
                 <Crown size={14} className="text-amber-600 fill-amber-600/10" />
               </button>
             )}
-            <button 
-              onClick={handleToggleTheme}
-              className="p-2 border border-black/10 hover:bg-black/5 transition-colors bg-white shadow-sm"
-              aria-label="Toggle theme"
-            >
-              {isDark ? <Sun size={14} /> : <Moon size={14} />}
-            </button>
           </div>
         </div>
 
@@ -1168,7 +1197,7 @@ export default function App() {
                 <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 flex items-center gap-2">
                   Journal
                 </div>
-                <h1 className="text-5xl md:text-7xl font-serif font-light leading-[1.1] text-black title-elegant drop-shadow-sm">
+                <h1 className="text-5xl md:text-7xl font-serif font-light leading-[1.1] text-main-primary title-elegant drop-shadow-sm">
                   The <span className="text-indigo-600 font-black not-italic relative">Options Flow<div className="absolute -bottom-2 left-0 w-full h-1 bg-indigo-200/50 blur-[2px] rounded-full" /></span> <br />
                   <span className="text-rose-500 font-serif italic italic">Trading Guide</span>
                 </h1>
@@ -1178,16 +1207,16 @@ export default function App() {
               </motion.div>
 
           {/* Module 1 */}
-          <section id="module-1" className="scroll-mt-10 p-8 md:p-12 bg-sky-50/40 rounded-[3rem] border border-sky-100/50 shadow-sm mb-12">
+          <section id="module-1" className="scroll-mt-10 p-8 md:p-12 bg-card-primary border border-main-primary rounded-[3rem] shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-sky-800 bg-sky-100 px-2 py-1 rounded">Module 01</span>
+              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 01</span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-10 title-elegant text-sky-950">The Foundation of Options-Driven Markets</h2>
+            <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-10 title-elegant text-main-primary">The Foundation of Options-Driven Markets</h2>
             
             <div className="space-y-12">
               <div className="max-w-3xl">
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 border-b border-black/10 pb-2">Why Traditional Technical Analysis is No Longer Enough</h3>
-                <p className="text-neutral-600 leading-relaxed text-lg">
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 border-b border-main-primary/10 pb-2 text-main-primary">Why Traditional Technical Analysis is No Longer Enough</h3>
+                <p className="text-main-primary opacity-80 leading-relaxed text-lg">
                   The global financial ecosystem has experienced a fundamental transition in its underlying price discovery mechanisms. 
                   Since 2021, options trading volumes have systematically surpassed the volumes of the underlying cash equity markets. 
                   This evolution means that the hedging activities of market makers—the primary counterparties to retail and institutional 
@@ -1196,42 +1225,44 @@ export default function App() {
               </div>
 
               <div className="grid md:grid-cols-2 gap-8">
-                <div className="bg-white p-8 border border-black/5 shadow-sm group">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 mb-4 bg-emerald-50 inline-block px-2 py-1">Mechanism</h3>
-                  <h4 className="text-2xl font-serif italic mb-3">The Role of the Market Maker and Delta Hedging</h4>
-                  <p className="text-neutral-600 leading-relaxed text-sm">
+                <div className="bg-card-primary p-8 border border-main-primary shadow-sm group">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-accent-primary mb-4 bg-accent-primary/10 inline-block px-2 py-1">Mechanism</h3>
+                  <h4 className="text-2xl font-serif italic mb-3 text-main-primary">The Role of the Market Maker and Delta Hedging</h4>
+                  <p className="text-main-primary opacity-60 leading-relaxed text-sm mb-6">
                     Market makers are not in the business of taking directional bets; their goal is to provide liquidity and collect the spread. 
-                    To protect themselves from market movements, they use a strategy called <strong className="font-bold text-black">delta hedging</strong>. 
+                    To protect themselves from market movements, they use a strategy called <strong className="font-bold text-main-primary">delta hedging</strong>. 
                     This means they constantly buy or sell the underlying asset (or futures) to keep their directional exposure neutral. 
                   </p>
+                  <HedgingAnimation />
                 </div>
                 
-                <div className={`p-8 ${isDark ? "bg-white text-black" : "bg-black text-white"} preserve-dark border border-black/5 rounded-tr-[40px] shadow-sm`}>
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#e80c0c] mb-4 bg-red-500/10 dark:bg-red-50 inline-block px-2 py-1">Metrics</h3>
-                  <h4 className="text-2xl font-serif italic mb-3">What is Gamma and Why Does It Move Markets?</h4>
-                  <p className="leading-relaxed text-sm">
+                <div className="bg-accent-surface p-8 preserve-dark border border-main-primary shadow-sm group">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-4 bg-rose-500/10 inline-block px-2 py-1">Metrics</h3>
+                  <h4 className="text-2xl font-serif italic mb-3 text-main-primary">What is Gamma and Why Does It Move Markets?</h4>
+                  <p className="leading-relaxed text-sm opacity-80 text-main-primary mb-6">
                     Gamma measures how fast an option's delta changes as the underlying price moves. When gamma is high, an option's 
                     delta changes very quickly, which forces dealers to adjust their hedges rapidly. This urgent need to hedge translates 
                     into massive buying or selling volume in the underlying asset.
                   </p>
+                  <GammaGauge ticker={activeTicker} />
                 </div>
               </div>
 
-              <div className="bg-[#F5F2EF] border border-black/5 p-8 md:p-10">
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-black/10 flex items-center justify-between">
+              <div className="bg-accent-surface border border-main-primary p-8 md:p-10 rounded-2xl">
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-main-primary/20 flex items-center justify-between text-main-primary">
                   <span>Positive vs. Negative Gamma Regimes</span>
                   <Activity size={16} className="opacity-50" />
                 </h3>
-                <p className="text-neutral-600 leading-relaxed mb-8 text-sm italic font-serif">
+                <p className="text-main-primary opacity-60 leading-relaxed mb-8 text-sm italic font-serif text-main-primary">
                   To trade successfully, you must know what "gamma regime" the market is in. FlowDynamics calculates the Net Gamma Exposure (Net GEX) to determine this:
                 </p>
                 
                 <div className="space-y-6">
                   <div className="flex gap-4">
-                    <div className="w-1 bg-emerald-800"></div>
+                    <div className="w-1 bg-brand-emerald"></div>
                     <div>
-                      <h4 className="text-xl font-serif italic text-black mb-1">Position Gamma (Low Volatility / Mean Reverting)</h4>
-                      <p className="text-neutral-600 text-sm leading-relaxed">
+                      <h4 className="text-xl font-serif italic text-main-primary mb-1">Position Gamma (Low Volatility / Mean Reverting)</h4>
+                      <p className="text-main-primary opacity-40 text-sm leading-relaxed">
                         When the market is in positive gamma, market makers hedge by buying when the price drops and selling when it rises. 
                         This dampens volatility, keeping the market trapped in a range and creating choppy, sideways movement.
                       </p>
@@ -1239,10 +1270,10 @@ export default function App() {
                   </div>
                   
                   <div className="flex gap-4">
-                    <div className="w-1 bg-red-800"></div>
+                    <div className="w-1 bg-rose-500"></div>
                     <div>
-                      <h4 className="text-xl font-serif italic text-black mb-1">Negative Gamma (High Volatility / Directional)</h4>
-                      <p className="text-neutral-600 text-sm leading-relaxed">
+                      <h4 className="text-xl font-serif italic text-main-primary mb-1">Negative Gamma (High Volatility / Directional)</h4>
+                      <p className="text-main-primary opacity-40 text-sm leading-relaxed">
                         When the market is in negative gamma, dealers must sell when the price drops and buy when it rises. 
                         This pro-cyclical hedging amplifies market moves, creating fast, aggressive trends and massive intraday swings.
                       </p>
@@ -1254,13 +1285,13 @@ export default function App() {
           </section>
 
           {/* Module 2 */}
-          <section id="module-2" className="scroll-mt-10 p-8 md:p-12 bg-emerald-50/40 rounded-[3rem] border border-emerald-100/50 shadow-sm mb-12">
+          <section id="module-2" className="scroll-mt-10 p-8 md:p-12 bg-card-primary border border-main-primary rounded-[3rem] shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-emerald-800 bg-emerald-100 px-2 py-1 rounded">Module 02</span>
+              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 02</span>
             </div>
-            <div className="mb-12 border-b border-emerald-200/30 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-emerald-950">Mastering Gamma Levels</h2>
-              <p className="text-neutral-600 text-lg max-w-3xl">
+            <div className="mb-12 border-b border-main-primary/10 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Mastering Gamma Levels</h2>
+              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
                 OptionsFlow Gamma Levels are forward-looking price zones derived from options positioning, revealing exactly where institutions and market makers are forced to hedge aggressively.
               </p>
             </div>
@@ -1309,55 +1340,60 @@ export default function App() {
                 subtitle="Secondary Ranges"
                 def="Secondary levels representing the top 10 strikes with highest net gamma and delta exposure."
                 impact="GEX 1 is the strongest. Actively used by day traders for precise take-profit targets."
+                style={{ color: '#0d8fff', borderColor: '#d100ff' }}
               />
             </div>
           </section>
 
           {/* Module 3 */}
-          <section id="module-3" className="scroll-mt-10 p-8 md:p-12 bg-indigo-50/40 rounded-[3rem] border border-indigo-100/50 shadow-sm mb-12">
+          <section id="module-3" className="scroll-mt-10 p-8 md:p-12 bg-accent-surface border border-main-primary rounded-[3rem] shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-indigo-800 bg-indigo-100 px-2 py-1 rounded">Module 03</span>
+              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 03</span>
             </div>
             
-            <div className="mb-12 border-b border-indigo-200/30 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-indigo-950">Advanced Quantitative Models</h2>
-              <p className="text-neutral-600 text-lg max-w-3xl">
+            <div className="mb-12 border-b border-main-primary/10 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Advanced Quantitative Models</h2>
+              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
                 To give you a true institutional edge, FlowDynamics provides supplementary models that combine with Gamma Levels to build a complete trading roadmap.
               </p>
             </div>
 
+            <div className="mb-12">
+              <BlackScholesCalculator />
+            </div>
+
             <div className="space-y-6">
-              <div className="bg-white border text-black border-black/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
+              <div className="bg-card-primary border text-main-primary border-main-primary p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm rounded-xl">
                 <div className="md:w-1/3">
                   <h3 className="text-2xl font-serif italic mb-2">Blind Spots Levels</h3>
-                  <div className="w-12 h-1 bg-black my-4"></div>
+                  <div className="w-12 h-1 bg-accent-primary my-4"></div>
                 </div>
                 <div className="md:w-2/3">
-                  <p className="text-neutral-600 leading-relaxed text-sm">
+                  <p className="text-main-primary opacity-60 leading-relaxed text-sm">
                     Blind Spots are hidden market reaction zones that traditional charting overlooks. They highlight crucial price levels where correlated assets (such as bonds, commodities, or the Dollar) heavily influence your target asset. They serve as excellent take-profit zones and help you avoid opening trades right into hidden institutional friction.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-white border text-black border-black/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
+              <div className="bg-card-primary border text-main-primary border-main-primary p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm rounded-xl">
                 <div className="md:w-1/3">
                   <h3 className="text-2xl font-serif italic mb-2">Dark Pool Anomalies</h3>
-                  <div className="w-12 h-1 bg-black my-4"></div>
+                  <div className="w-12 h-1 bg-accent-primary my-4"></div>
                 </div>
                 <div className="md:w-2/3">
-                  <p className="text-neutral-600 leading-relaxed text-sm">
+                  <p className="text-main-primary opacity-60 leading-relaxed text-sm">
                     Off-exchange footprints tracking high-block institutional volume that bypasses the public lit order books. These dark pools act as immense structural support or resistance when the public price approaches. Monitoring these anomalies gives early warnings of potential trend reversals or major continuation legs before retail catches on.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-white border text-black border-black/10 p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm mix-blend-multiply">
+              <div className="bg-card-primary border text-main-primary border-main-primary p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm rounded-xl">
                 <div className="md:w-1/3">
                   <h3 className="text-2xl font-serif italic mb-2">Absolute Liquidity Voids</h3>
-                  <div className="w-12 h-1 bg-black my-4"></div>
+                  <div className="w-12 h-1 bg-accent-primary my-4"></div>
                 </div>
                 <div className="md:w-2/3">
-                  <p className="text-neutral-600 leading-relaxed text-sm">
+                  <p className="text-main-primary opacity-60 leading-relaxed text-sm">
                     Pinpoint exact price levels where institutional limit orders have completely evaporated. When the market enters a liquidity void, price accelerates violently due to a lack of friction. By mapping these hidden vacuums before they are filled, you can catch massive, high-R/R breakout momentum trades with razor-sharp precision long before retail volume even registers the move.
                   </p>
                 </div>
@@ -1367,14 +1403,14 @@ export default function App() {
           </section>
 
           {/* Module 4 */}
-          <section id="module-4" className="scroll-mt-10 p-8 md:p-12 bg-rose-50/40 rounded-[3rem] border border-rose-100/50 shadow-sm mb-12">
+          <section id="module-4" className="scroll-mt-10 p-8 md:p-12 bg-card-primary border border-main-primary rounded-[3rem] shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-rose-800 bg-rose-100 px-2 py-1 rounded">Module 04</span>
+              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 04</span>
             </div>
             
-            <div className="mb-12 border-b border-rose-200/30 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-rose-950">The Options Flow Trading Playbook</h2>
-              <p className="text-neutral-600 text-lg max-w-3xl">
+            <div className="mb-12 border-b border-main-primary/10 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">The Options Flow Trading Playbook</h2>
+              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
                 Actionable, step-by-step strategies based on the identified gamma environment.
               </p>
             </div>
@@ -1410,55 +1446,55 @@ export default function App() {
           </section>
 
           {/* Module 5 */}
-          <section id="module-5" className="scroll-mt-10 p-8 md:p-12 bg-purple-50/40 rounded-[3rem] border border-purple-100/50 shadow-sm mb-12">
+          <section id="module-5" className="scroll-mt-10 p-8 md:p-12 bg-accent-surface border border-main-primary rounded-[3rem] shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-purple-800 bg-purple-100 px-2 py-1 rounded">Module 05</span>
+              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 05</span>
             </div>
             
-             <div className="mb-12 border-b border-purple-200/30 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-purple-950">Integrating the Data</h2>
-              <p className="text-neutral-600 text-lg max-w-3xl">
+             <div className="mb-12 border-b border-main-primary/10 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Integrating the Data</h2>
+              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
                 We deliver institutional models directly to your favorite charting software via API, eliminating guesswork.
               </p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-10">
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-black/10">Supported Platforms</h3>
-                <p className="text-neutral-600 mb-6 text-sm">FlowDynamics natively integrates into the industry's best software:</p>
-                <ul className="space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-main-primary/10 text-main-primary">Supported Platforms</h3>
+                <p className="text-main-primary opacity-60 mb-6 text-sm">FlowDynamics natively integrates into the industry's best software:</p>
+                <ul className="space-y-4 text-main-primary">
                   {[
                     ['MotiveWave', 'Imports Gamma Levels, Blind Spots, and Expected Moves natively.'],
                     ['Quantower', 'Overlays options liquidity data right onto advanced order-flow software.']
                   ].map(([p, desc]) => (
-                    <li key={p} className="flex gap-4 p-4 border border-black/10 bg-white shadow-sm">
-                      <div className="mt-1"><Target size={18} className="opacity-50" /></div>
+                    <li key={p} className="flex gap-4 p-4 border border-main-primary/10 bg-card-primary shadow-sm rounded-lg">
+                      <div className="mt-1"><Target size={18} className="text-accent-primary opacity-50" /></div>
                       <div>
-                        <div className="font-serif italic text-lg mb-1">{p}</div>
-                        <div className="text-xs text-neutral-600">{desc}</div>
+                        <div className="font-serif italic text-lg mb-1 text-main-primary">{p}</div>
+                        <div className="text-xs text-main-primary opacity-40">{desc}</div>
                       </div>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="preserve-dark bg-black text-white p-8 rounded-tr-[40px] shadow-sm relative flex flex-col h-full">
+              <div className="bg-accent-primary text-app-primary p-8 rounded-tr-[40px] shadow-sm relative flex flex-col h-full overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10">
                   <Monitor size={150} />
                 </div>
                 <h3 className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-4 bg-white/10 inline-block px-2 py-1 self-start">Feature</h3>
-                <h3 className="text-2xl font-serif italic mb-4 relative z-10">The Power of Levels Conversion</h3>
-                <div className="w-12 h-1 bg-white my-6 relative z-10"></div>
-                <div className="text-neutral-300 leading-relaxed text-sm relative z-10 space-y-4 flex-1">
+                <h3 className="text-2xl font-serif italic mb-4 relative z-10 text-app-primary">The Power of Levels Conversion</h3>
+                <div className="w-12 h-1 bg-app-primary my-6 relative z-10 opacity-30"></div>
+                <div className="text-app-primary opacity-70 leading-relaxed text-sm relative z-10 space-y-4 flex-1">
                   <p>
                     If you trade Futures (like ES or NQ), looking at futures volume alone is trading blind. FlowDynamics's "Levels Conversion" tool allows you to take the massive options data from indices (like SPX or NDX) and accurately overlay them onto your futures charts. 
                   </p>
                   <p>
                     By applying an <strong>Auto Ratio</strong> or <strong>Manual Ratio</strong>, you can perfectly align institutional SPX options flow onto your ES futures chart in real-time.
                   </p>
-                  <div className="mt-6 p-4 border border-white/20 bg-white/5 rounded-sm">
-                    <h4 className="font-bold text-white mb-2 uppercase text-[10px] tracking-wider">Why Not ETFs?</h4>
-                    <p className="text-xs">
+                  <div className="mt-6 p-4 border border-app-primary/20 bg-app-primary/5 rounded-sm" style={{ color: '#ffffff' }}>
+                    <h4 className="font-bold text-app-primary mb-2 uppercase text-[10px] tracking-wider">Why Not ETFs?</h4>
+                    <p className="text-xs text-app-primary opacity-80">
                       Levels conversion strictly applies to cash-settled Indices (like SPX and NDX) mapping to their respective Futures. ETFs (like SPY or QQQ) hold physical underlying shares and carry dividend payouts and early assignment risk. Because of these structural pricing differences, institutional options flow originating from an ETF cannot be mathematically mapped to a Futures contract with the precision required for institutional trading. We rely exclusively on the purest source: European-style Index Options.
                     </p>
                   </div>
@@ -1468,14 +1504,14 @@ export default function App() {
           </section>
 
           {/* Module 6 */}
-          <section id="module-6" className="scroll-mt-10 p-8 md:p-12 bg-cyan-50/40 rounded-[3rem] border border-cyan-100/50 shadow-sm mb-12">
+          <section id="module-6" className="scroll-mt-10 p-8 md:p-12 bg-accent-surface border border-main-primary rounded-[3rem] shadow-sm mb-12">
             <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-cyan-800 bg-cyan-100 px-2 py-1 rounded">Module 06</span>
+              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 06</span>
             </div>
             
-             <div className="mb-12 border-b border-cyan-200/30 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-cyan-950">Interactive Glossary</h2>
-              <p className="text-neutral-600 text-lg max-w-3xl">
+             <div className="mb-12 border-b border-main-primary/10 pb-8">
+              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Interactive Glossary</h2>
+              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
                 A definitive reference for quantitative options trading terminology and market mechanics.
               </p>
             </div>
@@ -1484,7 +1520,7 @@ export default function App() {
           </section>
 
           {/* Footer */}
-          <footer className="mt-10 pt-4 flex flex-col md:flex-row justify-between items-center text-[10px] pb-12 uppercase tracking-[0.2em] opacity-40 border-t border-black/10 gap-4">
+          <footer className="mt-10 pt-4 flex flex-col md:flex-row justify-between items-center text-[10px] pb-12 uppercase tracking-[0.2em] opacity-40 border-t border-main-primary gap-4 text-main-primary">
             <span>© {new Date().getFullYear()} OptionsFlow Quantitative Research</span>
             <span>Confidential Institutional Models</span>
             <span>Page 042</span>
@@ -1498,272 +1534,54 @@ export default function App() {
           transition={{ duration: 0.6, ease: "easeOut" }}
           className="min-h-screen bg-transparent"
         >
-          <div className="max-w-[1600px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 space-y-12 bg-white/40 shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-black/5">
+          <div className={`max-w-[1600px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 space-y-12 ${hasAccess ? 'bg-app-primary' : 'bg-transparent shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-main-primary'}`}>
 
 
             {/* VIP Content Switcher */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               {/* Main Display Area */}
-              <div className={`space-y-8 ${['vip-journal', 'vip-conversion', 'vip-gex', 'vip-strategy'].includes(activeModule) ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
+              <div className="space-y-8 lg:col-span-12">
+                {activeModule === 'vip-gex-premium' && (
+                  <GexRadarPremium />
+                )}
+
                 {activeModule === 'vip-gex' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                    {/* Header Controls */}
-                    <div className="flex flex-col md:flex-row md:items-end justify-between px-3 py-1 gap-4 border-b border-black/[0.03] mb-2">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#00E5A0]/80 shadow-[0_0_8px_rgba(0,229,160,0.4)] animate-pulse" />
-                          <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#64A0E6]/70 uppercase">Internal Engine Live</span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                          <h2 className="text-3xl font-bold tracking-tighter text-black/80 title-elegant">GEX TERMINAL</h2>
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              {TICKERS.map(t => (
-                                <button 
-                                  key={t}
-                                  onClick={() => setActiveTicker(t)}
-                                  className={`px-3 py-1 text-xs font-mono font-bold rounded-md uppercase tracking-widest transition-colors ${
-                                    activeTicker === t 
-                                      ? 'bg-black/80 text-white shadow-sm' 
-                                      : 'bg-black/5 text-black/50 hover:bg-black/10'
-                                  }`}
-                                >
-                                  {t}
-                                </button>
-                              ))}
-                            </div>
-                            
-                            <div className="flex items-center gap-2 px-3 py-1 bg-black/[0.02] border border-black/5 rounded-lg">
-                               <div className="w-2 h-2 rounded-full bg-[#00E5A0] animate-pulse shadow-[0_0_8px_rgba(0,229,160,0.5)]" />
-                               <span className="text-[10px] font-mono font-bold text-black/60 uppercase tracking-widest">Feed: Live (Yahoo)</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 pb-1">
-                        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-black/[0.02] border border-black/5 rounded-lg hover:bg-black/[0.04] transition-colors cursor-help group relative">
-                           <Info size={12} className="text-black/30" />
-                           <span className="text-[9px] font-mono font-bold text-black/50 tracking-wider">SYSTEM STATUS: OPTIMAL</span>
-                        </div>
-                      </div>
-                    </div>
+                  <GexDashboard />
+                )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      {[
-                        { 
-                          label: 'Net Gamma Exposure', 
-                          val: `${gexMetrics.netGex >= 0 ? '+' : ''}${gexMetrics.netGex.toFixed(2)}B`, 
-                          sub: 'Aggregate Market Maker Positioning',
-                          color: gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-600',
-                          labelColor: gexMetrics.netGex >= 0 ? 'text-[#00E5A0]/60' : 'text-rose-500/60',
-                          icon: Activity
-                        },
-                        { 
-                          label: 'Spot Reference', 
-                          val: gexMetrics.spot.toFixed(2), 
-                          sub: `${activeTicker} Last Consolidated Price`,
-                          color: 'text-black',
-                          labelColor: 'text-indigo-500/60',
-                          icon: Crosshair
-                        },
-                        { 
-                          label: 'Gamma Flip Level', 
-                          val: `$${gexMetrics.gammaFlip.toFixed(2)}`, 
-                          sub: 'Estimated Regime Transition Zone',
-                          color: 'text-amber-400',
-                          labelColor: 'text-amber-500/60',
-                          icon: Zap
-                        },
-                        { 
-                          label: 'Contract Volume', 
-                          val: gexMetrics.totalOi ? `${(gexMetrics.totalOi / 1000).toFixed(1)}K` : '0.0K', 
-                          sub: 'Total Open Interest Across Chain',
-                          color: 'text-[#64A0E6]',
-                          labelColor: 'text-[#77a0d6]',
-                          icon: BarChart2
-                        }
-                      ].map(stat => (
-                        <div 
-                          key={stat.label} 
-                          className={`p-5 bg-white/80 backdrop-blur-sm border border-black/5 rounded-2xl relative overflow-hidden group hover:bg-white transition-all duration-500 flex flex-col justify-between h-36 shadow-sm hover:shadow-md border-b-2 cursor-help ${
-                            stat.label.includes('Net') ? 'border-b-emerald-500/10' : 
-                            stat.label.includes('Spot') ? 'border-b-indigo-500/10' : 
-                            stat.label.includes('Flip') ? 'border-b-amber-500/10' : 'border-b-blue-500/10'
-                          }`}
-                          title={stat.label === 'Net Gamma Exposure' ? `Exact Value: ${(gexMetrics.netGex * 1000000000).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} (Theoretical)` : undefined}
-                        >
-                          {/* Colorful background glow */}
-                          <div className={`absolute -right-8 -top-8 w-24 h-24 rounded-full blur-3xl opacity-[0.06] group-hover:opacity-15 transition-opacity ${
-                            stat.label.includes('Net') ? 'bg-emerald-400' : 
-                            stat.label.includes('Spot') ? 'bg-indigo-400' : 
-                            stat.label.includes('Flip') ? 'bg-amber-400' : 'bg-blue-400'
-                          }`} />
-                          
-                          <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-10 group-hover:scale-105 transition-all duration-700">
-                            <stat.icon size={56} className="text-black/40" />
-                          </div>
-                          <div className="relative z-10">
-                            <div className={`text-xs font-mono font-bold ${stat.labelColor} uppercase tracking-[0.15em] mb-1`}>{stat.label}</div>
-                            <div className="text-xs font-sans text-black/25 leading-tight">{stat.sub}</div>
-                          </div>
-                          <div className={`text-2xl font-mono font-bold tracking-tighter relative z-10 ${stat.color} opacity-90 group-hover:opacity-100 transition-opacity`}>{stat.val}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Chart & Secondary Data */}
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                      <div className="lg:col-span-3 bg-white border border-black/5 rounded-3xl p-2 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.1)] h-[550px] relative">
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/10 via-transparent to-rose-50/10 pointer-events-none" />
-                        <GexDashboardChart 
-                          data={combinedLiveChartData} 
-                          activeTicker={activeTicker}
-                        />
-                      </div>
-                      
-                      <div className="space-y-6">
-                        {/* Volatility Regime Card */}
-                        <div className="p-6 bg-white border border-black/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
-                          <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl opacity-[0.03] ${gexMetrics.netGex >= 0 ? 'bg-[#00E5A0]' : 'bg-rose-500'}`} />
-                          
-                          <div className="flex items-center gap-3 mb-6 relative z-10">
-                            <div className={`p-2.5 rounded-xl ${gexMetrics.netGex >= 0 ? 'bg-[#00E5A0]/10 border-[#00E5A0]/20' : 'bg-rose-500/10 border-rose-500/20'} border shadow-sm`}>
-                              <Zap size={16} className={gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'} />
-                            </div>
-                            <span className={`text-xs font-mono font-bold uppercase tracking-[0.2em] ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]/60' : 'text-rose-500/60'}`}>Market Regime</span>
-                          </div>
-                          
-                          <div className="space-y-5 relative z-10">
-                            <div className="p-5 bg-black/[0.02] border border-black/[0.03] rounded-2xl">
-                              <div className={`text-2xl font-mono font-bold mb-2 tracking-tighter ${gexMetrics.netGex >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'} drop-shadow-sm`}>
-                                {gexMetrics.netGex >= 0 ? 'STABLE' : 'VOLATILE'}
-                              </div>
-                              <div className="text-xs text-black/40 font-sans leading-relaxed">
-                                {gexMetrics.netGex >= 0 
-                                  ? 'Mechanically suppressing volatility through counter-cyclical liquidity provision.' 
-                                  : 'Negative gamma accelerants detected. High probability of expanding ATR.'}
-                              </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center px-2">
-                              <span className="text-[10px] font-mono font-bold text-black/20 uppercase tracking-widest">Live Sync</span>
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[11px] font-mono font-bold text-black/60">{lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Inventory Card */}
-                        <div className="p-6 bg-white border border-black/5 rounded-3xl relative overflow-hidden group shadow-[0_15px_35px_rgba(0,0,0,0.05)] hover:shadow-[0_25px_50px_rgba(0,0,0,0.1)] transition-all duration-500">
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400 blur-3xl opacity-[0.03]" />
-                          
-                          <div className="flex items-center gap-3 mb-6 relative z-10">
-                            <div className="p-2.5 rounded-xl bg-[#64A0E6]/10 border border-[#64A0E6]/20 shadow-sm">
-                              <Target size={16} className="text-[#64A0E6]" />
-                            </div>
-                            <span className="text-xs font-mono font-bold uppercase tracking-[0.2em] text-[#0013f0]">Liquidity Skew</span>
-                          </div>
-
-                          <div className="space-y-5 relative z-10">
-                             <div className="flex justify-between items-end mb-1 px-1">
-                                <span className="text-xs font-mono font-bold text-black/30 uppercase tracking-wider">C/P Dominance</span>
-                                <span className="font-mono text-base text-black/80 font-bold">{(gexMetrics.callGex / Math.abs(gexMetrics.putGex || 1)).toFixed(2)}x</span>
-                             </div>
-                             <div className="h-3 w-full bg-black/[0.03] rounded-full overflow-hidden flex border border-black/[0.03] p-0.5">
-                               <div 
-                                 className="h-full bg-gradient-to-r from-emerald-400 to-[#00E5A0] rounded-full shadow-[0_0_12px_rgba(0,229,160,0.4)] transition-all duration-1000" 
-                                 style={{ width: `${(gexMetrics.callGex / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
-                               />
-                               <div 
-                                 className="h-full bg-gradient-to-l from-rose-400 to-rose-500 rounded-full shadow-[0_0_12px_rgba(244,63,94,0.4)] transition-all duration-1000" 
-                                 style={{ width: `${(Math.abs(gexMetrics.putGex) / (gexMetrics.callGex + Math.abs(gexMetrics.putGex)) * 100).toFixed(1)}%` }} 
-                               />
-                             </div>
-                             <div className="flex justify-between text-[10px] font-mono font-bold uppercase tracking-widest px-1">
-                               <span className="text-[#00E5A0]">Bullish</span>
-                               <span className="text-rose-500">Bearish</span>
-                             </div>
-
-                             <div className="pt-5 border-t border-black/5 mt-5">
-                               <div className="flex items-center gap-2 mb-3">
-                                 <Activity size={12} className="text-blue-400 animate-pulse" />
-                                 <span className="text-[10px] font-mono font-bold text-black/40 uppercase tracking-widest">Flow Intelligence</span>
-                               </div>
-                               <p className="text-xs text-black/30 font-sans italic leading-relaxed">
-                                 Cross-exchange institutional positioning synchronized. Zero-lag feed active.
-                               </p>
-                             </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-
+                {activeModule === 'vip-blackscholes' && (
+                  <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
+                     <BlackScholesCalculator />
                   </motion.div>
                 )}
 
                 {activeModule === 'vip-conversion' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                    <div className="relative p-6 bg-white text-neutral-700 border border-black/10 shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
+                    <div className="relative p-6 bg-card-primary text-main-primary border border-main-primary shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
                        {/* Hardware/terminal accents */}
-                       <div className="absolute top-0 left-0 w-full h-1 bg-neutral-100 flex">
-                         <div className="w-1/3 h-full bg-[#3B82F6] shadow-[0_0_15px_rgba(59,130,246,0.8)]" />
+                       <div className="absolute top-0 left-0 w-full h-1 bg-main-primary flex">
+                         <div className="w-1/3 h-full bg-accent-primary shadow-[0_0_15px_var(--accent-glow)]" />
                        </div>
                        
                        {/* Header */}
-                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 border-b border-black/10 pb-6">
+                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 border-b border-main-primary pb-6">
                          <div className="relative flex items-center gap-4">
-                           <div className="w-3 h-3 rounded-sm bg-[#3B82F6] shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse" />
+                           <div className="w-3 h-3 rounded-sm bg-accent-primary shadow-[0_0_8px_var(--accent-glow)] animate-pulse" />
                            <div>
-                             <h2 className="text-2xl font-mono tracking-tighter font-bold text-black uppercase text-nowrap">Macro Analyst AI</h2>
-                             <p className="text-[10px] text-blue-600 uppercase tracking-[0.2em] mt-1 font-bold">Autonomous Regime Classification & Yield Analysis</p>
+                             <h2 className="text-2xl font-mono tracking-tighter font-bold text-main-primary uppercase text-nowrap">Macro Analyst AI</h2>
+                             <p className={`text-[10px] text-accent-primary uppercase tracking-[0.2em] mt-1 font-bold`}>Autonomous Regime Classification & Yield Analysis</p>
                            </div>
                          </div>
 
-                         {/* Ticker Selector & Search Widget */}
-                         <div className="hidden lg:flex items-center gap-1 bg-black/5 p-1 rounded-md border border-neutral-200 mx-4">
-                           {['SPY', 'QQQ', 'IWM', 'BTC', 'NVDA'].map(ticker => (
-                             <button
-                               key={ticker}
-                               onClick={() => setActiveTicker(ticker)}
-                               className={`px-3 py-1 text-[9px] font-bold rounded transition-all ${
-                                 activeTicker === ticker 
-                                   ? 'bg-black text-white shadow-sm' 
-                                   : 'text-neutral-500 hover:text-black hover:bg-black/5'
-                               }`}
-                             >
-                               {ticker}
-                             </button>
-                           ))}
-                           <div className="w-px h-3 bg-black/10 mx-1"></div>
-                           <div className="relative flex items-center bg-white border border-black/10 rounded overflow-hidden group focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/5 transition-all h-8">
-                              <Search size={12} className="text-neutral-400 absolute left-2 group-focus-within:text-blue-500 transition-colors" />
-                              <input 
-                                type="text" 
-                                placeholder="SEARCH INSTRUMENT..." 
-                                className="w-full h-full pl-7 pr-2 py-1 text-[10px] font-bold bg-transparent border-none outline-none text-black placeholder:text-neutral-400 font-mono tracking-widest uppercase"
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const val = (e.currentTarget as HTMLInputElement).value.toUpperCase();
-                                    if (val) setActiveTicker(val);
-                                    (e.currentTarget as HTMLInputElement).value = '';
-                                  }
-                                }}
-                              />
-                              
-                           </div>
-                         </div>
 
                          <div className="flex flex-wrap items-center gap-4 mt-4 md:mt-0">
-                           <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 border border-blue-600/30 rounded-md">
-                             <Cpu size={14} className="text-blue-600" />
-                             <span className="text-[10px] text-blue-600 tracking-wider font-bold">MODEL: V-PREDICT-7</span>
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-surface border border-main-primary rounded-md">
+                             <Cpu size={14} className="text-accent-primary" />
+                             <span className="text-[10px] text-accent-primary tracking-wider font-bold">MODEL: V-PREDICT-7</span>
                            </div>
-                           <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 border border-black/10 rounded-md">
-                              <RefreshCcw size={12} className="text-neutral-600 animate-spin" />
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">Syncing Fed Funds</span>
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-surface border border-main-primary rounded-md">
+                              <RefreshCcw size={12} className="text-main-primary opacity-40 animate-spin" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-40">Syncing Fed Funds</span>
                            </div>
                          </div>
                        </div>
@@ -1773,44 +1591,45 @@ export default function App() {
                           spotPrice={gexMetrics.spot} 
                           netGex={gexMetrics.netGex} 
                           chartData={combinedLiveChartData}
+                          isDarkTheme={isDarkTheme}
                        />
                     </div>
 
                     <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
-                        <div className="relative p-8 bg-white border border-black/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black overflow-hidden group hover:border-black/10 transition-colors">
-                           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#00E5A0]/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                         <div className="relative p-8 bg-card-primary border border-main-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
+                           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-primary/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                            <div className="flex items-center gap-3 mb-2">
-                              <div className="p-2.5 bg-[#00E5A0]/10 rounded-xl border border-[#00E5A0]/20 shadow-inner"><Calculator size={18} className="text-[#00E5A0]" /></div>
-                              <h3 className="text-xl font-bold tracking-tight text-black/90">SPY → ES Converter</h3>
+                              <div className="p-2.5 bg-accent-surface rounded-xl border border-accent-primary/20 shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
+                              <h3 className="text-xl font-bold tracking-tight text-main-primary/90">SPY → ES Converter</h3>
                            </div>
-                           <p className="text-sm text-black/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
+                           <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
                            
-                           <div className="flex items-center gap-2 mb-6 text-[#00E5A0] text-xs font-medium tracking-wide uppercase">
+                           <div className="flex items-center gap-2 mb-6 text-accent-primary text-xs font-medium tracking-wide uppercase">
                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
                            </div>
 
                            <div className="grid grid-cols-2 gap-4 mb-6">
-                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">SPY Spot</div>
-                                 <div className="text-2xl font-mono text-black/90 drop-shadow-sm">{typeof conversionRatios['SPY']?.spotPrice === 'number' ? conversionRatios['SPY']?.spotPrice?.toFixed(2) : '---'}</div>
+                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">SPY Spot</div>
+                                 <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios['SPY']?.spotPrice === 'number' ? conversionRatios['SPY']?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
-                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">ES Future</div>
-                                 <div className="text-2xl font-mono text-[#00E5A0] drop-shadow-sm">{typeof conversionRatios['SPY']?.futurePrice === 'number' ? conversionRatios['SPY']?.futurePrice?.toFixed(2) : '---'}</div>
+                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">ES Future</div>
+                                 <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios['SPY']?.futurePrice === 'number' ? conversionRatios['SPY']?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
                            </div>
 
-                           <div className="p-5 bg-white border border-black/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-black/60 font-medium">Conversion Ratio (ES / SPY)</span>
-                              <span className="text-lg font-mono font-bold text-[#00E5A0] drop-shadow-[0_0_8px_rgba(0,229,160,0.3)]">{conversionRatios['SPY']?.ratio?.toFixed(4) || '---'}</span>
+                           <div className="p-5 bg-card-primary border border-main-primary/50 rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                              <span className="text-sm text-main-primary/60 font-medium">Conversion Ratio (ES / SPY)</span>
+                              <span className="text-lg font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios['SPY']?.ratio?.toFixed(4) || '---'}</span>
                            </div>
 
                            <div className="space-y-4">
-                              <div className="flex items-center gap-2 text-sm text-black/80 font-medium tracking-wide">
-                                 <ChevronRight size={16} className="text-[#00E5A0]" /> Calculate Level
+                              <div className="flex items-center gap-2 text-sm text-main-primary/80 font-medium tracking-wide">
+                                 <ChevronRight size={16} className="text-accent-primary" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-white border border-black/10 rounded-xl py-4 px-5 text-sm font-mono text-black focus:outline-none focus:border-[#00E5A0]/50 transition-colors placeholder:text-black/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-card-primary border border-main-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
                                     const box = document.getElementById('spy-result');
                                     if (box) {
@@ -1818,56 +1637,56 @@ export default function App() {
                                     }
                                  }} />
                               </div>
-                              <div className="flex flex-col mt-4 bg-[#00E5A0]/5 rounded-xl border border-[#00E5A0]/10 p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-1">Estimated ES Level</div>
-                                 <div className="text-3xl font-mono font-bold text-[#00E5A0] drop-shadow-md" id="spy-result">0.00</div>
+                              <div className="flex flex-col mt-4 bg-accent-surface rounded-xl border border-accent-primary/10 p-5 mt-6">
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated ES Level</div>
+                                 <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="spy-result">0.00</div>
                               </div>
-                              <div className="mt-6 p-4 bg-black/[0.02] border border-black/5 rounded-xl">
+                              <div className="mt-6 p-4 bg-accent-surface border border-accent-primary/10 rounded-xl">
                                  <div className="flex items-center gap-2 mb-2">
-                                    <Cpu size={12} className="text-blue-600" />
-                                    <span className="text-[9px] font-mono font-bold text-blue-600 uppercase tracking-widest leading-none">Macro AI Intel</span>
+                                    <Cpu size={12} className="text-accent-primary" />
+                                    <span className="text-[9px] font-mono font-bold text-accent-primary uppercase tracking-widest leading-none">Macro AI Intel</span>
                                  </div>
-                                 <p className="text-[10px] text-neutral-500 font-sans italic leading-tight">
+                                 <p className="text-[10px] text-main-primary opacity-40 font-sans italic leading-tight">
                                     Carry pricing reflects {conversionRatios['SPY']?.ratio > 10.05 ? 'dividend' : 'risk-free'} skew. Monitor basis for breakout signals.
                                  </p>
                               </div>
                            </div>
                         </div>
 
-                        <div className="relative p-8 bg-white border border-black/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-black overflow-hidden group hover:border-[#F5A623]/30 transition-colors">
-                           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#F5A623]/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                         <div className="relative p-8 bg-card-primary border border-main-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
+                           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-primary/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                            <div className="flex items-center gap-3 mb-2">
-                              <div className="p-2.5 bg-[#F5A623]/10 rounded-xl border border-[#F5A623]/20 shadow-inner"><Calculator size={18} className="text-[#F5A623]" /></div>
-                              <h3 className="text-xl font-bold tracking-tight text-black/90">QQQ → NQ Converter</h3>
+                              <div className="p-2.5 bg-accent-surface rounded-xl border border-accent-primary/20 shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
+                              <h3 className="text-xl font-bold tracking-tight text-main-primary/90">QQQ → NQ Converter</h3>
                            </div>
-                           <p className="text-sm text-black/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
+                           <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
                            
-                           <div className="flex items-center gap-2 mb-6 text-[#00E5A0] text-xs font-medium tracking-wide uppercase">
+                           <div className="flex items-center gap-2 mb-6 text-accent-primary text-xs font-medium tracking-wide uppercase">
                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
                            </div>
 
                            <div className="grid grid-cols-2 gap-4 mb-6">
-                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">QQQ Spot</div>
-                                 <div className="text-2xl font-mono text-black/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
+                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">QQQ Spot</div>
+                                 <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
-                              <div className="p-5 bg-[#f6f6f6] rounded-xl border border-black/[0.03] shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-2">NQ Future</div>
-                                 <div className="text-2xl font-mono text-[#F5A623] drop-shadow-sm">{typeof conversionRatios['QQQ']?.futurePrice === 'number' ? conversionRatios['QQQ']?.futurePrice?.toFixed(2) : '---'}</div>
+                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">NQ Future</div>
+                                 <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios['QQQ']?.futurePrice === 'number' ? conversionRatios['QQQ']?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
                            </div>
 
-                           <div className="p-5 bg-white border border-black/5 rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-black/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
-                              <span className="text-lg font-mono font-bold text-[#F5A623] drop-shadow-[0_0_8px_rgba(245,166,35,0.3)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '---'}</span>
+                           <div className="p-5 bg-card-primary border border-main-primary/50 rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                              <span className="text-sm text-main-primary/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
+                              <span className="text-lg font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '---'}</span>
                            </div>
 
                            <div className="space-y-4">
-                              <div className="flex items-center gap-2 text-sm text-black/80 font-medium tracking-wide">
-                                 <ChevronRight size={16} className="text-[#F5A623]" /> Calculate Level
+                              <div className="flex items-center gap-2 text-sm text-main-primary/80 font-medium tracking-wide">
+                                 <ChevronRight size={16} className="text-accent-primary" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-white border border-black/10 rounded-xl py-4 px-5 text-sm font-mono text-black focus:outline-none focus:border-[#F5A623]/50 transition-colors placeholder:text-black/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-card-primary border border-main-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
                                     const box = document.getElementById('qqq-result');
                                     if (box) {
@@ -1875,16 +1694,16 @@ export default function App() {
                                     }
                                  }} />
                               </div>
-                              <div className="flex flex-col mt-4 bg-[#F5A623]/5 rounded-xl border border-[#F5A623]/10 p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-black/40 mb-1">Estimated NQ Level</div>
-                                 <div className="text-3xl font-mono font-bold text-[#F5A623] drop-shadow-md" id="qqq-result">0.00</div>
+                              <div className="flex flex-col mt-4 bg-accent-surface rounded-xl border border-accent-primary/10 p-5 mt-6">
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated NQ Level</div>
+                                 <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="qqq-result">0.00</div>
                               </div>
-                              <div className="mt-6 p-4 bg-black/[0.02] border border-black/5 rounded-xl">
+                              <div className="mt-6 p-4 bg-accent-surface border border-accent-primary/10 rounded-xl">
                                  <div className="flex items-center gap-2 mb-2">
-                                    <Cpu size={12} className="text-blue-600" />
-                                    <span className="text-[9px] font-mono font-bold text-blue-600 uppercase tracking-widest leading-none">Macro AI Intel</span>
+                                    <Cpu size={12} className="text-accent-primary" />
+                                    <span className="text-[9px] font-mono font-bold text-accent-primary uppercase tracking-widest leading-none">Macro AI Intel</span>
                                  </div>
-                                 <p className="text-[10px] text-neutral-500 font-sans italic leading-tight">
+                                 <p className="text-[10px] text-main-primary opacity-40 font-sans italic leading-tight">
                                     NQ premium expansion often correlates with tech liquidity surges. Watching for AI risk premium divergence.
                                  </p>
                               </div>
@@ -1892,18 +1711,18 @@ export default function App() {
                         </div>
                     </div>
 
-                    <div className="p-0 border border-black/5 bg-[#FAFAFA] text-black rounded-sm overflow-hidden shadow-sm">
-                       <div className="p-6 border-b border-black/5 bg-[#F4F5F7] flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-600 flex items-center gap-2">
-                             <Target size={14} className="text-emerald-600" />
+                    <div className="p-0 border border-main-primary bg-card-primary text-main-primary rounded-sm overflow-hidden shadow-sm">
+                       <div className="p-6 border-b border-main-primary/10 bg-main-primary/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-main-primary/80 flex items-center gap-2">
+                             <Target size={14} className="text-brand-emerald" />
                              Chain Decomposition ({activeTicker})
                           </h3>
-                           <div className="relative flex items-center bg-white border border-black/10 rounded overflow-hidden group focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/5 transition-all h-8 w-48 shadow-sm">
-                              <Search size={12} className="text-neutral-400 absolute left-2 group-focus-within:text-blue-500 transition-colors" />
+                           <div className="relative flex items-center bg-surface-primary border border-main-primary rounded overflow-hidden group focus-within:border-accent-primary/50 focus-within:ring-4 focus-within:ring-accent-primary/5 transition-all h-8 w-48 shadow-sm">
+                              <Search size={12} className="text-main-tertiary absolute left-2 group-focus-within:text-accent-primary transition-colors" />
                               <input 
                                 type="text" 
                                 placeholder="SEARCH TICKER..." 
-                               className="w-full h-full pl-8 pr-2 py-1 text-[10px] font-bold bg-transparent border-none outline-none text-black placeholder:text-neutral-400 font-mono tracking-widest uppercase"
+                               className="w-full h-full pl-8 pr-2 py-1 text-[10px] font-bold bg-transparent border-none outline-none text-main-primary placeholder:text-main-tertiary/40 font-mono tracking-widest uppercase"
                                onKeyDown={(e) => {
                                  if (e.key === 'Enter') {
                                    const val = e.currentTarget.value.trim().toUpperCase();
@@ -1916,8 +1735,8 @@ export default function App() {
                        </div>
                        <div className="overflow-x-auto">
                           <table className="w-full text-right font-mono text-[11px]">
-                             <thead className="bg-[#F8F9FA] text-[10px] uppercase tracking-wider text-neutral-500">
-                               <tr className="border-b border-black/5">
+                             <thead className="bg-main-primary/5 text-[10px] uppercase tracking-wider text-main-tertiary">
+                               <tr className="border-b border-main-primary/10">
                                  <th className="py-4 px-6 text-left font-semibold">Strike</th>
                                  <th className="py-4 px-6 font-semibold">{activeTicker === 'SPY' ? 'ES' : activeTicker === 'QQQ' ? 'NQ1!' : 'FUT'}</th>
                                  <th className="py-4 px-6 font-semibold">Net GEX</th>
@@ -1951,12 +1770,12 @@ export default function App() {
                                     
                                     const marketPrice = parseFloat(opt.mark) || parseFloat(opt.last_trade_price) || 0;
                                     let iv = parseFloat(opt.iv) || 0;
-                                    const calcIv = implied_vol(marketPrice, spot, strike, t, RISK_FREE_RATE, div, type as "C" | "P");
-                                    if (!isNaN(calcIv) && calcIv > 0) iv = calcIv;
+                                    const calcIv = impliedVol(marketPrice, spot, strike, t, RISK_FREE_RATE, div, type as "C" | "P");
+                                    if (calcIv !== null && calcIv > 0) iv = calcIv;
                                     
-                                    const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bs_gamma(spot, strike, t, RISK_FREE_RATE, div, iv);
-                                    const delta = opt.delta !== undefined && opt.delta !== null ? parseFloat(opt.delta) : bs_delta(spot, strike, t, RISK_FREE_RATE, div, iv, type as "C" | "P");
-                                    const vega = opt.vega !== undefined && opt.vega !== null ? parseFloat(opt.vega) : bs_vega(spot, strike, t, RISK_FREE_RATE, div, iv);
+                                    const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bsGamma(spot, strike, t, RISK_FREE_RATE, div, iv);
+                                    const delta = opt.delta !== undefined && opt.delta !== null ? parseFloat(opt.delta) : bsDelta(spot, strike, t, RISK_FREE_RATE, div, iv, type as "C" | "P");
+                                    const vega = opt.vega !== undefined && opt.vega !== null ? parseFloat(opt.vega) : bsVega(spot, strike, t, RISK_FREE_RATE, div, iv);
 
                                     const gex = calculateGEX(gamma, oi, spot) || 0; // Return in Billions
                                     
@@ -2010,24 +1829,24 @@ export default function App() {
                                    };
 
                                    return (
-                                     <tr key={strike} className={`border-b border-black/5 last:border-0 hover:bg-black/[0.02] transition-colors ${isClosest ? 'bg-indigo-50/50' : (i % 2 === 0 ? 'bg-white' : 'bg-[#FAFAFA]')}`}>
-                                       <td className={`py-3 px-6 text-left font-bold ${isClosest ? 'text-indigo-600' : 'text-neutral-900'}`}>
+                                     <tr key={strike} className={`border-b border-main-primary/10 last:border-0 hover:bg-main-primary/5 transition-colors ${isClosest ? 'bg-accent-primary/10' : (i % 2 === 0 ? 'bg-transparent' : 'bg-main-primary/[0.02]')}`}>
+                                       <td className={`py-3 px-6 text-left font-bold ${isClosest ? 'text-accent-primary' : 'text-main-primary'}`}>
                                           <div className="flex items-center gap-2">
-                                             {isClosest && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>}
+                                             {isClosest && <span className="w-1.5 h-1.5 rounded-full bg-accent-primary shadow-[0_0_8px_var(--accent-glow)]"></span>}
                                              {strike.toFixed(2)}
                                           </div>
                                        </td>
-                                       <td className="py-3 px-6 text-neutral-500">{Math.round(futValue)}</td>
-                                       <td className={`py-3 px-6 font-bold ${data.netGex > 0.00005 ? 'text-emerald-600' : data.netGex < -0.00005 ? 'text-[#FF8DA1]' : 'text-neutral-400'}`}>
+                                       <td className="py-3 px-6 text-main-secondary">{Math.round(futValue)}</td>
+                                       <td className={`py-3 px-6 font-bold ${data.netGex > 0.00005 ? 'text-brand-emerald' : data.netGex < -0.00005 ? 'text-rose-500' : 'text-main-tertiary'}`}>
                                           {formatGex(data.netGex, false, '-0.0000')}
                                        </td>
-                                       <td className={`py-3 px-6 ${data.callGex > 0.00005 ? 'text-emerald-500' : 'text-neutral-400'}`}>{formatGex(data.callGex, false, '0.0000')}</td>
-                                       <td className={`py-3 px-6 ${data.putGex < -0.00005 ? 'text-[#FF8DA1]' : 'text-neutral-400'}`}>{formatGex(data.putGex, false, '-0.0000')}</td>
-                                       <td className={`py-3 px-6 font-semibold ${data.netDelta > 0 ? 'text-blue-500' : data.netDelta < 0 ? 'text-orange-500' : 'text-neutral-400'}`}>{data.netDelta === 0 ? '0' : data.netDelta > 0 ? `+${Math.round(data.netDelta).toLocaleString()}` : Math.round(data.netDelta).toLocaleString()}</td>
-                                       <td className={`py-3 px-6 font-semibold ${data.netGamma > 0 ? 'text-purple-500' : data.netGamma < 0 ? 'text-pink-500' : 'text-neutral-400'}`}>{data.netGamma === 0 ? '0' : data.netGamma > 0 ? `+${Math.round(data.netGamma).toLocaleString()}` : Math.round(data.netGamma).toLocaleString()}</td>
-                                       <td className={`py-3 px-6 font-semibold ${data.netVega > 0 ? 'text-teal-500' : data.netVega < 0 ? 'text-amber-500' : 'text-neutral-400'}`}>{data.netVega === 0 ? '0' : data.netVega > 0 ? `+${Math.round(data.netVega).toLocaleString()}` : Math.round(data.netVega).toLocaleString()}</td>
-                                       <td className="py-3 px-6 text-neutral-800 font-semibold">{data.oi}</td>
-                                       <td className="py-3 px-6 text-neutral-500">{(avgIv * 100).toFixed(1)}</td>
+                                       <td className={`py-3 px-6 ${data.callGex > 0.00005 ? 'text-brand-emerald' : 'text-main-tertiary'}`}>{formatGex(data.callGex, false, '0.0000')}</td>
+                                       <td className={`py-3 px-6 ${data.putGex < -0.00005 ? 'text-rose-500' : 'text-main-tertiary'}`}>{formatGex(data.putGex, false, '-0.0000')}</td>
+                                       <td className={`py-3 px-6 font-semibold ${data.netDelta > 0 ? 'text-blue-500' : data.netDelta < 0 ? 'text-orange-500' : 'text-main-tertiary'}`}>{data.netDelta === 0 ? '0' : data.netDelta > 0 ? `+${Math.round(data.netDelta).toLocaleString()}` : Math.round(data.netDelta).toLocaleString()}</td>
+                                       <td className={`py-3 px-6 font-semibold ${data.netGamma > 0 ? 'text-purple-500' : data.netGamma < 0 ? 'text-pink-500' : 'text-main-tertiary'}`}>{data.netGamma === 0 ? '0' : data.netGamma > 0 ? `+${Math.round(data.netGamma).toLocaleString()}` : Math.round(data.netGamma).toLocaleString()}</td>
+                                       <td className={`py-3 px-6 font-semibold ${data.netVega > 0 ? 'text-teal-500' : data.netVega < 0 ? 'text-amber-500' : 'text-main-tertiary'}`}>{data.netVega === 0 ? '0' : data.netVega > 0 ? `+${Math.round(data.netVega).toLocaleString()}` : Math.round(data.netVega).toLocaleString()}</td>
+                                       <td className="py-3 px-6 text-main-primary font-semibold">{data.oi}</td>
+                                       <td className="py-3 px-6 text-main-tertiary">{(avgIv * 100).toFixed(1)}</td>
                                      </tr>
                                    );
                                  });
@@ -2041,21 +1860,21 @@ export default function App() {
 
                 {activeModule === 'vip-journal' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="bg-white border border-black/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black p-8 md:p-10 rounded-2xl relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 p-12 opacity-5 translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-1000 pointer-events-none">
+                    <div className="bg-card-primary border border-main-primary shadow-[0_12px_40px_rgba(0,0,0,0.2)] text-main-primary p-8 md:p-10 rounded-2xl relative overflow-hidden group transition-colors duration-500">
+                      <div className="absolute top-0 right-0 p-12 opacity-5 translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-1000 pointer-events-none text-main-primary">
                         <Book size={240} />
                       </div>
-                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/50 via-teal-500/50 to-cyan-500/50 opacity-50"></div>
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-emerald/50 via-brand-primary/50 to-cyan-500/50 opacity-50"></div>
                       
                       <div className="relative z-10">
                         {/* Module Title & Tabs */}
                         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-8">
                            <div>
-                              <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#64A0E6] mb-2">Trade Analytics</div>
-                              <h2 className="text-4xl font-serif italic text-black">Journal</h2>
-                              <p className="text-black/40 text-xs mt-2">Log institutional executions — equity curve, session stats & alpha metrics</p>
+                              <div className={`text-[10px] font-bold uppercase tracking-[0.3em] ${isDarkTheme ? 'text-brand-emerald' : 'text-blue-600'} mb-2`}>Trade Analytics</div>
+                              <h2 className="text-4xl font-serif italic text-main-primary">Journal</h2>
+                              <p className="opacity-40 text-xs mt-2">Log institutional executions — equity curve, session stats & alpha metrics</p>
                            </div>
-                           <div className="flex bg-neutral-100 border border-black/10 p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
+                           <div className="flex bg-surface-primary border border-main-primary p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
                               {[
                                 { id: 'journal', label: 'Journal', icon: Book },
                                 { id: 'curve', label: 'Equity Curve', icon: TrendingUp },
@@ -2066,7 +1885,7 @@ export default function App() {
                                 <button
                                   key={tab.id}
                                   onClick={() => setJournalSubTab(tab.id as any)}
-                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${journalSubTab === tab.id ? 'bg-[#00E5A0] text-[#0A0B0E] shadow-[0_0_15px_rgba(0,229,160,0.3)]' : 'text-black/40 hover:text-black/80 hover:bg-black/5'}`}
+                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${journalSubTab === tab.id ? 'bg-accent-primary text-app-primary shadow-[0_0_15px_var(--accent-glow)]' : 'text-main-tertiary hover:text-main-secondary hover:bg-surface-hover'}`}
                                 >
                                    <tab.icon size={14} />
                                    <span className="hidden sm:inline">{tab.label}</span>
@@ -2075,23 +1894,24 @@ export default function App() {
                            </div>
                         </div>
 
-                        {/* Quick Stats Grid */}
+                        {/* Quick Stats */}
                         <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
                            {[
                              { label: 'Total Trades', value: journalStats.totalTrades, sub: 'Executions' },
                              { label: 'Win Rate', value: `${journalStats.winRate}%`, sub: 'Accuracy' },
                              { label: 'Avg Win', value: `$${journalStats.avgWin}`, sub: 'Profitability' },
                              { label: 'Avg Loss', value: `$${journalStats.avgLoss}`, sub: 'Risk Control' },
-                             { label: 'Total P&L', value: `$${journalStats.totalPnl.toLocaleString()}`, sub: 'Net Bottom Line', color: journalStats.totalPnl >= 0 ? 'text-[#00E5A0]' : 'text-rose-500' },
-                             { label: 'Streak', value: journalStats.maxStreak, sub: 'Consistency', color: 'text-amber-400' }
+                             { label: 'Total P&L', value: `$${journalStats.totalPnl.toLocaleString()}`, sub: 'Net Bottom Line', color: journalStats.totalPnl >= 0 ? 'text-brand-emerald' : 'text-rose-500' },
+                             { label: 'Streak', value: journalStats.maxStreak, sub: 'Consistency', color: 'text-brand-amber' }
                            ].map(stat => (
-                             <div key={stat.label} className="p-5 bg-white/[0.02] border border-black/5 rounded-xl text-center hover:bg-white/[0.04] transition-colors">
-                                <div className="text-[9px] font-bold uppercase tracking-widest text-[#64A0E6]/70 mb-2">{stat.label}</div>
-                                <div className={`text-2xl font-mono font-bold ${stat.color || 'text-black'}`}>{stat.value}</div>
-                                <div className="text-[9px] text-black/20 font-bold uppercase mt-1">{stat.sub}</div>
+                             <div key={stat.label} className="p-5 bg-surface-primary border border-main-primary rounded-xl text-center hover:bg-surface-hover transition-colors">
+                                <div className={`text-[9px] font-bold uppercase tracking-widest text-accent-primary/70 mb-2`}>{stat.label}</div>
+                                <div className={`text-2xl font-mono font-bold ${stat.color || 'text-main-primary'}`}>{stat.value}</div>
+                                <div className="text-[9px] text-main-tertiary font-bold uppercase mt-1">{stat.sub}</div>
                              </div>
                            ))}
                         </div>
+             </div>
 
                         {/* Tab Content */}
                         <AnimatePresence mode="wait">
@@ -2099,69 +1919,69 @@ export default function App() {
                               <motion.div key="journal" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-8">
                                  {/* LOG A TRADE SECTION */}
                              <div>
-                                <h3 className="text-[10px] font-bold uppercase tracking-widest text-black/40 mb-4 border-b border-black/5 pb-2">Log A Trade</h3>
+                                <h3 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4 border-b border-main-primary pb-2">Log A Trade</h3>
                                 
                                 <div className="space-y-4">
                                    {/* Drag & Drop Area */}
-                                   <div className="relative border-2 border-dashed border-black/10 rounded-lg p-6 bg-white/[0.02] hover:bg-white/[0.04] transition-colors flex items-center gap-4 cursor-pointer">
+                                   <div className="relative border-2 border-dashed border-main-primary/20 rounded-lg p-6 bg-accent-surface hover:bg-accent-primary/5 transition-colors flex items-center gap-4 cursor-pointer">
                                       <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                      <div className="w-10 h-10 rounded bg-black/5 flex items-center justify-center border border-black/10">
-                                         <Plus size={16} className="text-black/40" />
+                                      <div className="w-10 h-10 rounded bg-accent-surface flex items-center justify-center border border-main-primary/30 text-accent-primary">
+                                         <Plus size={16} />
                                       </div>
                                       <div>
-                                         <p className="text-sm font-bold text-black/80">Paste or drop a position screenshot <span className="font-normal text-black/30 italic">— stored with trade</span></p>
-                                         <p className="text-[10px] text-black/30 truncate mt-1">Ctrl+V to paste &middot; drag & drop image &middot; future: AI auto-fill</p>
+                                         <p className="text-sm font-bold text-main-primary">Paste or drop a position screenshot <span className="font-normal opacity-40 italic">— stored with trade</span></p>
+                                         <p className="text-[10px] text-main-primary opacity-30 truncate mt-1">Ctrl+V to paste &middot; drag & drop image &middot; future: AI auto-fill</p>
                                       </div>
                                    </div>
 
                                    {/* Fields Row */}
                                    <div className="grid grid-cols-2 md:grid-cols-11 gap-2">
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Date</div>
-                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-transparent border border-black/10 rounded grow py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Date</div>
+                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-accent-surface border border-main-primary rounded grow py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Ticker</div>
-                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Ticker</div>
+                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Direction</div>
-                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30 appearance-none">
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Direction</div>
+                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50 appearance-none">
                                             <option value="long">Long</option>
                                             <option value="short">Short</option>
                                          </select>
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Entry Price</div>
-                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Entry Price</div>
+                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Stop Loss</div>
-                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Stop Loss</div>
+                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Exit Price</div>
-                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Exit Price</div>
+                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Contracts</div>
-                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Contracts</div>
+                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">MAE</div>
-                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">MAE</div>
+                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">MFE</div>
-                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">MFE</div>
+                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Setup Grade</div>
-                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Setup Grade</div>
+                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">Outcome</div>
-                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30 appearance-none">
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Outcome</div>
+                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50 appearance-none">
                                             <option value="">-</option>
                                             <option value="win">Win</option>
                                             <option value="loss">Loss</option>
@@ -2169,55 +1989,53 @@ export default function App() {
                                          </select>
                                       </div>
                                       <div className="space-y-1">
-                                         <div className="text-[9px] uppercase tracking-widest text-black/40">P&L ($)</div>
-                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-transparent border border-black/10 rounded py-2 px-2 text-xs font-mono text-black outline-none focus:border-black/30" />
+                                         <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">P&L ($)</div>
+                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                    </div>
 
                                    {/* Notes */}
                                    <div className="space-y-1 mt-4">
-                                      <div className="text-[9px] uppercase tracking-widest text-black/40">Notes</div>
+                                      <div className="text-[9px] uppercase tracking-widest text-main-tertiary">Notes</div>
                                       <textarea 
                                          value={tradeNotes} 
                                          onChange={(e) => setTradeNotes(e.target.value)} 
                                          placeholder="What did you see? What worked well? What would you do differently?"
-                                         className="w-full bg-transparent border border-black/10 rounded py-3 px-3 text-xs font-mono text-black outline-none focus:border-black/30 min-h-[80px]"
+                                         className="w-full bg-transparent border border-main-primary rounded py-3 px-3 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/30 min-h-[80px]"
                                       />
                                    </div>
 
                                    {/* Buttons */}
                                    <div className="flex items-center justify-between mt-4">
                                       <div className="flex gap-4">
-                                         <button onClick={logTrade} className="bg-[#00E5A0] hover:bg-[#00E5A0]/80 text-[#0A0B0E] font-bold text-[11px] uppercase tracking-wider py-2 px-6 rounded transition-colors">
+                                         <button onClick={logTrade} className="bg-main-primary hover:opacity-90 text-app-primary font-bold text-[11px] uppercase tracking-wider py-2 px-6 rounded transition-colors">
                                            Add Trade
                                          </button>
-                                         <button onClick={exportCSV} className="bg-transparent border border-black/10 text-black/60 hover:text-black hover:border-black/30 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
+                                         <button onClick={exportCSV} className="bg-transparent border border-main-primary/20 text-main-secondary hover:text-main-primary hover:border-main-primary/40 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
                                             Export CSV
                                          </button>
                                       </div>
-                                      <button onClick={clearAllTrades} className="bg-transparent border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
+                                      <button onClick={clearAllTrades} className="bg-transparent border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
                                          Clear All
                                       </button>
                                    </div>
                                 </div>
-                             </div>
-
-                             {/* TRADE LOG */}
-                             <div className="mt-8 border border-black/5 rounded-lg bg-white">
-                                <div className="flex items-center justify-between p-4 border-b border-black/5 bg-black/5">
-                                   <div className="text-[10px] font-bold uppercase tracking-widest text-black/40">Trade Log</div>
+                                             {/* TRADE LOG */}
+                             <div className="mt-8 border border-main-primary rounded-lg bg-card-primary">
+                                <div className="flex items-center justify-between p-4 border-b border-main-primary bg-surface-primary">
+                                   <div className="text-[10px] font-bold uppercase tracking-widest text-main-tertiary">Trade Log</div>
                                    <div className="flex gap-6">
-                                      <button className="text-[#00E5A0] border border-[#00E5A0]/30 rounded px-3 py-1 text-[10px] uppercase font-bold bg-[#00E5A0]/5">All</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">Today</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">This Week</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">This Month</button>
-                                      <button className="text-black/40 hover:text-black/80 text-[10px] uppercase font-bold">Pick Date</button>
+                                      <button className="text-accent-primary border border-accent-primary/30 rounded px-3 py-1 text-[10px] uppercase font-bold bg-accent-surface">All</button>
+                                      <button className="text-main-tertiary hover:text-main-primary text-[10px] uppercase font-bold">Today</button>
+                                      <button className="text-main-tertiary hover:text-main-primary text-[10px] uppercase font-bold">This Week</button>
+                                      <button className="text-main-tertiary hover:text-main-primary text-[10px] uppercase font-bold">This Month</button>
+                                      <button className="text-main-tertiary hover:text-main-primary text-[10px] uppercase font-bold">Pick Date</button>
                                    </div>
                                 </div>
                                 <div className="overflow-x-auto">
                                    <table className="w-full text-left font-mono">
                                       <thead>
-                                         <tr className="bg-black/20 text-[9px] uppercase tracking-widest text-black/30">
+                                         <tr className="bg-surface-primary text-[9px] uppercase tracking-widest text-main-tertiary">
                                             <th className="px-4 py-3 font-normal">Date</th>
                                             <th className="px-4 py-3 font-normal">TKR</th>
                                             <th className="px-4 py-3 font-normal">Dir</th>
@@ -2227,11 +2045,11 @@ export default function App() {
                                             <th className="px-4 py-3 font-normal">CTS</th>
                                             <th className="px-4 py-3 font-normal relative group cursor-help">
                                                Grade
-                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-neutral-100 border border-black/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                                                  <div className="text-[10px] space-y-1 text-black/70 normal-case tracking-normal">
+                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-card-primary border border-main-primary rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                                                  <div className="text-[10px] space-y-1 text-main-secondary normal-case tracking-normal">
                                                      <div className="flex justify-between"><span className="text-[#00E5A0] font-bold">A+</span><span>Perfect Execution</span></div>
-                                                     <div className="flex justify-between"><span className="text-black font-bold">A</span><span>Good Setup</span></div>
-                                                     <div className="flex justify-between"><span className="text-black/50 font-bold">B</span><span>Mediocre</span></div>
+                                                     <div className="flex justify-between"><span className="text-main-primary font-bold">A</span><span>Good Setup</span></div>
+                                                     <div className="flex justify-between"><span className="text-main-tertiary font-bold">B</span><span>Mediocre</span></div>
                                                      <div className="flex justify-between"><span className="text-rose-500 font-bold">C</span><span>Poor Context</span></div>
                                                      <div className="flex justify-between"><span className="text-rose-600 font-bold">D</span><span>Rule Break</span></div>
                                                   </div>
@@ -2239,11 +2057,11 @@ export default function App() {
                                             </th>
                                             <th className="px-4 py-3 font-normal relative group cursor-help">
                                                Outcome
-                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-3 bg-neutral-100 border border-black/10 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                                                  <div className="text-[10px] space-y-1 text-black/70 normal-case tracking-normal">
+                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 p-3 bg-card-primary border border-main-primary rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                                                  <div className="text-[10px] space-y-1 text-main-secondary normal-case tracking-normal">
                                                      <div className="flex justify-between"><span className="text-[#00E5A0] font-bold">Win</span><span>Target hit</span></div>
                                                      <div className="flex justify-between"><span className="text-rose-500 font-bold">Loss</span><span>Stop-out</span></div>
-                                                     <div className="flex justify-between"><span className="text-black/50 font-bold">BE</span><span>Break Even</span></div>
+                                                     <div className="flex justify-between"><span className="text-main-tertiary font-bold">BE</span><span>Break Even</span></div>
                                                   </div>
                                                </div>
                                             </th>
@@ -2252,16 +2070,16 @@ export default function App() {
                                             <th className="px-4 py-3 font-normal">Notes</th>
                                          </tr>
                                       </thead>
-                                      <tbody className="divide-y divide-white/5 text-[11px] text-black/70">
+                                      <tbody className="divide-y border-main-primary/10 text-[11px] text-main-secondary">
                                          {Object.entries(journalData).slice(-15).reverse().map(([date, day]: [string, any]) => (
                                             day.trades?.map((t: any, i: number) => {
                                                const rr = (parseFloat(t.entry) && parseFloat(t.stop) && parseFloat(t.exit)) 
                                                  ? Math.abs((parseFloat(t.exit) - parseFloat(t.entry)) / (parseFloat(t.entry) - parseFloat(t.stop))).toFixed(1)
                                                  : '-';
                                                return (
-                                               <tr key={`${date}-${i}`} className="hover:bg-white/[0.02] transition-colors group">
+                                               <tr key={`${date}-${i}`} className="hover:bg-surface-primary transition-colors group">
                                                   <td className="px-4 py-3 opacity-50 group-hover:opacity-100 transition-opacity whitespace-nowrap">{date}</td>
-                                                  <td className="px-4 py-3 font-bold text-black">{t.sym}</td>
+                                                  <td className="px-4 py-3 font-bold text-main-primary">{t.sym}</td>
                                                   <td className="px-4 py-3 capitalize">{t.dir}</td>
                                                   <td className="px-4 py-3">{t.entry || '-'}</td>
                                                   <td className="px-4 py-3">{t.stop || '-'}</td>
@@ -2271,7 +2089,7 @@ export default function App() {
                                                   <td className="px-4 py-3 capitalize">{t.outcome || '-'}</td>
                                                   <td className="px-4 py-3">{rr}</td>
                                                   <td className="px-4 py-3">
-                                                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${t.pnl > 0 ? 'bg-[#00E5A0]/10 text-[#00E5A0]' : t.pnl < 0 ? 'bg-rose-500/10 text-rose-500' : 'bg-black/5 text-black/70'}`}>
+                                                     <span className={`px-2 py-1 rounded text-[10px] font-bold ${t.pnl > 0 ? 'bg-[#00E5A0]/10 text-[#00E5A0]' : t.pnl < 0 ? 'bg-rose-500/10 text-rose-500' : 'bg-surface-primary text-main-secondary'}`}>
                                                         {t.pnl === 0 ? '$0' : t.pnl > 0 ? `+$${t.pnl}` : `-$${Math.abs(t.pnl)}`}
                                                      </span>
                                                   </td>
@@ -2284,8 +2102,8 @@ export default function App() {
                                            <tr>
                                               <td colSpan={12} className="px-6 py-20 text-center">
                                                  <div className="flex flex-col items-center opacity-20">
-                                                    <p className="text-sm font-mono italic">No trades match this filter</p>
-                                                    <p className="text-[10px] mt-4">Trades saved locally in your browser</p>
+                                                    <p className="text-sm font-mono italic text-main-primary">No trades match this filter</p>
+                                                    <p className="text-[10px] mt-4 text-main-tertiary">Trades saved locally in your browser</p>
                                                  </div>
                                               </td>
                                            </tr>
@@ -2293,7 +2111,7 @@ export default function App() {
                                       </tbody>
                                    </table>
                                 </div>
-                             </div>
+                             </div>                </div>
                           </motion.div>
                        )}
 
@@ -2307,7 +2125,7 @@ export default function App() {
                                    </div>
                                    <div className="text-right">
                                       <div className="text-[10px] font-bold uppercase tracking-widest text-[#00E5A0]/50">Total Net Balance</div>
-                                      <div className="text-2xl font-bold font-mono text-black">${journalStats.totalPnl.toLocaleString()}</div>
+                                      <div className="text-2xl font-bold font-mono text-main-primary">${journalStats.totalPnl.toLocaleString()}</div>
                                    </div>
                                 </div>
                                 <div className="h-[250px]">
@@ -2327,8 +2145,8 @@ export default function App() {
                                               if (active && payload && payload.length) {
                                                 const data = payload[0].payload;
                                                 return (
-                                                  <div className="bg-white border border-black/10 p-3 rounded-lg shadow-xl shadow-black/50">
-                                                    <div className="text-[10px] text-black/50 uppercase tracking-widest mb-1">{data.date}</div>
+                                                  <div className="bg-card-primary border border-main-primary p-3 rounded-lg shadow-xl shadow-black/50">
+                                                    <div className="text-[10px] text-main-tertiary uppercase tracking-widest mb-1">{data.date}</div>
                                                     <div className="text-[#00E5A0] font-mono font-bold text-[15px] mb-1">${data.balance.toLocaleString()} Total</div>
                                                     <div className={`text-xs font-mono font-bold ${data.pnl >= 0 ? 'text-[#00E5A0]' : 'text-rose-500'}`}>
                                                       {data.pnl >= 0 ? '+' : '-'}${Math.abs(data.pnl).toLocaleString()} Day P&L
@@ -2353,7 +2171,7 @@ export default function App() {
                                    </div>
                                    <div className="text-right">
                                       <div className="text-[10px] font-bold uppercase tracking-widest text-[#64A0E6]/50">Win Rate</div>
-                                      <div className="text-2xl font-bold font-mono text-black">{journalStats.winRate}%</div>
+                                      <div className="text-2xl font-bold font-mono text-main-primary">{journalStats.winRate}%</div>
                                    </div>
                                 </div>
                                 <div className="h-[250px]">
@@ -2383,13 +2201,13 @@ export default function App() {
                        )}
 
                        {journalSubTab === 'calendar' && (
-                          <motion.div key="calendar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white border border-black/10 rounded-2xl overflow-hidden shadow-2xl">
-                            <div className="p-6 border-b border-black/10 flex items-center justify-between bg-black/20">
+                          <motion.div key="calendar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-card-primary border border-main-primary rounded-2xl overflow-hidden shadow-2xl">
+                            <div className="p-6 border-b border-main-primary flex items-center justify-between bg-surface-primary">
                               <div className="flex items-center gap-4">
-                                 <div className="p-2 bg-black/5 rounded-lg border border-black/10">
-                                    <Calendar size={18} className="text-[#64A0E6]" />
+                                 <div className="p-2 bg-card-primary rounded-lg border border-main-primary">
+                                    <Calendar size={18} className="text-accent-primary" />
                                  </div>
-                                 <h2 className="text-xl font-serif italic text-black/90">
+                                 <h2 className="text-xl font-serif italic text-main-primary">
                                    {new Date(journalYear, journalMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}
                                  </h2>
                               </div>
@@ -2397,21 +2215,21 @@ export default function App() {
                                  <button onClick={() => {
                                    if (journalMonth === 0) { setJournalMonth(11); setJournalYear(journalYear - 1); }
                                    else setJournalMonth(journalMonth - 1);
-                                 }} className="p-2 hover:bg-black/5 border border-black/10 rounded-lg text-black/60 transition-colors">
+                                 }} className="p-2 hover:bg-surface-hover border border-main-primary rounded-lg text-main-secondary transition-colors">
                                    <ChevronRight size={18} className="rotate-180" />
                                  </button>
                                  <button onClick={() => {
                                    if (journalMonth === 11) { setJournalMonth(0); setJournalYear(journalYear + 1); }
                                    else setJournalMonth(journalMonth + 1);
-                                 }} className="p-2 hover:bg-black/5 border border-black/10 rounded-lg text-black/60 transition-colors">
+                                 }} className="p-2 hover:bg-surface-hover border border-main-primary rounded-lg text-main-secondary transition-colors">
                                    <ChevronRight size={18} />
                                  </button>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-5 border-b border-black/10 bg-black/5">
+                            <div className="grid grid-cols-5 border-b border-main-primary bg-surface-primary">
                               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(day => (
-                                <div key={day} className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-black/30 text-center border-r border-black/5 last:border-0">{day}</div>
+                                <div key={day} className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-main-tertiary text-center border-r border-main-primary last:border-0">{day}</div>
                               ))}
                             </div>
 
@@ -2440,11 +2258,11 @@ export default function App() {
                                            setJournalSubTab('journal');
                                          }
                                        }}
-                                       className={`min-h-[120px] p-4 border-r border-b border-black/5 relative group cursor-pointer transition-all ${
-                                         !isThisMonth ? 'opacity-10 pointer-events-none' : 'hover:bg-white/[0.02]'
-                                       } ${isToday ? 'bg-black/[0.03]' : ''}`}
+                                       className={`min-h-[120px] p-4 border-r border-b border-main-primary relative group cursor-pointer transition-all ${
+                                         !isThisMonth ? 'opacity-10 pointer-events-none' : 'hover:bg-surface-hover'
+                                       } ${isToday ? 'bg-accent-primary/5' : ''}`}
                                      >
-                                       <div className={`text-[11px] font-mono font-bold mb-2 ${isToday ? 'text-[#64A0E6]' : 'text-black/40'}`}>
+                                       <div className={`text-[11px] font-mono font-bold mb-2 ${isToday ? 'text-accent-primary' : 'text-main-tertiary'}`}>
                                          {current.getDate()}
                                        </div>
                                        
@@ -2543,21 +2361,20 @@ export default function App() {
                           </motion.div>
                        )}
                     </AnimatePresence>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
+                  </div>
+                </motion.div>
+              )}
 
                 {activeModule === 'vip-alpha' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="bg-white border border-black/10 shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-black pb-12 pr-[15px] pl-[19px] pt-10 rounded-2xl relative overflow-hidden group">
+                    <div className="bg-card-primary border border-main-primary shadow-[0_12px_40px_rgba(0,0,0,0.4)] text-main-primary pb-12 pr-[15px] pl-[19px] pt-10 rounded-2xl relative overflow-hidden group">
                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/80 to-transparent opacity-50">
-                         <div className="absolute top-0 left-0 h-full w-24 bg-white/80 animate-[ping_3s_ease-in-out_infinite] blur-[2px]"></div>
+                         <div className="absolute top-0 left-0 h-full w-24 bg-card-primary/80 animate-[ping_3s_ease-in-out_infinite] blur-[2px]"></div>
                        </div>
                          <div className="flex flex-col gap-6 w-full">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-black/5 pb-8">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-main-primary pb-8">
                             <div>
-                              <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-black/90 title-elegant">Alpha Intelligence <span className="text-amber-500 font-sans not-italic font-black text-sm tracking-[0.3em] uppercase align-middle ml-2">Internal News</span></h2>
+                              <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-main-primary title-elegant">Alpha Intelligence <span className="text-amber-500 font-sans not-italic font-black text-sm tracking-[0.3em] uppercase align-middle ml-2">Internal News</span></h2>
                               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
                             </div>
                             
@@ -2566,7 +2383,7 @@ export default function App() {
                                 <select
                                   value={newsSentimentFilter}
                                   onChange={e => setNewsSentimentFilter(e.target.value)}
-                                  className="appearance-none bg-black/5 border border-black/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 hover:text-black transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                  className="appearance-none bg-surface-primary border border-main-primary hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-main-secondary hover:text-main-primary transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
                                 >
                                   <option value="ALL">ALL SENTIMENTS</option>
                                   <option value="Positive">POSITIVE ONLY</option>
@@ -2574,7 +2391,7 @@ export default function App() {
                                   <option value="Negative">NEGATIVE ONLY</option>
                                 </select>
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                  <Activity size={14} className={newsSentimentFilter === 'ALL' ? 'text-black/30' : 'text-amber-500'} />
+                                  <Activity size={14} className={newsSentimentFilter === 'ALL' ? 'text-main-tertiary' : 'text-amber-500'} />
                                 </div>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                                   <ChevronDown size={14} />
@@ -2585,14 +2402,14 @@ export default function App() {
                                 <select
                                   value={newsDateFilter}
                                   onChange={e => setNewsDateFilter(e.target.value)}
-                                  className="appearance-none bg-black/5 border border-black/10 hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-black/70 hover:text-black transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                                  className="appearance-none bg-surface-primary border border-main-primary hover:border-amber-500/30 rounded-lg pl-10 pr-10 py-2.5 text-[10px] font-bold uppercase tracking-widest text-main-secondary hover:text-main-primary transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/20"
                                 >
                                   <option value="ALL">ALL TIME</option>
                                   <option value="TODAY">LAST 24H</option>
                                   <option value="OLDER">OLDER THAN 24H</option>
                                 </select>
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                  <Calendar size={14} className={newsDateFilter === 'ALL' ? 'text-black/30' : 'text-amber-500'} />
+                                  <Calendar size={14} className={newsDateFilter === 'ALL' ? 'text-main-tertiary' : 'text-amber-500'} />
                                 </div>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                                   <ChevronDown size={14} />
@@ -2601,9 +2418,9 @@ export default function App() {
 
                               <button 
                                 onClick={() => fetchNews(true)}
-                                className={`flex items-center justify-center p-2.5 rounded-lg border transition-all ${newsLoading ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/5 border-black/10 hover:border-amber-500/40 hover:bg-neutral-900'}`}
+                                className={`flex items-center justify-center p-2.5 rounded-lg border transition-all ${newsLoading ? 'bg-amber-500/10 border-amber-500/30' : 'bg-surface-primary border-main-primary hover:border-amber-500/40 hover:bg-surface-hover'}`}
                               >
-                                <RefreshCcw size={16} className={`${newsLoading ? 'text-amber-500 animate-spin' : 'text-black/40 group-hover:text-amber-500'}`} />
+                                <RefreshCcw size={16} className={`${newsLoading ? 'text-amber-500 animate-spin' : 'text-main-tertiary group-hover:text-amber-500'}`} />
                               </button>
                             </div>
                           </div>
@@ -2611,7 +2428,7 @@ export default function App() {
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-black/30">Intelligence Sources</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-main-tertiary">Intelligence Sources</span>
                                 {newsSourceFilter.length > 0 && (
                                   <button 
                                     onClick={() => setNewsSourceFilter([])}
@@ -2621,7 +2438,7 @@ export default function App() {
                                   </button>
                                 )}
                               </div>
-                              <span className="text-[9px] font-mono text-black/20 uppercase">
+                              <span className="text-[9px] font-mono text-main-tertiary uppercase">
                                 {newsSourceFilter.length === 0 ? 'Showing All' : `${newsSourceFilter.length} Active Filters`}
                               </span>
                             </div>
@@ -2642,11 +2459,11 @@ export default function App() {
                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-mono border transition-all duration-200 ${
                                       isActive 
                                         ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.05)]' 
-                                        : 'bg-black/5 border-black/5 text-black/40 hover:border-black/20 hover:text-black/80'
+                                        : 'bg-surface-primary border-main-primary text-main-tertiary hover:border-main-strong hover:text-main-primary'
                                     }`}
                                   >
                                     <span>{source}</span>
-                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-black/5'}`}></span>
+                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-main-tertiary/10'}`}></span>
                                     <span className={isActive ? 'text-amber-400 font-bold' : 'text-amber-500/60'}>
                                       {sourceCounts[source] || 0}
                                     </span>
@@ -2655,13 +2472,11 @@ export default function App() {
                               })}
                             </div>
                           </div>
-                        </div>
-
-                        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[750px] overflow-y-auto pr-2 custom-scrollbar">
+                                   <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[750px] overflow-y-auto pr-2 custom-scrollbar">
                         {newsError ? (
-                           <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-20 px-6 bg-rose-50/50 border border-rose-100 rounded-xl">
+                           <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-20 px-6 bg-rose-500/5 border border-rose-500/20 rounded-xl">
                               <div className="text-rose-500 font-mono text-sm mb-2 font-bold uppercase tracking-widest">RELAY INTERRUPTED</div>
-                              <div className="text-neutral-500 text-xs font-mono">{newsError}</div>
+                              <div className="text-main-tertiary text-xs font-mono">{newsError}</div>
                               <button 
                                 onClick={() => fetchNews(true)}
                                 className="mt-4 px-4 py-2 bg-rose-500 text-white text-[10px] font-bold uppercase tracking-widest rounded hover:bg-rose-600 transition-colors"
@@ -2671,31 +2486,31 @@ export default function App() {
                            </div>
                         ) : newsLoading && news.length === 0 ? (
                           Array.from({ length: 6 }).map((_, i) => (
-                            <div key={i} className="flex flex-col h-full p-6 bg-white border border-black/5 rounded-xl animate-pulse shadow-sm min-h-[220px]">
-                              <div className="flex items-center justify-between gap-3 mb-5 border-b border-black/5 pb-4">
-                                <div className="h-2.5 w-16 bg-black/5 rounded-full"></div>
-                                <div className="h-2.5 w-12 bg-black/5 rounded-full"></div>
+                            <div key={i} className="flex flex-col h-full p-6 bg-card-primary border border-main-primary rounded-xl animate-pulse shadow-sm min-h-[220px]">
+                              <div className="flex items-center justify-between gap-3 mb-5 border-b border-main-primary pb-4">
+                                <div className="h-2.5 w-16 bg-main-tertiary/10 rounded-full"></div>
+                                <div className="h-2.5 w-12 bg-main-tertiary/10 rounded-full"></div>
                               </div>
                               <div className="space-y-2 mb-4">
-                                <div className="h-4 w-full bg-black/5 rounded"></div>
-                                <div className="h-4 w-4/5 bg-black/5 rounded"></div>
+                                <div className="h-4 w-full bg-main-tertiary/10 rounded"></div>
+                                <div className="h-4 w-4/5 bg-main-tertiary/10 rounded"></div>
                               </div>
                               <div className="space-y-1.5 mb-6">
-                                <div className="h-2 w-full bg-black/5 rounded-full"></div>
-                                <div className="h-2 w-full bg-black/5 rounded-full"></div>
-                                <div className="h-2 w-2/3 bg-black/5 rounded-full"></div>
+                                <div className="h-2 w-full bg-main-tertiary/10 rounded-full"></div>
+                                <div className="h-2 w-full bg-main-tertiary/10 rounded-full"></div>
+                                <div className="h-2 w-2/3 bg-main-tertiary/10 rounded-full"></div>
                               </div>
                               <div className="mt-auto flex items-center justify-between">
                                 <div className="flex gap-1.5">
-                                  <div className="h-4 w-8 bg-black/5 rounded-sm"></div>
-                                  <div className="h-4 w-8 bg-black/5 rounded-sm"></div>
+                                  <div className="h-4 w-8 bg-main-tertiary/10 rounded-sm"></div>
+                                  <div className="h-4 w-8 bg-main-tertiary/10 rounded-sm"></div>
                                 </div>
-                                <div className="h-3 w-16 bg-black/5 rounded-full"></div>
+                                <div className="h-3 w-16 bg-main-tertiary/10 rounded-full"></div>
                               </div>
                             </div>
                           ))
                         ) : filteredNews.length === 0 && !newsLoading ? (
-                           <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-12 opacity-40 italic font-mono text-sm">NO INTELLIGENCE FOUND MATCHING CRITERIA.</div>
+                           <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-12 opacity-40 italic font-mono text-sm text-main-primary">NO INTELLIGENCE FOUND MATCHING CRITERIA.</div>
                         ) : (
                           filteredNews.map((item, idx) => {
                             const desc = item.ai_description || item.description || `AI Summary: Initial flow analysis indicates institutional activity surrounding "${item.title}". Volatility markers from ${getDisplaySource(item.source)} suggest market makers are adjusting positions. Further details and market impacts are being processed by our models.`;
@@ -2703,42 +2518,40 @@ export default function App() {
                             const tickers = Array.isArray(item.tickers) && item.tickers.length > 0 ? item.tickers : getAffectedTickers(item.title, desc);
                             
                             const getSentimentStyle = (s: string) => {
-                                if (s === 'Positive') return 'text-emerald-400';
-                                if (s === 'Negative') return 'text-red-400';
-                                return 'text-neutral-400';
+                                if (s === 'Positive') return 'text-emerald-500';
+                                if (s === 'Negative') return 'text-rose-500';
+                                return 'text-main-tertiary';
                             };
-
-                            const SentimentIcon = sentiment === 'Positive' ? ArrowUpRight : sentiment === 'Negative' ? ArrowDownRight : Minus;
 
                             return (
                             <div 
                               key={idx} 
                               onClick={() => setSelectedNews({...item, displayDesc: desc, displayTickers: tickers, displaySentiment: sentiment})}
-                              className="flex flex-col h-full p-6 bg-white border border-black/5 rounded-xl hover:border-amber-500/40 hover:bg-neutral-100 hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
+                              className="flex flex-col h-full p-6 bg-card-primary border border-main-primary rounded-xl hover:border-amber-500/40 hover:bg-surface-primary hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
                             >
                               <div className="absolute top-0 right-0 p-8 opacity-0 group-hover/news:opacity-[0.03] transition-opacity duration-500 delay-100 pointer-events-none">
                                 <Zap size={100} />
                               </div>
                               <div className="flex-1 flex flex-col z-10 pointer-events-none">
-                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-black/5 pb-4">
+                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-main-primary pb-4">
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500">
                                       {getDisplaySource(item.source)}
                                     </span>
-                                    <span className="text-black/20 text-[9px]">•</span>
+                                    <span className="text-main-tertiary text-[9px]">•</span>
                                     {sentiment && (
                                       <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${getSentimentStyle(sentiment)}`}>
                                         {sentiment}
                                       </span>
                                     )}
                                   </div>
-                                  <span className="text-[9px] text-black/30 font-mono font-medium whitespace-nowrap">{item.date}</span>
+                                  <span className="text-[9px] text-main-tertiary font-mono font-medium whitespace-nowrap">{item.date}</span>
                                 </div>
-                                <h3 className="text-lg font-serif font-medium text-black group-hover/news:text-amber-400 transition-colors leading-snug mb-4">
+                                <h3 className="text-lg font-serif font-medium text-main-primary group-hover/news:text-amber-500 transition-colors leading-snug mb-4">
                                   {item.title}
                                 </h3>
                                 <div className="relative mt-auto">
-                                  <p className="text-sm text-neutral-400 leading-relaxed font-sans line-clamp-3">
+                                  <p className="text-sm text-main-secondary leading-relaxed font-sans line-clamp-3">
                                     {desc}
                                   </p>
                                 </div>
@@ -2746,7 +2559,7 @@ export default function App() {
                               <div className="mt-5 pt-4 flex items-center justify-between shrink-0 z-10 pointer-events-none">
                                 <div className="flex flex-wrap gap-1.5">
                                   {tickers.slice(0, 4).map((tick: string, i: number) => (
-                                    <span key={i} className="text-[9px] font-mono font-bold uppercase text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-sm flex items-center gap-1">
+                                    <span key={i} className="text-[9px] font-mono font-bold uppercase text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-sm flex items-center gap-1">
                                       ${tick}
                                     </span>
                                   ))}
@@ -2760,7 +2573,7 @@ export default function App() {
                             </div>
                           )})
                         )}
-                      </div>
+                      </div>                  </div>
 
                       {/* Modal overlay for selected news */}
                       <AnimatePresence>
@@ -2777,7 +2590,7 @@ export default function App() {
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="bg-white border border-black/20 shadow-[0_20px_60px_rgba(0,0,0,0.8)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh]"
+                                className="bg-card-primary border border-main-primary shadow-[0_20px_60px_rgba(0,0,0,0.5)] rounded-3xl p-8 md:p-12 max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh]"
                               >
                                 <div className="absolute top-0 right-0 opacity-[0.03] pointer-events-none transform translate-x-1/4 -translate-y-1/4">
                                   <Zap size={300} />
@@ -2785,7 +2598,7 @@ export default function App() {
                                 
                                 <button
                                   onClick={() => setSelectedNews(null)}
-                                  className="absolute top-6 right-6 p-2 text-black/40 hover:text-black rounded-full hover:bg-black/5 transition-colors z-50"
+                                  className="absolute top-6 right-6 text-main-tertiary hover:text-main-primary rounded-full hover:bg-surface-hover transition-colors z-50"
                                 >
                                   <X size={20} />
                                 </button>
@@ -2797,7 +2610,7 @@ export default function App() {
                                         {getDisplaySource(selectedNews.source)}
                                       </span>
                                     </div>
-                                    <span className="text-black/20 text-[10px]">•</span>
+                                    <span className="text-main-tertiary/20 text-[10px]">•</span>
                                     {selectedNews.displaySentiment && (
                                        <span 
                                          className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest ${
@@ -2814,10 +2627,10 @@ export default function App() {
                                          {selectedNews.displaySentiment}
                                        </span>
                                     )}
-                                    <span className="ml-auto text-[10px] text-black/30 font-mono font-medium">{selectedNews.date}</span>
+                                    <span className="ml-auto text-[10px] text-main-tertiary font-mono font-medium">{selectedNews.date}</span>
                                   </div>
                                   
-                                  <h2 className="text-2xl md:text-3xl font-serif font-medium text-black leading-tight mb-8">
+                                  <h2 className="text-2xl md:text-3xl font-serif font-medium text-main-primary leading-tight mb-8">
                                     {selectedNews.title}
                                   </h2>
                                   
@@ -2877,11 +2690,11 @@ export default function App() {
                 {activeModule === 'vip-strategy' && (
                    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
                       {/* Playbook Header */}
-                      <div className="bg-white border border-black/10 p-8 rounded-sm shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                      <div className="bg-card-primary border border-main-primary p-8 rounded-sm shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div>
-                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-2">Institutional Playbook</div>
-                          <h2 className="text-4xl font-serif italic text-black title-elegant bg-gradient-to-r from-emerald-600 via-teal-600 to-transparent bg-clip-text text-transparent">Institutional Strategies</h2>
-                          <p className="text-neutral-500 text-sm mt-1">Deep dives into professional execution models and systematic frameworks.</p>
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-main-tertiary mb-2">Institutional Playbook</div>
+                          <h2 className="text-4xl font-serif italic text-main-primary title-elegant bg-gradient-to-r from-emerald-600 via-teal-600 to-transparent bg-clip-text text-transparent">Institutional Strategies</h2>
+                          <p className="text-main-tertiary text-sm mt-1">Deep dives into professional execution models and systematic frameworks.</p>
                         </div>
                         <div className="flex gap-3">
                           {/* Only show Author Mode toggle to the owner */}
@@ -2889,7 +2702,7 @@ export default function App() {
                              <div className="flex gap-3">
                                <button 
                                  onClick={() => setIsPlaybookEditor(!isPlaybookEditor)}
-                                 className={`flex items-center gap-2 px-4 py-2.5 border text-[10px] font-bold uppercase tracking-widest transition-all rounded-sm ${isPlaybookEditor ? 'bg-amber-500 border-amber-600 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white border-black/10 text-black hover:bg-black/5'}`}
+                                 className={`flex items-center gap-2 px-4 py-2.5 border text-[10px] font-bold uppercase tracking-widest transition-all rounded-sm ${isPlaybookEditor ? 'bg-amber-500 border-amber-600 text-[#030712] shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-surface-primary border-main-primary text-main-primary hover:bg-surface-hover'}`}
                                >
                                  {isPlaybookEditor ? <ShieldCheck size={14} /> : <Lock size={14} />}
                                  {isPlaybookEditor ? 'Lock Editor' : 'Author Mode'}
@@ -2910,7 +2723,7 @@ export default function App() {
                                      setActiveStrategyId(newStrat.id);
                                      setActiveStepIndex(0);
                                    }}
-                                   className="flex items-center gap-2 px-6 py-2.5 bg-black text-black text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all rounded-sm"
+                                   className="flex items-center gap-2 px-6 py-2.5 bg-main-primary text-app-primary text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-all rounded-sm"
                                  >
                                    <Plus size={14} />
                                    Deploy New Strategy
@@ -2937,11 +2750,11 @@ export default function App() {
                                    setActiveStrategyId(strat.id);
                                    setActiveStepIndex(0);
                                  }}
-                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-black text-black border-black shadow-xl ring-2 ring-[#64A0E6]/20' : 'bg-white text-black border-black/5 hover:border-black/20 hover:shadow-md'}`}
+                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-main-primary text-app-primary border-main-primary shadow-xl ring-2 ring-accent-primary/20' : 'bg-card-primary text-main-primary border-main-primary hover:border-main-strong hover:shadow-md'}`}
                                >
                                  <div className="relative z-10">
                                    <div className="flex justify-between items-start mb-4">
-                                     <div className={`text-[9px] font-bold uppercase tracking-[0.2em] ${activeStrategyId === strat.id ? 'text-[#64A0E6]' : 'text-black/30'}`}>
+                                     <div className={`text-[9px] font-bold uppercase tracking-[0.2em] ${activeStrategyId === strat.id ? 'text-accent-primary' : 'text-main-tertiary'}`}>
                                        {strat.category}
                                      </div>
                                      {isPlaybookEditor && (
@@ -2957,8 +2770,8 @@ export default function App() {
                                          }}
                                          className={`p-2 rounded-full transition-all border ${
                                            activeStrategyId === strat.id 
-                                             ? 'bg-rose-500/20 border-black/10 text-rose-500 hover:bg-rose-500 hover:text-black' 
-                                             : 'bg-white border-black/5 text-rose-600 hover:bg-rose-500 hover:text-black shadow-sm'
+                                             ? 'bg-rose-500/20 border-main-primary/20 text-rose-500 hover:bg-rose-500 hover:text-white' 
+                                             : 'bg-card-primary border-main-primary text-rose-500 hover:bg-rose-500 hover:text-white shadow-sm'
                                          }`}
                                          title="Delete Strategy"
                                        >
@@ -2967,7 +2780,7 @@ export default function App() {
                                      )}
                                    </div>
                                    <h4 className="font-serif italic text-2xl leading-tight mb-4">{strat.title}</h4>
-                                   <p className={`text-xs line-clamp-6 leading-relaxed ${activeStrategyId === strat.id ? 'text-black/60' : 'text-black/40'}`}>
+                                   <p className={`text-xs line-clamp-6 leading-relaxed ${activeStrategyId === strat.id ? 'opacity-70' : 'text-main-tertiary'}`}>
                                      {strat.description}
                                    </p>
                                  </div>
@@ -2982,7 +2795,7 @@ export default function App() {
                                  </div>
 
                                  {activeStrategyId === strat.id && (
-                                   <div className="absolute right-0 top-0 bottom-0 w-1 bg-[#64A0E6]"></div>
+                                   <div className="absolute right-0 top-0 bottom-0 w-1 bg-accent-primary"></div>
                                  )}
                                </motion.div>
                              ))}
@@ -2992,12 +2805,12 @@ export default function App() {
                         {/* Main Content: Step by Step */}
                         <div className="lg:col-span-9 space-y-8">
                           {activeStrategy ? (
-                            <div className="bg-white border border-black/10 rounded-sm overflow-hidden shadow-sm">
+                            <div className="bg-card-primary border border-main-primary rounded-sm overflow-hidden shadow-sm">
                               {/* Strategy Header */}
-                              <div className="p-10 border-b border-black/5 bg-[#FAFAFA]">
+                              <div className="p-10 border-b border-main-primary bg-surface-primary">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                                   <div className="flex items-center gap-6">
-                                    <div className="w-14 h-14 rounded-full bg-black text-black flex items-center justify-center font-serif text-2xl italic shadow-2xl ring-4 ring-black/5">
+                                    <div className="w-14 h-14 rounded-full bg-main-primary text-app-primary flex items-center justify-center font-serif text-2xl italic shadow-2xl ring-4 ring-main-primary/5">
                                       {strategies.indexOf(activeStrategy) + 1}
                                     </div>
                                     <div className="flex-1 min-w-[300px]">
@@ -3010,7 +2823,7 @@ export default function App() {
                                               const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, title: e.target.value } : s);
                                               saveStrategies(updated);
                                             }}
-                                            className="text-4xl font-serif italic text-black bg-transparent border-b border-dashed border-black/20 focus:border-black outline-none w-full"
+                                            className="text-4xl font-serif italic text-main-primary bg-transparent border-b border-dashed border-main-primary/40 focus:border-main-primary outline-none w-full"
                                             placeholder="Strategy Title"
                                           />
                                           <input 
@@ -3020,14 +2833,14 @@ export default function App() {
                                               const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, category: e.target.value } : s);
                                               saveStrategies(updated);
                                             }}
-                                            className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#64A0E6] bg-transparent border-b border-dashed border-black/10 focus:border-black outline-none w-full"
+                                            className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent-primary bg-transparent border-b border-dashed border-main-primary/20 focus:border-main-primary outline-none w-full"
                                             placeholder="Category"
                                           />
                                         </div>
                                       ) : (
                                         <div className="space-y-1">
-                                          <h3 className="text-4xl font-serif italic text-black">{activeStrategy.title}</h3>
-                                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#64A0E6]">
+                                          <h3 className="text-4xl font-serif italic text-main-primary">{activeStrategy.title}</h3>
+                                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent-primary">
                                             {activeStrategy.category}
                                           </div>
                                         </div>
@@ -3045,16 +2858,16 @@ export default function App() {
                                       const updated = strategies.map(s => s.id === activeStrategy.id ? { ...s, description: e.target.value } : s);
                                       saveStrategies(updated);
                                     }}
-                                    className="text-neutral-600 w-full bg-transparent border border-dashed border-black/10 p-4 rounded-sm italic outline-none focus:border-black/30 min-h-[100px]"
+                                    className="text-main-secondary w-full bg-transparent border border-dashed border-main-primary/40 p-4 rounded-sm italic outline-none focus:border-main-primary/60 min-h-[100px]"
                                     placeholder="Describe the institutional framework..."
                                   />
                                 ) : (
-                                  <p className="text-neutral-600 max-w-3xl text-lg leading-relaxed italic opacity-80">{activeStrategy.description}</p>
+                                  <p className="text-main-tertiary max-w-3xl text-lg leading-relaxed italic opacity-80">{activeStrategy.description}</p>
                                 )}
                               </div>
 
                               {/* Steps Timeline Navigation */}
-                              <div className="px-8 py-4 border-b border-black/5 bg-white flex items-center gap-2 overflow-x-auto custom-scrollbar active:cursor-grabbing">
+                              <div className="px-8 py-4 border-b border-main-primary bg-card-primary flex items-center gap-2 overflow-x-auto custom-scrollbar active:cursor-grabbing">
                                 {activeStrategy.steps.map((step, idx) => (
                                   <div key={step.id} className="relative flex items-center group/step shrink-0">
                                     <button
@@ -3062,11 +2875,11 @@ export default function App() {
                                       onClick={() => setActiveStepIndex(idx)}
                                       className={`flex items-center gap-3 px-6 py-4 border transition-all relative ${
                                         activeStepIndex === idx 
-                                          ? 'bg-black text-black border-black font-bold shadow-lg -translate-y-0.5 z-10' 
-                                          : 'bg-white text-neutral-400 border-black/5 hover:border-black/20 hover:text-black'
+                                          ? 'bg-main-primary text-app-primary border-main-primary font-bold shadow-lg -translate-y-0.5 z-10' 
+                                          : 'bg-card-primary text-main-tertiary border-main-primary hover:border-main-strong hover:text-main-primary'
                                       }`}
                                     >
-                                      <span className={`text-[10px] font-mono ${activeStepIndex === idx ? 'text-[#64A0E6]' : 'opacity-20'}`}>
+                                      <span className={`text-[10px] font-mono ${activeStepIndex === idx ? 'text-accent-primary' : 'opacity-20'}`}>
                                         0{idx + 1}
                                       </span>
                                       <span className="text-[11px] uppercase tracking-widest whitespace-nowrap">
@@ -3090,7 +2903,7 @@ export default function App() {
                                             setActiveStepIndex(Math.max(0, activeS.steps.length - 1));
                                           }
                                         }}
-                                        className="absolute -top-1 -right-1 p-1 bg-white border border-black shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-black text-rose-600"
+                                        className="absolute -top-1 -right-1 p-1 bg-card-primary border border-main-primary shadow-sm rounded-full z-20 opacity-0 group-hover/step:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white text-rose-500"
                                       >
                                         <X size={10} />
                                       </button>
@@ -3105,7 +2918,7 @@ export default function App() {
                                       saveStrategies(updated);
                                       setActiveStepIndex(activeStrategy.steps.length);
                                     }}
-                                    className="ml-4 shrink-0 p-3 border border-dashed border-black/20 text-neutral-400 hover:text-black hover:border-black/40 transition-colors rounded-sm bg-neutral-50/50"
+                                    className="ml-4 shrink-0 p-3 border border-dashed border-main-primary/40 text-main-tertiary hover:text-main-primary hover:border-main-primary/60 transition-colors rounded-sm bg-surface-primary"
                                   >
                                     <Plus size={16} />
                                   </button>
@@ -3146,20 +2959,20 @@ export default function App() {
                                               });
                                               saveStrategies(updated);
                                             }}
-                                            className="text-4xl font-serif italic text-black leading-tight bg-transparent border-b border-dashed border-black/10 focus:border-black outline-none w-full"
+                                            className="text-4xl font-serif italic text-main-primary leading-tight bg-transparent border-b border-dashed border-main-primary/40 focus:border-main-primary outline-none w-full"
                                             placeholder="Phase Title"
                                           />
                                         </div>
 
                                       <div className="prose prose-neutral max-w-none">
-                                        <p className="text-lg text-neutral-600 leading-relaxed">
+                                        <p className="text-lg text-main-secondary leading-relaxed">
                                           {activeStrategy.steps[activeStepIndex]?.content}
                                         </p>
                                       </div>
 
                                       {/* Metrics if any */}
                                       {activeStrategy.steps[activeStepIndex]?.metrics && (
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-6 border-y border-black/5">
+                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-6 border-y border-main-primary/10">
                                           {activeStrategy.steps[activeStepIndex].metrics.map((m, i) => (
                                             <div key={i} className="space-y-1">
                                               <div className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-40">{m.label}</div>
@@ -3303,7 +3116,7 @@ export default function App() {
                                               if (activeStepIndex < activeStrategy.steps.length - 1) setActiveStepIndex(activeStepIndex + 1);
                                             }}
                                             disabled={activeStepIndex === activeStrategy.steps.length - 1}
-                                            className="flex-1 py-3 bg-black text-black text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-20 transition-all"
+                                            className="flex-1 py-3 bg-black text-white text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-20 transition-all"
                                           >
                                             Next Phase
                                           </button>
@@ -3315,9 +3128,9 @@ export default function App() {
                               </AnimatePresence>
                             </div>
                           ) : (
-                            <div className="h-[600px] flex flex-col items-center justify-center bg-white border border-dashed border-black/10 rounded-sm">
-                               <MapIcon size={48} className="text-black/5 mb-6" />
-                               <div className="text-xl font-serif italic text-black/20">Awaiting strategy deployment...</div>
+                            <div className="h-[600px] flex flex-col items-center justify-center bg-card-primary border border-dashed border-main-primary/40 rounded-sm">
+                               <MapIcon size={48} className="text-main-tertiary/10 mb-6" />
+                               <div className="text-xl font-serif italic text-main-tertiary/40">Awaiting strategy deployment...</div>
                             </div>
                           )}
                         </div>
@@ -3325,122 +3138,6 @@ export default function App() {
                    </motion.div>
                 )}
               </div>
-
-              {/* Sidebar Info/Status */}
-              {activeModule === 'vip-alpha' ? (
-                <div className="lg:col-span-4 space-y-6">
-                   <div className="p-6 border border-amber-500/20 bg-white rounded-xl relative overflow-hidden shadow-[0_4px_20px_rgba(245,158,11,0.05)]">
-                      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <Cpu size={14} className="text-amber-500" />
-                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-black">AI Overall Sentiment Analysis</h3>
-                      </div>
-                      
-                      {(() => {
-                         if (newsLoading) {
-                           return (
-                             <div className="flex flex-col items-center justify-center py-6">
-                               <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin mb-3"></div>
-                               <div className="text-xs text-amber-500/80 uppercase tracking-widest animate-pulse">Scanning flow...</div>
-                             </div>
-                           );
-                         }
-
-                         const validNews = filteredNews.filter(n => n.sentiment && ['Positive', 'Negative', 'Neutral'].includes(n.sentiment));
-                         if (validNews.length === 0) return <div className="text-xs text-black/40 py-4">Awaiting intelligence...</div>;
-                         
-                         const pos = validNews.filter(n => n.sentiment === 'Positive').length;
-                         const neg = validNews.filter(n => n.sentiment === 'Negative').length;
-                         const neu = validNews.filter(n => n.sentiment === 'Neutral').length;
-                         const total = validNews.length;
-                         
-                         const posPct = (pos / total) * 100;
-                         const negPct = (neg / total) * 100;
-                         const neuPct = (neu / total) * 100;
-                         
-                         const dominant = pos > neg ? 'Net Positive' : neg > pos ? 'Net Negative' : 'Mixed / Neutral';
-                         const dominantColor = pos > neg ? 'text-emerald-400' : neg > pos ? 'text-red-400' : 'text-neutral-400';
-                         const analysisText = pos > neg ? 'Catalyst flow is heavily titled towards bullish positioning. Institutions are buying dips.' : neg > pos ? 'Catalyst flow shows structural weakness. Large participants are accelerating distribution.' : 'Conflicting fundamental drivers. Expect dealer mean-reversion chopping action.';
-                         
-                         return (
-                           <>
-                             <div className="mb-5">
-                               <div className={`text-xl font-serif italic mb-1 ${dominantColor}`}>{dominant}</div>
-                               <div className="text-[10px] text-black/40 uppercase tracking-widest">{total} Market Drivers Analyzed</div>
-                             </div>
-                             
-                             <div className="space-y-3 mb-5">
-                               <div>
-                                  <div className="flex justify-between text-[9px] font-mono mb-1">
-                                    <span className="text-emerald-400">Positive ({Math.round(posPct)}%)</span>
-                                    <span className="text-emerald-400">{pos}</span>
-                                  </div>
-                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-emerald-500/80" style={{width: `${posPct}%`}}></div></div>
-                               </div>
-                               <div>
-                                  <div className="flex justify-between text-[9px] font-mono mb-1">
-                                    <span className="text-red-400">Negative ({Math.round(negPct)}%)</span>
-                                    <span className="text-red-400">{neg}</span>
-                                  </div>
-                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-red-500/80" style={{width: `${negPct}%`}}></div></div>
-                               </div>
-                               <div>
-                                  <div className="flex justify-between text-[9px] font-mono mb-1">
-                                    <span className="text-neutral-400">Neutral ({Math.round(neuPct)}%)</span>
-                                    <span className="text-neutral-400">{neu}</span>
-                                  </div>
-                                  <div className="h-1 bg-black/5 rounded-full overflow-hidden"><div className="h-full bg-neutral-500/80" style={{width: `${neuPct}%`}}></div></div>
-                               </div>
-                             </div>
-                             
-                             <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/10">
-                               <p className="text-xs text-amber-500/80 leading-relaxed italic">{analysisText}</p>
-                             </div>
-                           </>
-                         );
-                      })()}
-                   </div>
-                </div>
-              ) : !['vip-journal', 'vip-conversion', 'vip-gex', 'vip-strategy'].includes(activeModule) && (
-                <div className="lg:col-span-4 space-y-6">
-                   <div className="p-6 bg-white border border-black/5 shadow-sm rounded-sm">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4 opacity-40">System Diagnostics</h3>
-                      <div className="space-y-4">
-                         {[
-                           { label: 'Engine', status: 'Stable', color: 'text-emerald-500' },
-                           { label: 'Market Data API', status: 'Connected', color: 'text-emerald-500' },
-                           { label: 'Latency', status: '12ms', color: 'text-emerald-500' },
-                           { label: 'Risk Model', status: 'Optimal', color: 'text-emerald-500' }
-                         ].map(d => (
-                           <div key={d.label} className="flex justify-between items-center text-[11px] font-bold">
-                              <span className="uppercase tracking-wider opacity-60">{d.label}</span>
-                              <span className={d.color}>{d.status}</span>
-                           </div>
-                         ))}
-                      </div>
-                   </div>
-
-                   <div className="p-6 bg-amber-50 border border-amber-100 rounded-sm">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Globe size={14} className="text-amber-600" />
-                        <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Market Regime</h3>
-                      </div>
-                      <div className="p-3 bg-white border border-amber-200 rounded-sm mb-4">
-                         <div className="text-2xl font-serif italic text-amber-900 mb-1">Low Volatility Drift</div>
-                         <div className="text-[10px] text-amber-700/60 font-bold uppercase">Positive Gamma Regime (72%)</div>
-                      </div>
-                      <p className="text-xs text-amber-800/70 italic leading-relaxed">Dealer hedging is currently dampening price action. Expect mean-reversion at established Core Resistance strikes.</p>
-                   </div>
-
-                   <button 
-                     onClick={() => setHasAccess(false)}
-                     className="w-full py-4 text-[10px] font-bold uppercase tracking-wider opacity-30 hover:opacity-100 transition-opacity flex items-center justify-center gap-2"
-                   >
-                     <X size={12} />
-                     Terminiate Session
-                   </button>
-                </div>
-              )}
             </div>
           </div>
         </motion.div>
@@ -3509,7 +3206,7 @@ export default function App() {
                 <button 
                   type="submit"
                   disabled={isVerifying || accessKey.length < 8}
-                  className="w-full py-4 bg-white text-black font-bold uppercase text-[10px] tracking-widest hover:bg-neutral-200 transition-all disabled:opacity-20 disabled:cursor-not-allowed group relative overflow-hidden"
+                  className="w-full py-4 bg-main-primary text-app-primary font-bold uppercase text-[10px] tracking-widest hover:bg-main-strong transition-all disabled:opacity-20 disabled:cursor-not-allowed group relative overflow-hidden"
                 >
                   <span className="relative z-10">{isVerifying ? 'Verifying Protocol...' : 'Authenticate'}</span>
                   {isVerifying && (
@@ -3552,16 +3249,16 @@ export default function App() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 300, ease: "easeOut" }}
-                className="relative bg-[#FDFCFB] w-full max-w-xl shadow-2xl border border-black/10 overflow-hidden"
+                className="relative bg-white w-full max-w-xl shadow-2xl border border-neutral-200 overflow-hidden"
               >
                 {/* Decorative Amber Bar */}
                 <div className="h-1.5 w-full bg-linear-to-r from-amber-200 via-amber-500 to-amber-200" />
                 
                 <button
                   onClick={() => setIsVIPOpen(false)}
-                  className="absolute top-4 right-4 p-2 hover:bg-black/5 transition-colors rounded-full z-10"
+                  className="absolute top-4 right-4 p-2 hover:bg-neutral-100 transition-colors rounded-full z-10"
                 >
-                  <X size={20} className="opacity-40" />
+                  <X size={20} className="text-neutral-400" />
                 </button>
 
                 <div className="p-8 md:p-12">
@@ -3572,9 +3269,9 @@ export default function App() {
                     <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-600">The Elite Tier</span>
                   </div>
 
-                  <h2 className="text-4xl font-serif italic mb-6">The Elite Trading Model</h2>
+                  <h2 className="text-4xl font-serif italic mb-6 text-neutral-900">The Elite Trading Model</h2>
                   
-                  <p className="text-neutral-600 mb-8 leading-relaxed">
+                  <p className="text-neutral-700 mb-8 leading-relaxed">
                     Elevate your edge with our institutional-grade proprietary flow models. Designed for traders who require real-time transparency into market dealer positioning.
                   </p>
 
@@ -3590,8 +3287,8 @@ export default function App() {
                           <Check size={16} className="text-amber-500" />
                         </div>
                         <div>
-                          <h4 className="font-bold text-xs uppercase tracking-wider mb-0.5">{item.title}</h4>
-                          <p className="text-xs text-neutral-500">{item.desc}</p>
+                          <h4 className="font-bold text-xs uppercase tracking-wider mb-0.5 text-neutral-900">{item.title}</h4>
+                          <p className="text-xs text-neutral-600">{item.desc}</p>
                         </div>
                       </div>
                     ))}
@@ -3601,13 +3298,13 @@ export default function App() {
                     href="https://whop.com/gexprada/the-trading-model/" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="preserve-dark flex items-center justify-center gap-3 w-full bg-black text-white py-4 font-bold uppercase text-xs tracking-widest hover:bg-neutral-800 transition-colors group"
+                    className="preserve-dark flex items-center justify-center gap-3 w-full bg-neutral-900 text-white py-4 font-bold uppercase text-xs tracking-widest hover:bg-neutral-800 transition-colors group"
                   >
                     <span>Secure Your Access</span>
                     <ExternalLink size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                   
-                  <p className="mt-4 text-center text-[10px] opacity-30 uppercase tracking-[0.2em]">
+                  <p className="mt-4 text-center text-[10px] text-neutral-400 uppercase tracking-[0.2em]">
                     Limited institutional spots remaining
                   </p>
                 </div>
@@ -3659,7 +3356,7 @@ export default function App() {
 
 // Subcomponents
 
-function GlossaryCard({ title, subtitle, def, impact, color = 'black', idx = 0 }: { title: string, subtitle: string, def: string, impact: string, color?: 'black' | 'emerald' | 'red', idx?: number }) {
+function GlossaryCard({ title, subtitle, def, impact, color = 'black', idx = 0, style }: { title: string, subtitle: string, def: string, impact: string, color?: 'black' | 'emerald' | 'red', idx?: number, style?: React.CSSProperties }) {
   const borderColors = {
     black: 'border-black',
     emerald: 'border-emerald-800',
@@ -3678,10 +3375,14 @@ function GlossaryCard({ title, subtitle, def, impact, color = 'black', idx = 0 }
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
       whileHover={{ y: -4, transition: { duration: 0.3, ease: 'easeOut' } }}
-      className={`p-5 border-l-4 ${borderColors[color]} bg-white shadow-sm hover:shadow-md transition-shadow`}
+      className={`p-5 border-l-4 ${borderColors[color]} border-solid bg-card-primary shadow-sm hover:shadow-md transition-shadow`}
+      style={{
+        borderWidth: style?.borderColor ? '0.25px 0.25px 0.25px 4px' : undefined,
+        ...style
+      }}
     >
       <div className="flex justify-between items-baseline mb-3">
-        <h4 className="font-serif italic text-xl text-black">{title}</h4>
+        <h4 className="font-serif italic text-xl text-main-primary">{title}</h4>
         <span className={`font-mono text-xs ${textColors[color]}`}>"{subtitle}"</span>
       </div>
       <div className="space-y-3">
@@ -3712,19 +3413,19 @@ function InteractiveGlossary() {
   return (
     <div className="grid md:grid-cols-12 gap-10 items-start">
       <div className="md:col-span-5 flex flex-col">
-        <div className="relative border-b border-black/20 pb-2 mb-4">
-          <Search size={14} className="absolute left-0 top-1/2 -translate-y-1/2 opacity-40" />
+        <div className="relative border-b border-main-primary/20 pb-2 mb-4">
+          <Search size={14} className="absolute left-0 top-1/2 -translate-y-1/2 opacity-40 text-main-primary" />
           <input 
             type="text" 
             placeholder="Search glossary..." 
-            className="w-full bg-transparent pl-7 pr-4 py-2 outline-none font-sans text-sm placeholder:opacity-50"
+            className="w-full bg-transparent pl-7 pr-4 py-2 outline-none font-sans text-sm placeholder:opacity-50 text-main-primary"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
         <div className="flex flex-col gap-1 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }}>
           {filteredTerms.length === 0 && (
-            <div className="text-sm text-neutral-400 italic py-4">No terms found.</div>
+            <div className="text-sm text-main-primary opacity-40 italic py-4">No terms found.</div>
           )}
           <AnimatePresence mode="popLayout">
             {filteredTerms.map(t => (
@@ -3734,27 +3435,27 @@ function InteractiveGlossary() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                whileHover={{ x: 4, backgroundColor: 'rgba(0,0,0,0.03)' }}
+                whileHover={{ x: 4, backgroundColor: 'var(--accent-surface)' }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTerm(t)}
-                className={`text-left p-4 border-l-2 relative overflow-hidden transition-all ${activeTerm.term === t.term ? 'border-black bg-black/[0.03]' : 'border-transparent'}`}
+                className={`text-left p-4 border-l-2 relative overflow-hidden transition-all ${activeTerm.term === t.term ? 'border-accent-primary bg-accent-surface' : 'border-transparent'}`}
               >
                 {activeTerm.term === t.term && (
                   <motion.div 
                     layoutId="activeGlossaryIndicator" 
-                    className="absolute inset-y-0 left-0 w-1 bg-black" 
+                    className="absolute inset-y-0 left-0 w-1 bg-accent-primary" 
                     initial={false}
                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   />
                 )}
-                <div className={`font-bold text-xs uppercase tracking-wider transition-colors ${activeTerm.term === t.term ? 'text-black' : 'text-neutral-500 hover:text-black'}`}>{t.term}</div>
-                {t.subtitle && <div className="text-[10px] opacity-50 mt-1 italic font-serif">{t.subtitle}</div>}
+                <div className={`font-bold text-xs uppercase tracking-wider transition-colors ${activeTerm.term === t.term ? 'text-accent-primary' : 'text-main-primary opacity-50 hover:opacity-100'}`}>{t.term}</div>
+                {t.subtitle && <div className="text-[10px] opacity-50 mt-1 italic font-serif text-main-primary">{t.subtitle}</div>}
               </motion.button>
             ))}
           </AnimatePresence>
         </div>
       </div>
-      <div className="md:col-span-7 bg-white border border-black/10 p-8 shadow-sm relative group">
+      <div className="md:col-span-7 bg-card-primary border border-main-primary p-8 shadow-sm relative group rounded-xl">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTerm.term}
@@ -3765,20 +3466,20 @@ function InteractiveGlossary() {
           >
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-3xl font-serif italic mb-2">{activeTerm.term}</h3>
-                {activeTerm.subtitle && <p className="font-mono text-xs opacity-50">"{activeTerm.subtitle}"</p>}
+                <h3 className="text-3xl font-serif italic mb-2 text-main-primary">{activeTerm.term}</h3>
+                {activeTerm.subtitle && <p className="font-mono text-xs opacity-50 text-main-primary">"{activeTerm.subtitle}"</p>}
               </div>
               <button 
                 onClick={copyToClipboard}
-                className="p-2 hover:bg-neutral-100 rounded-full transition-colors relative"
+                className="p-2 hover:bg-accent-surface rounded-full transition-colors relative"
                 title="Copy to clipboard"
               >
-                {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} className="opacity-40 hover:opacity-100" />}
+                {copied ? <Check size={16} className="text-brand-emerald" /> : <Copy size={16} className="text-main-primary opacity-40 hover:opacity-100" />}
                 {copied && (
                   <motion.span 
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-emerald-600 whitespace-nowrap"
+                    className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-brand-emerald whitespace-nowrap"
                   >
                     Copied!
                   </motion.span>
@@ -3788,12 +3489,12 @@ function InteractiveGlossary() {
             
             <div className="space-y-6 text-sm">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-2 border-l-2 pl-2 border-black">Definition</div>
-                <p className="text-neutral-600 leading-relaxed">{activeTerm.def}</p>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-50 mb-2 border-l-2 pl-2 border-accent-primary">Definition</div>
+                <p className="text-main-primary opacity-60 leading-relaxed font-sans">{activeTerm.def}</p>
               </div>
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-2 border-l-2 pl-2 border-black">Market Impact</div>
-                <p className="text-black font-medium leading-relaxed">{activeTerm.impact}</p>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-50 mb-2 border-l-2 pl-2 border-accent-primary">Market Impact</div>
+                <p className="text-main-primary font-medium leading-relaxed font-sans">{activeTerm.impact}</p>
               </div>
             </div>
           </motion.div>
@@ -3803,26 +3504,26 @@ function InteractiveGlossary() {
   );
 }
 
-function StrategyCard({ num, title, env, play, color = 'black' }: { num: string, title: string, env: string, play: string, color?: 'black' | 'emerald' | 'red' }) {
+function StrategyCard({ num, title, env, play, color = 'black', numberStyle }: { num: string, title: string, env: string, play: string, color?: 'black' | 'emerald' | 'red', numberStyle?: React.CSSProperties }) {
   const numberColors = {
-    black: 'text-black/10',
-    emerald: 'text-emerald-900/10',
-    red: 'text-red-900/10'
+    black: 'text-main-primary opacity-10',
+    emerald: 'text-brand-emerald opacity-10',
+    red: 'text-rose-500 opacity-10'
   }
   return (
     <div className="relative pl-12 md:pl-20">
-      <div className={`absolute left-0 top-0 text-[50px] font-serif italic ${numberColors[color]}`}>
+      <div className={`absolute left-0 top-0 text-[50px] border-solid font-serif italic ${numberColors[color]}`} style={{ borderWidth: numberStyle?.borderColor ? '0.25px' : '0px', ...numberStyle }}>
         {num}
       </div>
-      <h5 className="font-bold text-xs uppercase border-b border-black/10 pb-2 mb-4 tracking-wider">{title}</h5>
+      <h5 className="font-bold text-xs uppercase border-b border-main-primary/10 pb-2 mb-4 tracking-wider text-main-primary">{title}</h5>
       <div className="grid md:grid-cols-2 gap-8">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-2 border-l-2 pl-2 border-black">Environment</div>
-          <p className="text-neutral-600 text-[13px] leading-relaxed italic">{env}</p>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-50 mb-2 border-l-2 pl-2 border-accent-primary">Environment</div>
+          <p className="text-main-primary opacity-60 text-[13px] leading-relaxed italic font-sans">{env}</p>
         </div>
         <div>
-           <div className="text-[10px] font-bold uppercase tracking-widest mb-2 border-l-2 pl-2 border-black">Strategy</div>
-          <p className="text-black font-medium text-[13px] leading-relaxed">{play}</p>
+           <div className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-50 mb-2 border-l-2 pl-2 border-accent-primary">Strategy</div>
+          <p className="text-main-primary font-medium text-[13px] leading-relaxed font-sans">{play}</p>
         </div>
       </div>
     </div>
