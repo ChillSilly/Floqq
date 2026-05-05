@@ -1,122 +1,140 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { TrendingUp, ArrowDownRight, ArrowUpRight, Shield } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Shield } from 'lucide-react';
 
 export function HedgingAnimation() {
-  const [phase, setPhase] = useState(0); // 0: baseline, 1: drop, 2: hedge, 3: recover, 4: hedge
-  
+  const [phase, setPhase] = useState(0);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setPhase((p) => (p + 1) % 5);
-    }, 4000);
+    }, 4500);
     return () => clearInterval(timer);
   }, []);
 
+  const getMMAction = () => {
+    switch(phase) {
+      case 0: return { title: "Neutral State", color: "text-main-primary", bg: "bg-main-primary/5", border: "border-main-primary/20", detail: "Market Maker is perfectly delta neutral." };
+      case 1: return { title: "Delta Imbalance", color: "text-rose-500", bg: "bg-rose-500/10", border: "border-rose-500/30", detail: "Price drops. The short put gains Delta. MM becomes dangerously LONG Delta." };
+      case 2: return { title: "Forced Selling", color: "text-rose-500", bg: "bg-rose-500/20", border: "border-rose-500/50", detail: "MM sells underlying assets into the falling market to neutralize their Long Delta, amplifying the drop." };
+      case 3: return { title: "Delta Imbalance", color: "text-brand-emerald", bg: "bg-brand-emerald/10", border: "border-brand-emerald/30", detail: "Price rallies. The short put loses Delta. The MM's previous short hedges now make them dangerously SHORT Delta." };
+      case 4: return { title: "Forced Buying", color: "text-brand-emerald", bg: "bg-brand-emerald/20", border: "border-brand-emerald/50", detail: "MM buys underlying assets into the rising market to cover their short hedges, amplifying the rally." };
+      default: return { title: "Neutral", color: "", bg: "", border: "", detail: "" };
+    }
+  };
+
   const getPricePosition = () => {
+    // 0 = left (drop), 50 = middle, 100 = right (rally)
     switch(phase) {
       case 0: return 50;
-      case 1: return 80;
-      case 2: return 80;
-      case 3: return 20;
-      case 4: return 20;
+      case 1: return 15;
+      case 2: return 15;
+      case 3: return 85;
+      case 4: return 85;
       default: return 50;
     }
   };
 
-  const getMMAction = () => {
+  const getExposure = () => {
     switch(phase) {
-      case 0: return { action: "Neutral", color: "text-main-primary", bg: "bg-main-primary/10", detail: "Perfectly hedged" };
-      case 1: return { action: "Long Delta", color: "text-rose-500", bg: "bg-rose-500/10", detail: "Price drops, Put delta increases" };
-      case 2: return { action: "Selling Asset", color: "text-rose-500", bg: "bg-rose-500/20", detail: "Shorting to get back to neutral" };
-      case 3: return { action: "Short Delta", color: "text-brand-emerald", bg: "bg-brand-emerald/10", detail: "Price rises, Put delta decreases" };
-      case 4: return { action: "Buying Asset", color: "text-brand-emerald", bg: "bg-brand-emerald/20", detail: "Buying back shorts to balance" };
-      default: return { action: "Neutral", color: "", bg: "", detail: "" };
+      case 0: return 0;
+      case 1: return 40; // Long delta
+      case 2: return 0;  // Hedged back to 0
+      case 3: return -40; // Short delta
+      case 4: return 0; // Hedged back to 0
+      default: return 0;
     }
   };
 
-  const { action, color, bg, detail } = getMMAction();
+  const { title, color, bg, border, detail } = getMMAction();
 
   return (
-    <div className="bg-card-primary border border-main-primary/20 p-6 rounded-2xl shadow-sm">
-      <div className="mb-6">
-        <h4 className="text-xl font-serif italic text-main-primary mb-2 flex items-center gap-2">
-          <Shield size={20} className="text-accent-primary" />
-          Interactive: Short Put Hedging (Negative Gamma)
-        </h4>
-        <p className="text-sm text-main-primary opacity-70">
-          When a Market Maker sells a put option, they are short gamma. Watch how their forced hedging exacerbates price movement.
-        </p>
+    <div className="relative overflow-hidden group/container flex flex-col justify-center h-full w-full max-w-[360px] mx-auto">
+      
+      <div className="mb-10 text-center">
+         <h4 className="text-2xl font-serif italic text-main-primary mb-3 flex items-center justify-center gap-2">
+            <Shield size={20} className="text-accent-primary" /> The Short Gamma Loop
+         </h4>
+         <p className="text-xs text-main-primary/60 font-sans leading-relaxed max-w-[280px] mx-auto">
+            How dealers are forced to trade with the trend, amplifying velocity.
+         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Price Chart Side */}
-        <div className="relative h-48 bg-accent-surface rounded-xl border border-main-primary/10 overflow-hidden flex items-center p-4">
-          <div className="absolute inset-0 opacity-10 pointer-events-none bg-[linear-gradient(rgba(var(--color-main-primary),0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(var(--color-main-primary),0.2)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
-          
-          <div className="w-full relative h-[140px] border-l border-b border-main-primary/30">
-            {/* Price Line Indicator */}
+      <div className="relative mb-12">
+         <div className="flex justify-between text-[10px] font-mono uppercase tracking-[0.2em] mb-4 text-main-primary opacity-40">
+             <span>Market Price</span>
+         </div>
+         {/* Price Track */}
+         <div className="h-[2px] bg-main-primary/20 w-full relative">
             <motion.div 
-               className="absolute left-0 w-full border-t-2 border-dashed border-accent-primary z-10"
-               animate={{ top: `${getPricePosition()}%` }}
+               className="absolute top-1/2 -translate-y-1/2 -ml-2 w-4 h-4 rounded-full bg-accent-primary shadow-[0_0_12px_rgba(var(--color-accent-primary),0.6)]"
+               animate={{ left: `${getPricePosition()}%` }}
                transition={{ type: "spring", stiffness: 40, damping: 15 }}
-            >
-               <div className="absolute right-0 -top-3 bg-accent-primary text-card-primary text-[10px] font-bold px-2 py-0.5 rounded shadow">PRICE</div>
-            </motion.div>
-
-            {/* Trading Volume Indicator */}
-            <AnimatePresence>
-               {phase === 2 && (
-                 <motion.div 
-                   initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                   className="absolute left-1/2 top-[80%] -translate-x-1/2 flex items-center gap-1 text-rose-500 font-bold bg-rose-500/10 px-3 py-1 rounded-full z-20"
-                 >
-                   <ArrowDownRight size={16} /> Selling Pressure
-                 </motion.div>
-               )}
-               {phase === 4 && (
-                 <motion.div 
-                   initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                   className="absolute left-1/2 top-[20%] -translate-x-1/2 flex items-center gap-1 text-brand-emerald font-bold bg-brand-emerald/10 px-3 py-1 rounded-full z-20"
-                 >
-                   <ArrowUpRight size={16} /> Buying Pressure
-                 </motion.div>
-               )}
-            </AnimatePresence>
-          </div>
-        </div>
-
-        {/* Market Maker Book Side */}
-        <div className="flex flex-col justify-center gap-4">
-          <div className="flex justify-between text-xs font-mono uppercase tracking-widest text-main-primary opacity-50 mb-2">
-            <span>Market Maker Book</span>
-            <span>Delta Exposure</span>
-          </div>
-
-          <div className={`p-4 rounded-xl border border-main-primary/10 transition-colors duration-500 ${bg}`}>
-            <div className="flex justify-between items-center mb-1">
-              <span className="font-bold text-main-primary">Status:</span>
-              <span className={`font-mono font-bold ${color}`}>{action}</span>
-            </div>
-            <div className="text-sm text-main-primary opacity-80 h-10">
-              {detail}
-            </div>
-          </div>
-
-          {/* Progress Indicator */}
-          <div className="flex justify-between mt-4">
-            {[0,1,2,3,4].map(idx => (
-              <div key={idx} className={`h-1.5 flex-1 mx-0.5 rounded-full transition-colors duration-500 ${phase === idx ? 'bg-accent-primary' : phase > idx ? 'bg-accent-primary/40' : 'bg-main-primary/10'}`} />
-            ))}
-          </div>
-          <div className="text-center text-[10px] font-mono text-main-primary opacity-40 uppercase">
-             {phase === 0 && 'Baseline'}
-             {phase === 1 && 'Market Drop'}
-             {phase === 2 && 'Forced Hedging'}
-             {phase === 3 && 'Market Rally'}
-             {phase === 4 && 'Forced Hedging'}
-          </div>
-        </div>
+            />
+            {/* Price Zones */}
+            <div className="absolute top-4 left-0 text-[10px] font-mono text-rose-500 opacity-80">DROP</div>
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[10px] font-mono text-main-primary opacity-40">SPOT</div>
+            <div className="absolute top-4 right-0 text-[10px] font-mono text-brand-emerald opacity-80">RALLY</div>
+         </div>
       </div>
+
+      <div className="relative mb-8">
+         <div className="flex justify-between text-[10px] font-mono uppercase tracking-[0.2em] mb-3 text-main-primary opacity-40">
+             <span>Dealer Delta Exposure</span>
+         </div>
+         {/* Exposure Track */}
+         <div className="h-4 w-full bg-main-primary/5 rounded border border-main-primary/10 relative overflow-hidden">
+             <div className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-main-primary/30 z-10" />
+             
+             {/* The Exposure Fill */}
+             <motion.div 
+                className={`absolute top-0 bottom-0 ${getExposure() > 0 ? 'bg-rose-500/60 left-1/2 origin-left' : 'bg-brand-emerald/60 right-1/2 origin-right'}`}
+                animate={{ 
+                   width: `${Math.abs(getExposure())}%`,
+                   backgroundColor: getExposure() > 0 ? 'rgb(244 63 94 / 0.6)' : 'rgb(16 185 129 / 0.6)'
+                }}
+                transition={{ type: "spring", stiffness: 50, damping: 15 }}
+             />
+         </div>
+         <div className="flex justify-between mt-2">
+             <span className="text-[9px] font-mono text-brand-emerald opacity-80">SHORT DELTA</span>
+             <span className="text-[9px] font-mono text-rose-500 opacity-80">LONG DELTA</span>
+         </div>
+      </div>
+
+      <div className={`mt-4 p-6 rounded-2xl border transition-all duration-700 text-center ${bg} ${border} min-h-[160px] flex flex-col items-center justify-center relative overflow-hidden`}>
+         <motion.div 
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-main-primary/5 to-transparent h-full w-40 -skew-x-12 translate-x-[-200%]"
+            animate={{ translateX: ['-100%', '300%'] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+         />
+         <motion.div
+           key={title}
+           initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+           className={`font-mono font-bold text-[10px] mb-4 uppercase tracking-widest px-3 py-1 rounded inline-block ${color} bg-white/5 border border-white/10`}
+         >
+           {title}
+         </motion.div>
+         <AnimatePresence mode="wait">
+            <motion.p 
+            key={detail}
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
+            className="text-[13px] font-serif italic text-main-primary/90 leading-relaxed"
+            >
+            {detail}
+            </motion.p>
+         </AnimatePresence>
+      </div>
+      
+      <div className="flex justify-center gap-2 mt-8">
+          {[0,1,2,3,4].map(idx => (
+             <div 
+                key={idx} 
+                className={`h-1.5 w-1.5 rounded-full transition-all duration-1000 ${phase === idx ? 'bg-accent-primary scale-125' : phase > idx ? 'bg-accent-primary/30' : 'bg-main-primary/10'}`} 
+             />
+          ))}
+      </div>
+
     </div>
   );
 }

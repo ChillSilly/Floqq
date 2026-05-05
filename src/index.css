@@ -24,8 +24,8 @@
   --text-main: #f8fafc;
   --text-secondary: #94a3b8;
   --text-tertiary: #64748b;
-  --border-main: rgba(148, 163, 184, 0.1);
-  --border-strong: rgba(148, 163, 184, 0.2);
+  --border-main: transparent;
+  --border-strong: transparent;
   
   --accent-main: #6366f1;
   --accent-secondary: #818cf8;
@@ -41,7 +41,7 @@
 [data-theme='default'] {
   --bg-app: #03070D; --bg-card: #0B1420; --bg-surface: #0F1C2E;
   --text-main: #C8DCEF; --text-secondary: #7FA8C4; --text-tertiary: #4E7A9C;
-  --border-main: #111E2E; --border-strong: #1F3A58; 
+  --border-main: transparent; --border-strong: transparent; 
   --accent-main: #4A9FFF; --accent-secondary: #5DAFFF;
   --success: #00E5A0; --danger: #FF3860; --warning: #F5A623;
 }
@@ -49,7 +49,7 @@
 [data-theme='obsidian'] {
   --bg-app: #000000; --bg-card: #101010; --bg-surface: #181818;
   --text-main: #F0F0F0; --text-secondary: #888888; --text-tertiary: #4A4A4A;
-  --border-main: rgba(255,255,255,0.06); --border-strong: rgba(255,255,255,0.11);
+  --border-main: transparent; --border-strong: transparent;
   --accent-main: #5599FF; --accent-secondary: #77AAFF;
   --success: #00FF88; --danger: #FF3355; --warning: #FFB800;
 }
@@ -57,7 +57,7 @@
 [data-theme='light'] {
   --bg-app: #FFFFFF; --bg-card: #EBEBEB; --bg-surface: #E0E0E0;
   --text-main: #0A0A0A; --text-secondary: #444444; --text-tertiary: #888888;
-  --border-main: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.15);
+  --border-main: transparent; --border-strong: transparent;
   --accent-main: #1A56CC; --accent-secondary: #2A66DD;
   --success: #00A86B; --danger: #D93025; --warning: #B8860B;
 }
@@ -65,7 +65,7 @@
 [data-theme='amber'] {
   --bg-app: #060400; --bg-card: #161000; --bg-surface: #1E1600;
   --text-main: #FFE066; --text-secondary: #CC9900; --text-tertiary: #7A5A00;
-  --border-main: rgba(255,180,0,0.09); --border-strong: rgba(255,180,0,0.17);
+  --border-main: transparent; --border-strong: transparent;
   --accent-main: #FFB800; --accent-secondary: #FFC844;
   --success: #FFD700; --danger: #FF6600; --warning: #FFB800;
 }
@@ -73,7 +73,7 @@
 [data-theme='glacier'] {
   --bg-app: #030710; --bg-card: #0A1428; --bg-surface: #0E1B34;
   --text-main: #D8ECFF; --text-secondary: #6A9EC8; --text-tertiary: #3A6090;
-  --border-main: rgba(100,160,230,0.09); --border-strong: rgba(100,160,230,0.16);
+  --border-main: transparent; --border-strong: transparent;
   --accent-main: #44CCFF; --accent-secondary: #66DDFF;
   --success: #44CCFF; --danger: #FF4466; --warning: #66AAFF;
 }

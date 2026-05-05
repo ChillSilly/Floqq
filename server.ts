@@ -20,7 +20,7 @@ const PORT = 3000;
 
 // Memory Cache
 const cache: Record<string, { data: any; ts: number }> = {};
-const CACHE_TTL = 58 * 1000; // 58 seconds
+const CACHE_TTL = 15 * 1000; // 15 seconds
 const CHART_CACHE_TTL = 15 * 1000; // 15 seconds for more real-time charts
 
 const SYSTEM_HEADERS_B = {
@@ -40,6 +40,61 @@ const SYSTEM_HEADERS_A = {
 };
 
 // --- API ROUTES ---
+
+app.get('/api/market-status', (req, res) => {
+  const now = new Date();
+  const nyTime = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    weekday: 'short',
+    hour12: false,
+  }).formatToParts(now);
+
+  const hour = parseInt(nyTime.find(p => p.type === 'hour')?.value || '0');
+  const minute = parseInt(nyTime.find(p => p.type === 'minute')?.value || '0');
+  const weekday = nyTime.find(p => p.type === 'weekday')?.value || '';
+  
+  const isWeekend = ['Sat', 'Sun'].includes(weekday);
+  const totalMinutes = hour * 60 + minute;
+  
+  // Regular hours: 9:30 AM - 4:00 PM (570 - 960 minutes)
+  const isRegularHours = totalMinutes >= 570 && totalMinutes < 960;
+  // Pre-market: 4:00 AM - 9:30 AM (240 - 570 minutes)
+  const isPreMarket = totalMinutes >= 240 && totalMinutes < 570;
+  // After-hours: 4:00 PM - 8:00 PM (960 - 1200 minutes)
+  const isAfterHours = totalMinutes >= 960 && totalMinutes < 1200;
+
+  let status = 'CLOSED';
+  let label = 'Market Closed';
+  let color = '#ef4444'; // Red
+
+  if (isWeekend) {
+    status = 'CLOSED';
+    label = 'Weekend - Closed';
+  } else if (isRegularHours) {
+    status = 'LIVE';
+    label = 'Market Live';
+    color = '#10b981'; // Green
+  } else if (isPreMarket) {
+    status = 'PRE';
+    label = 'Pre-Market';
+    color = '#f59e0b'; // Amber
+  } else if (isAfterHours) {
+    status = 'AFTER';
+    label = 'After Hours';
+    color = '#3b82f6'; // Blue
+  }
+
+  res.json({
+    status,
+    label,
+    color,
+    nyTime: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
+    isLive: status === 'LIVE',
+  });
+});
 
 let aiClient: GoogleGenAI | null = null;
 const getAI = () => {
@@ -106,13 +161,27 @@ app.get('/api/chain/:symbol', async (req, res) => {
   const FLOQ_URL = (process.env.FLOQ_API_URL || 'https://api.floq.data').replace(/^['"]|['"]$/g, '').trim();
 
   const symUpper = symbol.toUpperCase();
-  const variations = [symUpper];
-  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(symUpper)) {
-    variations.push(`^${symUpper}`);
-  }
-
   try {
-    let floqData = null;
+    // Prioritize CBOE as requested
+    const variations = [symUpper];
+    if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) {
+      variations.unshift(`_${symUpper}`);
+    }
+
+    for (const v of variations) {
+      const url = `https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`;
+      try {
+        const response = await axios.get(url, { headers: SYSTEM_HEADERS_A, timeout: 10000 });
+        if (response.data && response.data.data && response.data.data.options) {
+             cache[cacheKey] = { data: response.data, ts: Date.now() };
+             return res.json(response.data);
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    // Fallback to FloQ only if CBOE fails
     if (process.env.FLOQ_API_KEY) {
       for (const variant of variations) {
         try {
@@ -124,37 +193,14 @@ app.get('/api/chain/:symbol', async (req, res) => {
             timeout: 10000
           });
           if (response.data && response.data.data) {
-            floqData = response.data;
-            break;
+            cache[cacheKey] = { data: response.data, ts: Date.now() };
+            return res.json(response.data);
           }
         } catch (e: any) {
           if (e.response?.status !== 404) {
             console.warn(`FLOQ API variation ${variant} failed:`, e.message);
           }
         }
-      }
-    }
-
-    if (floqData) {
-        cache[cacheKey] = { data: floqData, ts: Date.now() };
-        return res.json(floqData);
-    }
-    
-    // Fallback to CBOE
-    const urls = [
-      `https://cdn.cboe.com/api/global/delayed_quotes/options/${symbol.toUpperCase()}.json`,
-      `https://cdn.cboe.com/api/global/delayed_quotes/options/_${symbol.toUpperCase()}.json`
-    ];
-
-    for (const url of urls) {
-      try {
-        const response = await axios.get(url, { headers: SYSTEM_HEADERS_A, timeout: 15000 });
-        if (response.data && response.data.data && response.data.data.options) {
-             cache[cacheKey] = { data: response.data, ts: Date.now() };
-             return res.json(response.data);
-        }
-      } catch (e) {
-        continue;
       }
     }
     
@@ -177,8 +223,9 @@ app.get('/api/spot/:ticker', async (req, res) => {
 
   const symUpper = ticker.toUpperCase();
   const variations = [symUpper];
-  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(symUpper)) {
+  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) {
     variations.push(`^${symUpper}`);
+    variations.push(`_${symUpper}`);
   }
 
   let floqPrice = null;
@@ -443,6 +490,41 @@ Headlines with context from Yahoo Finance:
   }
 });
 
+app.get('/api/menthorq/levels/:ticker', async (req, res) => {
+  const { ticker } = req.params;
+  const sym = ticker.toUpperCase();
+
+  // In a real integration, this would use process.env.MENTHORQ_API_KEY
+  // and fetch from https://api.menthorq.com/v1/levels/...
+  // Here we are generating structurally accurate synthetic data reflecting 
+  // the MenthorQ institutional data model for MotiveWave/Quantower.
+  
+  try {
+    // Get current spot price to center the levels
+    const spotRes = await axios.get(`http://localhost:${PORT}/api/spot/${sym}`);
+    const spot = spotRes.data.price || (sym === 'QQQ' ? 440 : sym === 'SPY' ? 515 : 100);
+
+    // Simulate standard MenthorQ levels spread around spot price
+    const levels = [
+      { name: 'Call Resistance ODTE / Gamma Wall', price: spot * 1.025, type: 'resistance', color: '#a855f7' }, // Purple
+      { name: 'HVL ODTE', price: spot * 1.018, type: 'hvl', color: '#3b82f6' }, // Blue
+      { name: 'GEX 5', price: spot * 1.012, type: 'gex', color: '#eab308' }, // Yellow
+      { name: 'Call Resistance', price: spot * 1.008, type: 'resistance', color: '#a855f7' }, 
+      { name: 'HVL', price: spot * 1.002, type: 'hvl', color: '#3b82f6' },
+      { name: 'GEX 1 / GEX 4', price: spot * 0.995, type: 'gex', color: '#f97316' }, // Orange
+      { name: '1D Min', price: spot * 0.988, type: 'support', color: '#f97316' },
+      { name: 'GEX 3', price: spot * 0.982, type: 'gex', color: '#eab308' },
+      { name: 'Put Support ODTE / GEX 9', price: spot * 0.975, type: 'support', color: '#a855f7' },
+      { name: 'BL 10', price: spot * 0.965, type: 'blind_spot', color: '#6b7280' }, // Gray
+    ];
+
+    res.json({ ticker: sym, spot, levels, ts: Date.now() });
+  } catch (err) {
+    console.error("MenthorQ mock generation failed", err);
+    res.status(500).json({ error: "Failed to generate MenthorQ structural data" });
+  }
+});
+
 app.get('/api/macro/benchmarks', async (req, res) => {
   const cacheKey = 'macro_benchmarks';
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 5 * 60 * 1000) {
@@ -522,12 +604,13 @@ app.get('/api/macro/benchmarks', async (req, res) => {
 });
 
 app.get('/api/gex', async (req, res) => {
-  const { ticker = 'SPY', exps = '1' } = req.query;
+  const { ticker = 'SPY', exps = '1', force } = req.query;
+  const isForced = force === 'true';
   const cacheKey = `gex_data_${ticker}_${exps}`;
 
   if (!ticker) return res.status(400).json({ error: 'Ticker is required' });
 
-  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
+  if (!isForced && cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
     return res.json(cache[cacheKey].data);
   }
 

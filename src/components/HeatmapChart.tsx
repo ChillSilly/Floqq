@@ -34,7 +34,7 @@ export function HeatmapChart({ data, spotPrice }: HeatmapProps) {
   ];
 
   return (
-    <div style={{ width: '100%', height: 600, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(99,102,241,0.15)', background: '#070b14' }}>
+    <div style={{ width: '100%', height: 600, borderRadius: 8, overflow: 'hidden', background: '#070b14' }}>
       <Suspense fallback={<div style={{height: 500, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d1117', borderRadius: 8, color: '#9ca3af'}}>Loading Heatmap...</div>}>
         <Plot
           data={[

@@ -18,7 +18,7 @@ export interface AggRow {
   call_vol_gex: number; put_vol_gex: number; vol_gex_net: number;
   call_oi: number; put_oi: number; oi: number;
   iv: number; dist_pct: number;
-  dex_net: number; vex_net: number; cex_net: number;
+  dex_net: number; vex_net: number; cex_net: number; vanna_net: number;
 }
 
 export interface KeyLevels {
@@ -31,16 +31,23 @@ export interface GexResult {
   ticker: string; spot: number;
   levels: KeyLevels;
   agg: AggRow[];
+  exps: string[];
   regime: { is_long_gamma: boolean; label: string; bias: string; bias_color: string };
   totals: {
     net_gex: number; net_vol_gex: number; gex_ratio: number;
-    dex: number; vex: number; cex: number; atm_iv: number;
+    dex: number; vex: number; cex: number; vanna: number; atm_iv: number;
     call_gex: number; put_gex: number;
   };
   flow: { ratio: number; net: number };
   iv_rv_spread: number;
   timestamp: string;
-  raw: { strike: number; expiration: string; callGEX: number; putGEX: number }[];
+  uoa: { strike: number; expiration: string; flag: 'C' | 'P'; volume: number; oi: number; bid: number; ask: number; mid: number; intrinsic: number; extrinsic: number; dte: number; iv: number; }[];
+  raw: { strike: number; expiration: string; callGEX: number; putGEX: number; volume?: number; oi?: number; flag?: 'C' | 'P'; ask?: number; bid?: number; dte?: number; mid?: number; iv?: number }[];
+  summary: {
+    price_change: number; price_change_percent: number;
+    high: number; low: number; volume: number;
+    iv30: number; bid: number; ask: number;
+  };
 }
 
 // Ensure you set FLOQ_API_KEY in your AI Studio secrets tab
@@ -57,38 +64,74 @@ const CBOE_HEADERS = {
 };
 
 export async function getSpot(ticker: string): Promise<number> {
+  const symUpper = ticker.toUpperCase();
+  
   if (FLOQ_API_KEY) {
     try {
-      const r = await fetch(`${FLOQ_URL}/spot/${ticker.toUpperCase()}`, { headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` } });
+      const r = await fetch(`${FLOQ_URL}/spot/${symUpper}`, { headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` } });
       if (r.ok) {
         const d = await r.json();
-        return parseFloat(d.data?.current_price || d.price || 0);
+        const price = parseFloat(d.data?.current_price || d.price || 0);
+        if (price > 0) return price;
       }
     } catch(e) {}
   }
+
+  // Backup 1: Yahoo Finance
+  try {
+    const symbolMapping: Record<string, string> = { 
+      'SPX': '^GSPC', 'NDX': '^IXIC', 'RUT': '^RUT', 
+      'DIA': '^DJI', 'VIX': '^VIX', 'TYX': '^TYX', 'TNX': '^TNX' 
+    };
+    const yahooSym = symbolMapping[symUpper] || symUpper;
+    const r = await fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (r.ok) {
+      const d: any = await r.json();
+      const meta = d.chart.result[0].meta;
+      const price = meta.regularMarketPrice || meta.previousClose;
+      if (price > 0) return price;
+    }
+  } catch(e) {}
   
-  // Backups
-  const r = await fetch(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: CBOE_HEADERS });
-  const data = await r.json();
-  return parseFloat(data.data.current_price);
+  // Backup 2: CBOE Variations
+  const variants = [symUpper];
+  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) variants.push(`_${symUpper}`);
+
+  for (const v of variants) {
+    try {
+      const r = await fetch(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { headers: CBOE_HEADERS });
+      if (r.ok) {
+        const data = await r.json();
+        const price = parseFloat(data.data?.current_price || data.data?.last_trade_price || 0);
+        if (price > 0) return price;
+      }
+    } catch(e) {}
+  }
+
+  return 0;
 }
 
 async function getChain(ticker: string): Promise<any> {
   const sym = ticker.toUpperCase();
   
-  // Prioritize CBOE data
-  for (const url of [
-    `https://cdn.cboe.com/api/global/delayed_quotes/options/${sym}.json`,
-    `https://cdn.cboe.com/api/global/delayed_quotes/options/_${sym}.json`,
-  ]) {
+  // Prioritize CBOE data - try variations
+  const variants = [sym];
+  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(sym)) {
+    variants.unshift(`_${sym}`); // Try underscored version as well
+  }
+
+  for (const v of variants) {
+    const url = `https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`;
     try {
-      const r = await fetch(url, { headers: CBOE_HEADERS });
-      const data = await r.json();
-      if (data?.data?.options?.length) return data;
+      const response = await fetch(url, { headers: CBOE_HEADERS });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.data?.options?.length) return data;
+      }
     } catch { continue; }
   }
 
-  // Fallback to FloQ
+  // Fallback to FloQ only if CBOE fails and we have a key
   if (FLOQ_API_KEY) {
     try {
       const r = await fetch(`${FLOQ_URL}/chain/${sym}`, { 
@@ -110,7 +153,9 @@ async function getChain(ticker: string): Promise<any> {
 }
 
 function parseSymbol(sym: string): { expiry: string; flag: 'C' | 'P'; strike: number } | null {
-  const m = sym.match(/(\d{6})([CP])(\d{8})$/);
+  if (!sym) return null;
+  const clean = sym.trim();
+  const m = clean.match(/(\d{6})([CP])(\d{8})$/);
   if (!m) return null;
   const expiry = `20${m[1].slice(0, 2)}-${m[1].slice(2, 4)}-${m[1].slice(4, 6)}`;
   return { expiry, flag: m[2] as 'C' | 'P', strike: parseInt(m[3]) / 1000 };
@@ -118,8 +163,18 @@ function parseSymbol(sym: string): { expiry: string; flag: 'C' | 'P'; strike: nu
 
 function parseCboeChain(data: any, spot: number, maxExp = 4) {
   const options = data.data.options || [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  
+  // Get current date in NY timezone
+  const now = new Date();
+  const nyDateStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  
+  const [mm, dd, yyyy] = nyDateStr.split('/');
+  const todayNY = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
 
   const byExp: Record<string, any[]> = {};
   for (const opt of options) {
@@ -129,15 +184,22 @@ function parseCboeChain(data: any, spot: number, maxExp = 4) {
     byExp[parsed.expiry].push({ ...opt, _expiry: parsed.expiry, _flag: parsed.flag, _strike: parsed.strike });
   }
 
-  const dte = (e: string) => {
-    const d = new Date(e + 'T00:00:00');
-    return Math.round((d.getTime() - today.getTime()) / 86400000);
+  const dte = (expiryStr: string) => {
+    const expDate = new Date(expiryStr + 'T00:00:00');
+    const diffTime = expDate.getTime() - todayNY.getTime();
+    return Math.round(diffTime / 86400000);
   };
 
-  const sortedExps = Object.keys(byExp)
+  let sortedExps = Object.keys(byExp)
     .filter(e => dte(e) >= 0)
-    .sort((a, b) => dte(a) - dte(b))
-    .slice(0, maxExp);
+    .sort((a, b) => dte(a) - dte(b));
+
+  if (maxExp === 0) {
+    // 0 means strictly 0-DTE only
+    sortedExps = sortedExps.filter(e => dte(e) === 0);
+  } else if (maxExp < 99) {
+    sortedExps = sortedExps.slice(0, Math.max(1, maxExp));
+  } // if 99 or more, return all unfiltered
 
   const chains: Record<string, any[]> = {};
   for (const exp of sortedExps) {
@@ -148,6 +210,9 @@ function parseCboeChain(data: any, spot: number, maxExp = 4) {
       bid: parseFloat(opt.bid || '0') || 0,
       ask: parseFloat(opt.ask || '0') || 0,
       iv_raw: parseFloat(opt.iv || '0') || 0,
+      gamma_raw: opt.gamma !== undefined ? parseFloat(opt.gamma) : null,
+      delta_raw: opt.delta !== undefined ? parseFloat(opt.delta) : null,
+      vega_raw: opt.vega !== undefined ? parseFloat(opt.vega) : null,
     }));
   }
   return { chains, exps: sortedExps, dte };
@@ -162,9 +227,13 @@ function processChain(opts: any[], spot: number, T: number, r: number, q: number
   const rows: GexRow[] = [];
   for (const o of opts) {
     if (o.strike <= 0) continue;
+    
+    // RELAXED FILTERS:
+    // Allow strikes within 30% of spot (up from 8%)
+    // Allow strikes with any open interest (down from 100)
     const distPct = Math.abs(o.strike - spot) / spot;
-    if (distPct > 0.08) continue;
-    if (o.oi < 100) continue;
+    if (distPct > 0.30) continue;
+    if (o.oi < 1) continue; 
 
     const mid = (o.bid > 0 && o.ask > 0) ? (o.bid + o.ask) / 2 : 0;
 
@@ -173,10 +242,14 @@ function processChain(opts: any[], spot: number, T: number, r: number, q: number
     if (iv === null || iv <= 0.005) {
       if (o.iv_raw > 0.05) iv = o.iv_raw;
       else if (mid > 0.05) iv = atmIVBase * (1 + distPct * 0.5);
-      else continue;
+      else {
+        // If still no IV, but we have OI, use a fallback IV
+        iv = atmIVBase; 
+      }
     }
     iv = Math.min(iv, 1.5);
 
+    // Calculate Greeks via Black-Scholes for precision (CBOE rounds to 3 decimal places which ruins GEX at the tails)
     const gamma = bsGamma(spot, o.strike, T, r, q, iv);
     const delta = bsDelta(spot, o.strike, T, r, q, iv, o.flag);
     const vega = bsVega(spot, o.strike, T, r, q, iv);
@@ -185,8 +258,8 @@ function processChain(opts: any[], spot: number, T: number, r: number, q: number
     const vomma = bsVomma(spot, o.strike, T, r, q, iv);
     const zomma = bsZomma(spot, o.strike, T, r, q, iv);
 
-    const gexOI = gamma * o.oi * 100 * spot * Math.pow(spot, 2) * 0.01 / 1e9;
-    const gexVol = gamma * o.volume * 100 * spot * Math.pow(spot, 2) * 0.01 / 1e9;
+    const gexOI = gamma * o.oi * 100 * Math.pow(spot, 2) * 0.01 / 1e9;
+    const gexVol = gamma * o.volume * 100 * Math.pow(spot, 2) * 0.01 / 1e9;
 
     rows.push({
       strike: o.strike, expiry, dte: days, flag: o.flag,
@@ -220,6 +293,7 @@ function aggregate(rows: GexRow[], spot: number): AggRow[] {
       const dex = rs.reduce((s, r) => s + r.delta * r.oi * 100, 0);
       const vex = rs.reduce((s, r) => s + r.vega * r.oi * 100 / 1e6, 0);
       const cex = rs.reduce((s, r) => s + r.charm * r.oi * 100 / 1e6, 0);
+      const vanna = rs.reduce((s, r) => s + r.vanna * r.oi * 100 / 1e6, 0);
       const ivAvg = rs.reduce((s, r) => s + r.iv, 0) / rs.length;
 
       return {
@@ -229,7 +303,7 @@ function aggregate(rows: GexRow[], spot: number): AggRow[] {
         vol_gex_net: call_vol_gex + put_vol_gex,
         call_oi, put_oi, oi: call_oi + put_oi,
         iv: ivAvg, dist_pct: ((strike - spot) / spot) * 100,
-        dex_net: dex, vex_net: vex, cex_net: cex,
+        dex_net: dex, vex_net: vex, cex_net: cex, vanna_net: vanna,
       };
     })
     .sort((a, b) => a.strike - b.strike);
@@ -342,7 +416,16 @@ async function computeIVRVSpread(raw: GexRow[], spot: number, ticker: string): P
 
 export async function fetchGexData(ticker: string, maxExpirations = 4): Promise<GexResult> {
   const chainData = await getChain(ticker);
-  const spot = parseFloat(chainData.data.current_price);
+  let spot = parseFloat(chainData.data.current_price);
+  
+  // Try to get a fresher spot price
+  try {
+    const fresherSpot = await getSpot(ticker);
+    if (fresherSpot > 0) spot = fresherSpot;
+  } catch(e) {
+    console.warn("Failed to get fresh spot, using chain price");
+  }
+
   const r = RISK_FREE_RATE;
   const q = DIV_YIELD[ticker] ?? 0.01;
   const { chains, exps, dte } = parseCboeChain(chainData, spot, maxExpirations);
@@ -375,11 +458,15 @@ export async function fetchGexData(ticker: string, maxExpirations = 4): Promise<
   const dex = agg.reduce((s, a) => s + a.dex_net, 0);
   const vex = agg.reduce((s, a) => s + a.vex_net, 0);
   const cex = agg.reduce((s, a) => s + a.cex_net, 0);
+  const vanna = agg.reduce((s, a) => s + a.vanna_net, 0);
   const atmRows = agg.filter(a => Math.abs(a.dist_pct) <= 0.5);
   const atmIV = atmRows.length ? (atmRows.reduce((s, a) => s + a.iv, 0) / atmRows.length) * 100 : 0;
 
-  const filteredAgg = agg.filter(a => Math.abs(a.gex_net) > 0);
+  const maxGex = agg.reduce((m, a) => Math.max(m, Math.abs(a.gex_net)), 0);
+  const filteredAgg = agg.filter(a => Math.abs(a.gex_net) > maxGex * 0.01 || Math.abs(a.gex_net) > 0.05 || a.oi > 500);
 
+  // Return a much wider range of strikes to avoid "empty levels" look
+  // Show roughly 50 strikes around the spot or the whole chain if it's smaller
   let closestIdx = 0;
   let minDiff = Infinity;
   for (let i = 0; i < filteredAgg.length; i++) {
@@ -387,19 +474,47 @@ export async function fetchGexData(ticker: string, maxExpirations = 4): Promise<
     if (diff < minDiff) { minDiff = diff; closestIdx = i; }
   }
   
-  const showAgg = filteredAgg.slice(Math.max(0, closestIdx - 20), Math.min(filteredAgg.length, closestIdx + 21));
+  const showAgg = filteredAgg.slice(Math.max(0, closestIdx - 50), Math.min(filteredAgg.length, closestIdx + 51));
+
+  const summaryData = chainData.data || {};
+
+  const uoa = allRows
+    .filter(r => r.volume > r.oi && r.volume >= 50)
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 30)
+    .map(r => {
+      const intrinsic = r.flag === 'C' ? Math.max(0, spot - r.strike) : Math.max(0, r.strike - spot);
+      const extrinsic = Math.max(0, r.mid - intrinsic);
+      return {
+        strike: r.strike, expiration: r.expiry, flag: r.flag,
+        volume: r.volume, oi: r.oi, bid: r.bid, ask: r.ask, mid: r.mid,
+        intrinsic, extrinsic, dte: r.dte, iv: r.iv,
+      };
+    });
 
   return {
     ticker, spot, levels,
     agg: showAgg,
+    exps,
     regime: {
       is_long_gamma: isLong,
       label: isLong ? 'LONG GAMMA · STABLE' : 'SHORT GAMMA · VOLATILE',
       bias, bias_color: biasColor,
     },
-    totals: { net_gex: netGex, net_vol_gex: netVolGex, gex_ratio: gexRatio, dex, vex, cex, atm_iv: atmIV, call_gex: totalCallGex, put_gex: totalPutGex },
+    totals: { net_gex: netGex, net_vol_gex: netVolGex, gex_ratio: gexRatio, dex, vex, cex, vanna, atm_iv: atmIV, call_gex: totalCallGex, put_gex: totalPutGex },
     flow, iv_rv_spread: ivRv,
     timestamp: new Date().toISOString(),
-    raw: allRows.filter(r => showAgg.some(a => a.strike === r.strike)).map(r => ({ strike: r.strike, expiration: r.expiry, callGEX: r.call_gex, putGEX: r.put_gex })),
+    uoa,
+    raw: allRows.filter(r => showAgg.some(a => a.strike === r.strike)).map(r => ({ strike: r.strike, expiration: r.expiry, callGEX: r.call_gex, putGEX: r.put_gex, volume: r.volume, oi: r.oi, flag: r.flag, ask: r.ask, bid: r.bid, dte: r.dte, mid: r.mid, iv: r.iv })),
+    summary: {
+      price_change: parseFloat(summaryData.price_change || '0'),
+      price_change_percent: parseFloat(summaryData.price_change_percent || '0'),
+      high: parseFloat(summaryData.high || '0'),
+      low: parseFloat(summaryData.low || '0'),
+      volume: parseFloat(summaryData.volume || '0'),
+      iv30: parseFloat(summaryData.iv30 || '0'),
+      bid: parseFloat(summaryData.bid || '0'),
+      ask: parseFloat(summaryData.ask || '0'),
+    }
   };
 }

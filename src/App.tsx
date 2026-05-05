@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
-import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info } from 'lucide-react';
+import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info, Clock } from 'lucide-react';
 import { TradingViewWidget } from './components/TradingViewWidget';
 import { BeautifulChart } from './components/BeautifulChart';
 import { GexDashboard } from './components/GexDashboard';
@@ -10,10 +10,14 @@ import { BlackScholesCalculator } from './components/BlackScholesCalculator';
 import { MacroNexus } from './components/MacroNexus';
 import { GammaGauge } from './components/GammaGauge';
 import { HedgingAnimation } from './components/HedgingAnimation';
+import { MenthorQLevelsChart } from './components/MenthorQLevelsChart';
+import { MarketDynamicsGrid } from './components/MarketDynamicsGrid';
 import { THEMES } from './themes';
 
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from './lib/firebase';
 import { bsPrice, bsDelta, bsGamma, bsVega, impliedVol } from './lib/blackScholes';
+
+import { useGexMetrics } from './hooks/useGexMetrics';
 
 const RISK_FREE_RATE = 0.043;
 const DIV_YIELD: Record<string, number> = {
@@ -56,6 +60,7 @@ const MODULES = [
 const VIP_MODULES = [
   { id: 'vip-gex-premium', title: 'GexRadar Premium', icon: Crown },
   { id: 'vip-gex', title: 'Live GEX Dashboard', icon: Activity },
+  { id: 'vip-menthorq', title: 'MenthorQ API Labs', icon: LayoutGrid },
   { id: 'vip-blackscholes', title: 'Black-Scholes Calculator', icon: Calculator },
   { id: 'vip-conversion', title: 'Conversion Engine', icon: Cpu },
   { id: 'vip-journal', title: 'Journal', icon: Book },
@@ -155,8 +160,12 @@ export default function App() {
     setIsLoggingIn(true);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      console.error("Login failed:", err);
+    } catch (err: any) {
+      if (err?.code === 'auth/popup-closed-by-user') {
+        console.log("Login popup closed by user.");
+      } else {
+        console.error("Login failed:", err);
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -184,14 +193,15 @@ export default function App() {
   const [error, setError] = useState("");
   const [isPlaybookEditor, setIsPlaybookEditor] = useState(false);
 
-  // Live Data State
-  const [chainData, setChainData] = useState<any>(null);
+  // Macro Analyst AI State
   const [conversionRatios, setConversionRatios] = useState<Record<string, any>>({});
   const [isLoadingLive, setIsLoadingLive] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [activeTicker, setActiveTicker] = useState(() => {
     return localStorage.getItem('floq_active_ticker') || 'SPY';
   });
+
+  const { data: gexMetrics } = useGexMetrics(activeTicker, 1, 60000);
 
   useEffect(() => {
     localStorage.setItem('floq_active_ticker', activeTicker);
@@ -657,113 +667,39 @@ export default function App() {
   const TICKERS = ["SPY", "QQQ", "DIA", "GLD", "IWM"];
 
   useEffect(() => {
-    if (!hasAccess) return;
+    if (!hasAccess || !activeTicker) return;
 
-    const fetchData = async () => {
-      if (!activeTicker) return;
+    const fetchMacroData = async () => {
       setIsLoadingLive(true);
       try {
-        // Fetch Chain
-        const chainRes = await fetch(`/api/chain/${activeTicker}`);
-        const chainText = await chainRes.text();
-        let chain;
-        try {
-          chain = JSON.parse(chainText);
-        } catch (e) {
-          if (!chainText.trim().toLowerCase().startsWith('<!doctype html>')) {
-             console.error("Chain JSON parse error:", e, "Text:", chainText.substring(0, 200));
-          }
-          return; // Stop processing silently to avoid throwing and breaking the UI
-        }
-        setChainData(chain);
-
-        // Fetch Ratios
         const symbols = ['SPY', 'QQQ'];
         const ratios: any = {};
         for (const symbol of symbols) {
           const res = await fetch(`/api/ratio/${symbol}`);
-          const ratioText = await res.text();
-          try {
-            ratios[symbol] = JSON.parse(ratioText);
-          } catch(e) {
-             if (!ratioText.trim().toLowerCase().startsWith('<!doctype html>')) {
-                console.error("Ratio parse error for", symbol, ":", e, "Text:", ratioText.substring(0, 200));
-             }
-          }
+          if (res.ok) ratios[symbol] = await res.json();
         }
         setConversionRatios(ratios);
         setLastUpdate(new Date());
       } catch (err) {
-        console.error("Live fetch error:", err);
+        console.error("Macro data fetch error:", err);
       } finally {
         setIsLoadingLive(false);
       }
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // 60s refresh
+    fetchMacroData();
+    const interval = setInterval(fetchMacroData, 60000);
     return () => clearInterval(interval);
   }, [hasAccess, activeTicker]);
-
-  const gexMetrics = useMemo(() => {
-    if (!chainData || !chainData.data || !chainData.data.current_price) return { netGex: 0, callGex: 0, putGex: 0, spot: 0, gammaFlip: 0 };
-    
-    const spot = parseFloat(chainData.data.current_price);
-    if(isNaN(spot)) return { netGex: 0, callGex: 0, putGex: 0, spot: 0, gammaFlip: 0 };
-
-    const options = chainData.data.options || [];
-    const q = DIV_YIELD[activeTicker] || 0.01;
-    const r = RISK_FREE_RATE;
-
-    let netGex = 0;
-    let callGex = 0;
-    let putGex = 0;
-    let totalOi = 0;
-
-    const today = new Date();
-    
-    options.forEach((opt: any) => {
-      const oi = parseInt(opt.open_interest) || 0;
-      totalOi += oi;
-      
-      if (oi < 100) return; // Filtering as per FIX 2
-
-      const iv = parseFloat(opt.iv);
-      if (isNaN(iv) || iv <= 0 || iv > 1.5) return; // IV Gating FIX 3/5
-
-      const parsed = parseOSISymbol(opt.option);
-      if (!parsed) return;
-      const { expiration, type, strike } = parsed;
-
-      const t = (expiration.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 365);
-      
-      if (t <= 0) return;
-
-      const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bsGamma(spot, strike, t, r, q, iv);
-      if (isNaN(gamma)) return;
-      
-      const gex = calculateGEX(gamma, oi, spot);
-      if (isNaN(gex)) return;
-
-      if (type === 'C') {
-        callGex += gex;
-        netGex += gex;
-      } else {
-        putGex += gex;
-        netGex -= gex;
-      }
-    });
-
-    return { netGex, callGex, putGex, spot, gammaFlip: spot * 0.95, totalOi }; // Flip calculation is complex, keeping estimated placeholder
-  }, [chainData, activeTicker]);
 
   const [combinedLiveChartData, setCombinedLiveChartData] = useState<any[]>([]);
 
   useEffect(() => {
-    let base = gexMetrics.spot || (activeTicker === 'SPY' ? 512 : activeTicker === 'QQQ' ? 440 : 200);
+    const spot = gexMetrics?.spot;
+    let base = spot || (activeTicker === 'SPY' ? 512 : activeTicker === 'QQQ' ? 440 : 200);
     if (!base) base = 100;
     
-    let baseNetGex = gexMetrics.netGex || (activeTicker === 'SPY' ? 2.5 : activeTicker === 'QQQ' ? 1.2 : 0.5);
+    let baseNetGex = gexMetrics?.totals?.net_gex || (activeTicker === 'SPY' ? 2.5 : activeTicker === 'QQQ' ? 1.2 : 0.5);
 
     let isMounted = true;
 
@@ -949,7 +885,7 @@ export default function App() {
        clearInterval(fastInterval);
        clearInterval(slowInterval);
     };
-  }, [activeTicker, gexMetrics.spot, gexMetrics.netGex]);
+  }, [activeTicker, gexMetrics?.spot, gexMetrics?.totals?.net_gex]);
 
   const handleKeySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1013,13 +949,22 @@ export default function App() {
   return (
     <div className={`min-h-screen bg-app-primary text-main-primary flex font-sans scroll-smooth transition-colors duration-500 overflow-x-hidden`}>
       {/* Sidebar Navigation */}
-      <nav className={`fixed hidden md:flex flex-col w-64 h-screen border-r border-main-primary bg-sidebar p-6 z-10 transition-colors duration-500`}>
-        <div className="mb-10 flex items-baseline gap-3">
-          <h1 className={`font-serif font-black text-3xl tracking-tight uppercase title-elegant ${isDarkTheme ? 'text-white' : 'text-indigo-900'} drop-shadow-sm`}>FloQ</h1>
+      <nav className={`fixed hidden md:flex flex-col w-72 h-screen border-r border-white/5 bg-[#0a0a0c] p-8 z-10 transition-colors duration-500 overflow-hidden relative`}>
+        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/5 to-transparent shadow-[0_1px_10px_rgba(255,255,255,0.05)]" />
+        
+        <div className="mb-12 flex items-center justify-between">
+          <div className="group cursor-pointer">
+            <h1 className={`font-mono font-black text-2xl tracking-[0.2em] uppercase ${isDarkTheme ? 'text-white' : 'text-indigo-900'} drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>FLO<span className="text-blue-500">Q</span></h1>
+            <div className="h-[2px] w-0 group-hover:w-full bg-blue-500 transition-all duration-500" />
+          </div>
+          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse border border-blue-500/50 shadow-[0_0_8px_#3b82f6]" />
         </div>
         
-        <div className={`text-[10px] font-bold uppercase tracking-widest ${hasAccess ? 'opacity-20' : 'opacity-40'} mb-4`}>
-          Trading Guide
+        <div className="space-y-1 mb-10">
+          <div className={`text-[9px] font-black uppercase tracking-[0.4em] ${hasAccess ? 'text-blue-500/40' : 'text-white/20'} mb-4 flex items-center gap-3`}>
+            <span>Core Systems</span>
+            <div className="h-[1px] flex-1 bg-white/5" />
+          </div>
         </div>
 
         {!hasAccess && (
@@ -1061,7 +1006,7 @@ export default function App() {
         {!hasAccess && (
           <button
             onClick={() => setIsKeyModalOpen(true)}
-            className="flex items-center gap-3 px-3 py-3 text-left transition-all mt-6 border border-dashed border-main-primary/20 hover:border-main-primary/40 rounded-sm group opacity-60 hover:opacity-100 text-main-primary"
+            className="flex items-center gap-3 px-3 py-3 text-left transition-all mt-6 hover:border-main-primary/40 rounded-sm group opacity-60 hover:opacity-100 text-main-primary"
           >
             <Key size={14} className="group-hover:rotate-45 transition-transform" />
             <span className="text-[10px] font-bold uppercase tracking-widest flex-1">Decrypt Access</span>
@@ -1069,7 +1014,7 @@ export default function App() {
         )}
 
         {hasAccess && (
-           <div className={`mt-6 flex items-center gap-2 px-3 py-2 bg-brand-emerald/5 border border-brand-emerald/20 rounded-sm`}>
+           <div className={`mt-6 flex items-center gap-2 px-3 py-2 bg-brand-emerald/5 rounded-sm`}>
              <ShieldCheck size={14} className="text-brand-emerald" />
              <span className={`text-[9px] font-bold uppercase tracking-widest text-brand-emerald`}>Institutional Session</span>
            </div>
@@ -1079,7 +1024,7 @@ export default function App() {
         {hasAccess && (
           <button 
             onClick={() => setHasAccess(false)}
-            className="mt-4 flex items-center justify-center gap-2 w-full py-3 border border-main-primary/10 hover:border-rose-500/30 bg-main-primary/2 hover:bg-rose-500/5 transition-all group rounded-sm"
+            className="mt-4 flex items-center justify-center gap-2 w-full py-3 hover:border-rose-500/30 bg-main-primary/2 hover:bg-rose-500/5 transition-all group rounded-sm"
           >
             <Terminal size={12} className="text-main-primary opacity-40 group-hover:text-rose-500 transition-colors" />
             <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-main-primary opacity-40 group-hover:text-rose-500 transition-colors">
@@ -1090,7 +1035,7 @@ export default function App() {
 
         <div className="mt-auto px-1 py-4 mb-2">
             {user ? (
-                <div id="user-profile-section" className="flex flex-col gap-3 p-3 bg-card-primary border border-main-primary/10 rounded-sm">
+                <div id="user-profile-section" className="flex flex-col gap-3 p-3 bg-card-primary rounded-sm">
                     <div className="flex items-center gap-3">
                         {user.photoURL ? (
                             <img src={user.photoURL} alt={user.displayName || "User"} className="w-8 h-8 rounded-full border border-main-primary/10" />
@@ -1110,7 +1055,7 @@ export default function App() {
                     </div>
                     <button 
                         onClick={handleLogout}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-card-primary border border-main-primary hover:bg-accent-surface transition-all text-[9px] font-bold uppercase tracking-widest text-main-primary"
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-card-primary hover:bg-accent-surface transition-all text-[9px] font-bold uppercase tracking-widest text-main-primary"
                     >
                         <LogOut size={12} />
                         Logout
@@ -1132,7 +1077,7 @@ export default function App() {
             )}
         </div>
         
-        <div className="pt-6 border-t border-main-primary space-y-4">
+        <div className="pt-6 space-y-4">
           <div className="flex flex-col gap-3">
             <span className="text-[10px] uppercase tracking-widest text-main-primary opacity-40 font-bold">Theme Engine</span>
             <div className="flex flex-wrap gap-2">
@@ -1158,9 +1103,12 @@ export default function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 relative overflow-x-hidden">
+      <main className="flex-1 md:ml-72 relative overflow-x-hidden bg-app-primary">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#3b82f605,transparent_50%)] pointer-events-none" />
+        
+
         {/* Mobile Header */}
-        <div className="md:hidden sticky top-0 bg-card-primary/70 backdrop-blur-xl border-b border-main-primary p-4 flex items-center justify-between z-20">
+        <div className="md:hidden sticky top-0 bg-card-primary/70 backdrop-blur-xl p-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3">
             <h1 className="font-serif font-black text-lg tracking-tight uppercase title-elegant text-indigo-900">FloQ</h1>
             <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">{hasAccess ? 'Enterprise' : 'Academy'}</span>
@@ -1186,97 +1134,206 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.5, ease: "easeInOut" }}
-              className="max-w-4xl mx-auto px-6 py-12 md:py-24 space-y-32"
+              className="max-w-[1600px] mx-auto px-4 md:px-8 xl:px-16 py-12 md:py-24 space-y-48"
             >
               {/* Header Section */}
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="space-y-6 max-w-2xl pb-12 border-b border-black/10"
+                className="space-y-8 max-w-3xl pb-16 border-b border-white/5"
               >
-                <div className="text-[10px] font-bold uppercase tracking-widest opacity-50 flex items-center gap-2">
-                  Journal
+                <div className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-blue-500/50 flex items-center gap-3">
+                  <div className="w-8 h-[1px] bg-blue-500/30" />
+                  Terminal Journal
                 </div>
-                <h1 className="text-5xl md:text-7xl font-serif font-light leading-[1.1] text-main-primary title-elegant drop-shadow-sm">
-                  The <span className="text-indigo-600 font-black not-italic relative">Options Flow<div className="absolute -bottom-2 left-0 w-full h-1 bg-indigo-200/50 blur-[2px] rounded-full" /></span> <br />
-                  <span className="text-rose-500 font-serif italic italic">Trading Guide</span>
+                <h1 className="text-6xl md:text-8xl font-light leading-[0.95] text-white tracking-tighter">
+                  Options Flow <br />
+                  <span className="text-blue-500 italic font-serif opacity-90">Intelligence</span>
                 </h1>
-                <p className="text-lg text-neutral-600 leading-relaxed max-w-xl">
-                  An institutional approach to the financial ecosystem. Learn the foundation of options-driven markets, quantitative models, and actionable strategies.
+                <p className="text-xl text-white/40 leading-relaxed max-w-xl font-light">
+                  An institutional approach to the financial ecosystem. Quantifying the invisible forces of market maker hedging and liquidity dynamics.
                 </p>
               </motion.div>
 
           {/* Module 1 */}
-          <section id="module-1" className="scroll-mt-10 p-8 md:p-12 bg-card-primary border border-main-primary rounded-[3rem] shadow-sm mb-12">
-            <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 01</span>
-            </div>
-            <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-10 title-elegant text-main-primary">The Foundation of Options-Driven Markets</h2>
+          <section id="module-1" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/10 to-transparent rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] mb-32 relative group">
+            <div className="absolute inset-0 bg-[#0c0c10]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#3b82f608,transparent_50%)]" />
             
-            <div className="space-y-12">
-              <div className="max-w-3xl">
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-4 border-b border-main-primary/10 pb-2 text-main-primary">Why Traditional Technical Analysis is No Longer Enough</h3>
-                <p className="text-main-primary opacity-80 leading-relaxed text-lg">
-                  The global financial ecosystem has experienced a fundamental transition in its underlying price discovery mechanisms. 
-                  Since 2021, options trading volumes have systematically surpassed the volumes of the underlying cash equity markets. 
-                  This evolution means that the hedging activities of market makers—the primary counterparties to retail and institutional 
-                  options trades—now constitute a dominant force in intraday and swing-term price action.
-                </p>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-8">
-                <div className="bg-card-primary p-8 border border-main-primary shadow-sm group">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-accent-primary mb-4 bg-accent-primary/10 inline-block px-2 py-1">Mechanism</h3>
-                  <h4 className="text-2xl font-serif italic mb-3 text-main-primary">The Role of the Market Maker and Delta Hedging</h4>
-                  <p className="text-main-primary opacity-60 leading-relaxed text-sm mb-6">
-                    Market makers are not in the business of taking directional bets; their goal is to provide liquidity and collect the spread. 
-                    To protect themselves from market movements, they use a strategy called <strong className="font-bold text-main-primary">delta hedging</strong>. 
-                    This means they constantly buy or sell the underlying asset (or futures) to keep their directional exposure neutral. 
-                  </p>
-                  <HedgingAnimation />
+            <div className="relative p-8 md:p-16 xl:p-20">
+              <div className="mb-16 flex flex-col md:flex-row md:items-center justify-between gap-10 pb-12">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.1)]">Level 01</span>
+                    <div className="h-[1px] w-16 bg-gradient-to-r from-blue-500/50 to-transparent" />
+                  </div>
+                  <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none">Market Foundation</h2>
                 </div>
-                
-                <div className="bg-accent-surface p-8 preserve-dark border border-main-primary shadow-sm group">
-                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-4 bg-rose-500/10 inline-block px-2 py-1">Metrics</h3>
-                  <h4 className="text-2xl font-serif italic mb-3 text-main-primary">What is Gamma and Why Does It Move Markets?</h4>
-                  <p className="leading-relaxed text-sm opacity-80 text-main-primary mb-6">
-                    Gamma measures how fast an option's delta changes as the underlying price moves. When gamma is high, an option's 
-                    delta changes very quickly, which forces dealers to adjust their hedges rapidly. This urgent need to hedge translates 
-                    into massive buying or selling volume in the underlying asset.
-                  </p>
-                  <GammaGauge ticker={activeTicker} />
+                <div className="flex items-center gap-6">
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[9px] font-mono font-black text-white/10 uppercase tracking-[0.3em]">Core Protocol</span>
+                    <span className="text-sm font-mono text-white/40 bg-white/5 px-3 py-1 rounded-lg">ARCH-V4.2</span>
+                  </div>
+                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center shadow-inner">
+                    <Layers size={28} className="text-blue-500 opacity-80" />
+                  </div>
                 </div>
               </div>
-
-              <div className="bg-accent-surface border border-main-primary p-8 md:p-10 rounded-2xl">
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-main-primary/20 flex items-center justify-between text-main-primary">
-                  <span>Positive vs. Negative Gamma Regimes</span>
-                  <Activity size={16} className="opacity-50" />
-                </h3>
-                <p className="text-main-primary opacity-60 leading-relaxed mb-8 text-sm italic font-serif text-main-primary">
-                  To trade successfully, you must know what "gamma regime" the market is in. FlowDynamics calculates the Net Gamma Exposure (Net GEX) to determine this:
-                </p>
-                
-                <div className="space-y-6">
-                  <div className="flex gap-4">
-                    <div className="w-1 bg-brand-emerald"></div>
-                    <div>
-                      <h4 className="text-xl font-serif italic text-main-primary mb-1">Position Gamma (Low Volatility / Mean Reverting)</h4>
-                      <p className="text-main-primary opacity-40 text-sm leading-relaxed">
-                        When the market is in positive gamma, market makers hedge by buying when the price drops and selling when it rises. 
-                        This dampens volatility, keeping the market trapped in a range and creating choppy, sideways movement.
+                    <div className="space-y-32">
+                {/* Thesis & Intelligence Layer */}
+                <div className="grid lg:grid-cols-12 gap-12 lg:gap-24 items-center">
+                  <div className="lg:col-span-8 space-y-12">
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-4">
+                        <div className="h-[1px] w-12 bg-blue-500/50" />
+                        <h3 className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-blue-500/80">
+                          Analytical Thesis
+                        </h3>
+                      </div>
+                      <h4 className="text-5xl md:text-7xl xl:text-[5rem] font-thin text-white tracking-tighter leading-[1.05]">
+                        Structural <span className="text-blue-500 italic opacity-80">Supremacy</span>
+                      </h4>
+                      <p className="text-white/40 leading-relaxed text-xl font-light max-w-2xl">
+                        The global financial ecosystem has experienced a fundamental transition. 
+                        Since 2021, <span className="text-white/80">options trading volumes</span> have systematically eclipsed the volumes of underlying cash equity markets, forcing price discovery into the derivatives space.
                       </p>
                     </div>
+                    
+                    <div className="grid grid-cols-2 gap-12 pt-8 max-w-xl">
+                      <div className="space-y-2">
+                        <div className="text-[9px] font-mono font-black text-white/20 uppercase tracking-widest">Efficiency</div>
+                        <div className="text-4xl text-white font-light tracking-tight">99.8%</div>
+                        <p className="text-[10px] text-white/30 uppercase tracking-wider">Synchronization Rate</p>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[9px] font-mono font-black text-white/20 uppercase tracking-widest">Latency</div>
+                        <div className="text-4xl text-white font-light tracking-tight">&lt; 0.1ms</div>
+                        <p className="text-[10px] text-white/30 uppercase tracking-wider">Decision Logic</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-4">
+                    <div className="relative group/quote mt-8 lg:mt-0 xl:-ml-12">
+                      <div className="absolute -inset-4 bg-gradient-to-br from-blue-500/10 to-transparent blur-2xl opacity-0 group-hover/quote:opacity-100 transition-opacity duration-1000" />
+                      <div className="relative p-10 xl:p-14 rounded-[3rem] bg-white/[0.02] backdrop-blur-md space-y-10 shadow-2xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl opacity-50" />
+                        <div className="flex items-center justify-between">
+                           <Terminal size={32} className="text-blue-500/40" />
+                           <div className="w-1.5 h-1.5 rounded-full bg-blue-500/40 animate-pulse" />
+                        </div>
+                        <p className="text-lg xl:text-xl text-white/50 italic font-light leading-relaxed relative z-10">
+                          "Market maker hedging is no longer a secondary effect; it is the primary driver of intraday price discovery. To ignore flow is to trade static in a dynamic world."
+                        </p>
+                        <div className="flex items-center gap-4 pt-4">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center">
+                            <BrainCircuit size={18} className="text-blue-500/60" />
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-mono font-black text-white/60 uppercase tracking-widest">Quantitative Protocol</div>
+                            <div className="text-[10px] font-mono text-white/30 mt-1">Alpha-7 Deployment</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* The Synapse Laboratory */}
+                <div className="relative space-y-12">
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 px-6 xl:px-12">
+                    <div className="space-y-2">
+                      <div className="text-[10px] font-mono font-black text-blue-500 uppercase tracking-[0.5em]">System-01</div>
+                      <h4 className="text-3xl font-light text-white tracking-tight">Flow Mechanics Laboratory</h4>
+                    </div>
+                    <div className="text-[10px] font-mono font-bold text-white/20 leading-relaxed text-right uppercase tracking-[0.2em] hidden md:block">
+                      Visualizing the recursive feedback <br /> loops of institutional size.
+                    </div>
+                  </div>
+
+                  <div className="bg-[#08080c] rounded-[4rem] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.9)] relative">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#3b82f604,transparent_70%)] rounded-[4rem]" />
+                    <div className="flex flex-col xl:flex-row bg-gradient-to-br from-white/[0.03] to-transparent p-6 md:p-12 xl:p-16 gap-12 xl:gap-24 items-center relative z-10 w-full">
+                      <div className="w-full xl:w-1/2 flex flex-col items-center justify-center gap-12 group/item">
+                        <div className="w-full max-w-[540px] aspect-square bg-black/60 rounded-[3rem] flex items-center justify-center p-8 sm:p-12 transition-all duration-700 shadow-inner relative overflow-hidden">
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#3b82f605,transparent_70%)]" />
+                          <div className="absolute top-10 left-10 flex items-center gap-3">
+                             <div className="w-2 h-2 rounded-full bg-blue-500/80 animate-pulse" />
+                             <span className="text-[10px] font-mono font-black text-white/20 uppercase tracking-[0.3em]">Live Engine</span>
+                          </div>
+                          <div className="w-full h-full flex items-center justify-center scale-90 sm:scale-100">
+                             <HedgingAnimation />
+                          </div>
+                        </div>
+                        <div className="space-y-4 text-center max-w-md">
+                          <h5 className="text-2xl font-thin text-white tracking-tight">Delta-Neutral Sync</h5>
+                          <p className="text-sm font-light text-white/40 leading-relaxed">
+                            Market makers neutralize price risk through mechanical balancing, creating structured liquidity channels that govern intraday volatility.
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="hidden xl:block w-[1px] h-[500px] bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+                      
+                      <div className="w-full xl:w-1/2 flex flex-col items-center justify-center group/item scale-100">
+                        <div className="w-full max-w-[540px] p-4 hover:scale-[1.02] transition-transform duration-1000 ease-out flex justify-center">
+                          <MarketDynamicsGrid ticker={activeTicker} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Regime Architecture Comparison */}
+                <div className="space-y-12">
+                  <div className="flex items-center gap-6 px-4">
+                     <h3 className="text-[10px] font-mono font-black text-white/20 uppercase tracking-[0.5em]">Regime Logic</h3>
+                     <div className="h-[1px] flex-1 bg-white/5" />
                   </div>
                   
-                  <div className="flex gap-4">
-                    <div className="w-1 bg-rose-500"></div>
-                    <div>
-                      <h4 className="text-xl font-serif italic text-main-primary mb-1">Negative Gamma (High Volatility / Directional)</h4>
-                      <p className="text-main-primary opacity-40 text-sm leading-relaxed">
-                        When the market is in negative gamma, dealers must sell when the price drops and buy when it rises. 
-                        This pro-cyclical hedging amplifies market moves, creating fast, aggressive trends and massive intraday swings.
-                      </p>
+                  <div className="grid md:grid-cols-2 gap-10">
+                    <div className="group relative">
+                      <div className="absolute inset-0 bg-emerald-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-1000" />
+                      <div className="relative p-16 rounded-[4rem] bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-700 space-y-10 group/card overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[80px] -mr-16 -mt-16" />
+                        <div className="w-20 h-1 bg-emerald-500/30 mb-2 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)] group-hover:w-32 transition-all duration-700" />
+                        <div className="space-y-4">
+                          <h4 className="text-4xl font-thin text-white tracking-tighter">Positive Gamma</h4>
+                          <div className="flex items-center gap-3">
+                            <div className="text-[10px] font-mono font-black text-emerald-500/60 uppercase tracking-[0.3em]">Mean Reverting Regime</div>
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/40" />
+                          </div>
+                        </div>
+                        <p className="text-lg text-white/30 leading-relaxed font-light">
+                          Market makers trade against the trend to maintain neutral books. This absorbs volatility, trapping price in predictable structural corridors.
+                        </p>
+                        <div className="pt-6 flex items-center justify-between">
+                           <div className="text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Volatility Floor: Active</div>
+                           <ChevronRight size={20} className="text-emerald-500/20 group-hover:text-emerald-500 group-hover:translate-x-2 transition-all" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="group relative">
+                      <div className="absolute inset-0 bg-rose-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-1000" />
+                      <div className="relative p-16 rounded-[4rem] bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-700 space-y-10 group/card overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 blur-[80px] -mr-16 -mt-16" />
+                        <div className="w-20 h-1 bg-rose-500/30 mb-2 rounded-full shadow-[0_0_20px_rgba(244,63,94,0.3)] group-hover:w-32 transition-all duration-700" />
+                        <div className="space-y-4">
+                          <h4 className="text-4xl font-thin text-white tracking-tighter">Negative Gamma</h4>
+                          <div className="flex items-center gap-3">
+                            <div className="text-[10px] font-mono font-black text-rose-500/60 uppercase tracking-[0.3em]">Directional Regime</div>
+                            <div className="w-1.5 h-1.5 rounded-full bg-rose-500/40" />
+                          </div>
+                        </div>
+                        <p className="text-lg text-white/30 leading-relaxed font-light">
+                          Hedging flow accelerates price movement as dealers chase the underlying. This triggers aggressive expansion and high-velocity trends.
+                        </p>
+                        <div className="pt-6 flex items-center justify-between">
+                           <div className="text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Expansion Risk: Critical</div>
+                           <ChevronRight size={20} className="text-rose-500/20 group-hover:text-rose-500 group-hover:translate-x-2 transition-all" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1285,245 +1342,247 @@ export default function App() {
           </section>
 
           {/* Module 2 */}
-          <section id="module-2" className="scroll-mt-10 p-8 md:p-12 bg-card-primary border border-main-primary rounded-[3rem] shadow-sm mb-12">
-            <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 02</span>
-            </div>
-            <div className="mb-12 border-b border-main-primary/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Mastering Gamma Levels</h2>
-              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
-                OptionsFlow Gamma Levels are forward-looking price zones derived from options positioning, revealing exactly where institutions and market makers are forced to hedge aggressively.
-              </p>
-            </div>
+          <section id="module-2" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/5 to-transparent rounded-[4rem] shadow-2xl mb-32 relative">
+            <div className="absolute inset-0 bg-[#0a0a0e]" />
+            
+            <div className="relative p-12 md:p-24">
+              <div className="mb-16 border-b border-white/5 pb-12">
+                <div className="flex items-center gap-4 mb-6">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-purple-500 bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20">Operational</span>
+                </div>
+                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Mastering Gamma Levels</h2>
+                <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
+                  Strategic price zones derived from options positioning, revealing exactly where institutions are <span className="text-white/60">forced to hedge</span>.
+                </p>
+              </div>
 
-            <div className="grid md:grid-cols-2 gap-x-10 gap-y-6">
-              <GlossaryCard 
-                idx={0}
-                title="Core Resistance"
-                subtitle="The Gamma Wall"
-                def="This is the strike price with the highest net call gamma exposure across the option chain."
-                impact="It acts as a structural ceiling. As price approach this level, dealers who are long gamma must sell the underlying to stay neutral, causing the price to stall or reject."
-              />
-              <GlossaryCard 
-                idx={1}
-                title="Put Support"
-                subtitle="Floor"
-                def="The strike price with the highest net put gamma exposure."
-                impact="It acts as a structural floor. When price drops here, put holders monetize. Dealers buy back the underlying, creating a bounce."
-                color="red"
-              />
-              <GlossaryCard 
-                idx={2}
-                title="High Volatility Level (HVL)"
-                subtitle="Regime Compass"
-                def="The transition zone where market overall gamma flips from positive to negative."
-                impact="Price ABOVE HVL = positive gamma (range-bound chop). Price BELOW HVL = negative gamma (momentum, trends, high volatility)."
-                color="emerald"
-              />
-              <GlossaryCard 
-                idx={3}
-                title="1-Day Expected Move"
-                subtitle="Min & Max"
-                def="A proprietary volatility indicator using historical implied volatility to forecast statistical high and low boundaries for the day."
-                impact="The S&P 500 stays inside this range 85%-87% of the time."
-              />
-              <GlossaryCard 
-                idx={4}
-                title="0DTE Levels"
-                subtitle="Intraday Magnets"
-                def="Gamma levels calculated purely from options that expire on the current day."
-                impact="They have the highest gamma and are incredibly sensitive, causing fast pinning or reversals."
-              />
-              <GlossaryCard 
-                idx={5}
-                title="GEX Levels (1-10)"
-                subtitle="Secondary Ranges"
-                def="Secondary levels representing the top 10 strikes with highest net gamma and delta exposure."
-                impact="GEX 1 is the strongest. Actively used by day traders for precise take-profit targets."
-                style={{ color: '#0d8fff', borderColor: '#d100ff' }}
-              />
+              <div className="grid lg:grid-cols-2 gap-10">
+                <GlossaryCard 
+                  idx={0}
+                  title="Core Resistance"
+                  subtitle="The Gamma Wall"
+                  def="Strike price with the highest net call gamma exposure across the entire option chain."
+                  impact="Acts as a structural ceiling. Long-gamma dealers must sell as price rises, dampens expansion."
+                />
+                <GlossaryCard 
+                  idx={1}
+                  title="Put Support"
+                  subtitle="Floor"
+                  def="Strike price with the highest net put gamma exposure."
+                  impact="Acts as a structural floor. Put holders monetize while dealers buy back, creating a bounce."
+                  color="red"
+                />
+                <GlossaryCard 
+                  idx={2}
+                  title="Volatility Flip (HVL)"
+                  subtitle="Regime Compass"
+                  def="The transition zone where market overall gamma flips from positive to negative."
+                  impact="Above HVL = Stability/Mean Reversion. Below HVL = High Volatility/Expansion."
+                  color="emerald"
+                />
+                <GlossaryCard 
+                  idx={3}
+                  title="1-Day Expected Move"
+                  subtitle="Statistical Envelope"
+                  def="Forecasts statistical high/low boundaries for the day using historical implied volatility."
+                  impact="The market respects these boundaries 85-87% of the time. High probability reversal zones."
+                />
+              </div>
             </div>
           </section>
 
           {/* Module 3 */}
-          <section id="module-3" className="scroll-mt-10 p-8 md:p-12 bg-accent-surface border border-main-primary rounded-[3rem] shadow-sm mb-12">
-            <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 03</span>
-            </div>
+          <section id="module-3" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/5 to-transparent rounded-[4rem] shadow-2xl mb-32 relative">
+            <div className="absolute inset-0 bg-[#08080c]" />
             
-            <div className="mb-12 border-b border-main-primary/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Advanced Quantitative Models</h2>
-              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
-                To give you a true institutional edge, FlowDynamics provides supplementary models that combine with Gamma Levels to build a complete trading roadmap.
-              </p>
-            </div>
-
-            <div className="mb-12">
-              <BlackScholesCalculator />
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-card-primary border text-main-primary border-main-primary p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm rounded-xl">
-                <div className="md:w-1/3">
-                  <h3 className="text-2xl font-serif italic mb-2">Blind Spots Levels</h3>
-                  <div className="w-12 h-1 bg-accent-primary my-4"></div>
+            <div className="relative p-12 md:p-24">
+              <div className="mb-16 border-b border-white/5 pb-12">
+                <div className="flex items-center gap-4 mb-6">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-emerald-500 bg-emerald-500/10 px-4 py-1.5 rounded-full border border-emerald-500/20">Analytical</span>
                 </div>
-                <div className="md:w-2/3">
-                  <p className="text-main-primary opacity-60 leading-relaxed text-sm">
-                    Blind Spots are hidden market reaction zones that traditional charting overlooks. They highlight crucial price levels where correlated assets (such as bonds, commodities, or the Dollar) heavily influence your target asset. They serve as excellent take-profit zones and help you avoid opening trades right into hidden institutional friction.
-                  </p>
-                </div>
+                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Quantitative Edge</h2>
+                <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
+                  Institutional models that map the <span className="text-white/60">invisible roadmap</span> of market friction and liquidity voids.
+                </p>
               </div>
 
-              <div className="bg-card-primary border text-main-primary border-main-primary p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm rounded-xl">
-                <div className="md:w-1/3">
-                  <h3 className="text-2xl font-serif italic mb-2">Dark Pool Anomalies</h3>
-                  <div className="w-12 h-1 bg-accent-primary my-4"></div>
+              <div className="grid gap-8">
+                <div className="group relative">
+                  <div className="absolute inset-0 bg-blue-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-700" />
+                  <div className="relative p-12 rounded-[3.5rem] bg-white/[0.01] border border-white/10 hover:border-blue-500/20 hover:bg-white/[0.03] transition-all duration-500 flex flex-col lg:flex-row gap-12 items-start">
+                    <div className="lg:w-1/3">
+                      <h3 className="text-3xl font-light text-white tracking-tight">Blind Spots</h3>
+                      <div className="w-12 h-1 bg-blue-500/40 mt-4 rounded-full" />
+                    </div>
+                    <div className="lg:w-2/3">
+                      <p className="text-lg text-white/40 leading-relaxed font-light">
+                        Hidden Market reaction zones where multi-asset correlations influence intraday price. These friction nodes highlight where traditional charting fails to see institutional exhaustion.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="md:w-2/3">
-                  <p className="text-main-primary opacity-60 leading-relaxed text-sm">
-                    Off-exchange footprints tracking high-block institutional volume that bypasses the public lit order books. These dark pools act as immense structural support or resistance when the public price approaches. Monitoring these anomalies gives early warnings of potential trend reversals or major continuation legs before retail catches on.
-                  </p>
+
+                <div className="group relative">
+                  <div className="absolute inset-0 bg-purple-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-700" />
+                  <div className="relative p-12 rounded-[3.5rem] bg-white/[0.01] border border-white/10 hover:border-purple-500/20 hover:bg-white/[0.03] transition-all duration-500 flex flex-col lg:flex-row gap-12 items-start">
+                    <div className="lg:w-1/3">
+                      <h3 className="text-3xl font-light text-white tracking-tight">Dark Pools</h3>
+                      <div className="w-12 h-1 bg-purple-500/40 mt-4 rounded-full" />
+                    </div>
+                    <div className="lg:w-2/3">
+                      <p className="text-lg text-white/40 leading-relaxed font-light">
+                        Off-exchange data footprints. These large institutional block trades create immense structural magnets that often override retail sentiment and news-driven moves.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="bg-card-primary border text-main-primary border-main-primary p-8 flex flex-col md:flex-row gap-8 items-start shadow-sm rounded-xl">
-                <div className="md:w-1/3">
-                  <h3 className="text-2xl font-serif italic mb-2">Absolute Liquidity Voids</h3>
-                  <div className="w-12 h-1 bg-accent-primary my-4"></div>
-                </div>
-                <div className="md:w-2/3">
-                  <p className="text-main-primary opacity-60 leading-relaxed text-sm">
-                    Pinpoint exact price levels where institutional limit orders have completely evaporated. When the market enters a liquidity void, price accelerates violently due to a lack of friction. By mapping these hidden vacuums before they are filled, you can catch massive, high-R/R breakout momentum trades with razor-sharp precision long before retail volume even registers the move.
-                  </p>
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-          {/* Module 4 */}
-          <section id="module-4" className="scroll-mt-10 p-8 md:p-12 bg-card-primary border border-main-primary rounded-[3rem] shadow-sm mb-12">
-            <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 04</span>
-            </div>
-            
-            <div className="mb-12 border-b border-main-primary/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">The Options Flow Trading Playbook</h2>
-              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
-                Actionable, step-by-step strategies based on the identified gamma environment.
-              </p>
-            </div>
-
-            <div className="space-y-12">
-              <StrategyCard 
-                num="01"
-                title="Positive Gamma Mean Reversion"
-                env="The underlying price is trading ABOVE the HVL, and the Net GEX is positive."
-                play="Expect a choppy, range-bound market because dealers are selling rallies and buying dips. Use mean-reversion strategies: fade (short) the market at the Core Resistance and buy bounces at the Put Support. Anticipate the price to 'pin' near these major strikes."
-                color="emerald"
-              />
-               <StrategyCard 
-                num="02"
-                title="Negative Gamma Trend Following"
-                env="The price drops BELOW the HVL, flipping the gamma regime to negative."
-                play="Dealers are now forced to sell when the price drops, creating a feedback loop of volatility. Do not 'buy the dip' blindly. Switch to trend-following and momentum breakdown strategies, and widen stop-losses and profit targets to accommodate massive intraday swings."
-                color="red"
-              />
-               <StrategyCard 
-                num="03"
-                title="1-Day Expected Move Fades"
-                env="Price rapidly touches the 1-Day Min or 1-Day Max early in the session without a major news catalyst."
-                play="Because the market stays inside this statistical range ~85% of the time, touching the boundary signals the market is overextended. Enter a reversal trade at the 1D Min/Max, and use the opposite expected move or secondary GEX levels as your take-profit target."
-              />
-               <StrategyCard 
-                num="04"
-                title="Intraday Gamma Scalping"
-                env="High-volume intraday trading sessions."
-                play="Map out the 0DTE Core Resistance, 0DTE Put Support, and GEX 1 / GEX 2 levels. Use these exact lines as highly precise intraday magnets to scalp small bounces or efficiently scale out of winning positions."
-              />
-            </div>
-          </section>
-
-          {/* Module 5 */}
-          <section id="module-5" className="scroll-mt-10 p-8 md:p-12 bg-accent-surface border border-main-primary rounded-[3rem] shadow-sm mb-12">
-            <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 05</span>
-            </div>
-            
-             <div className="mb-12 border-b border-main-primary/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Integrating the Data</h2>
-              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
-                We deliver institutional models directly to your favorite charting software via API, eliminating guesswork.
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-10">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-6 pb-2 border-b border-main-primary/10 text-main-primary">Supported Platforms</h3>
-                <p className="text-main-primary opacity-60 mb-6 text-sm">FlowDynamics natively integrates into the industry's best software:</p>
-                <ul className="space-y-4 text-main-primary">
-                  {[
-                    ['MotiveWave', 'Imports Gamma Levels, Blind Spots, and Expected Moves natively.'],
-                    ['Quantower', 'Overlays options liquidity data right onto advanced order-flow software.']
-                  ].map(([p, desc]) => (
-                    <li key={p} className="flex gap-4 p-4 border border-main-primary/10 bg-card-primary shadow-sm rounded-lg">
-                      <div className="mt-1"><Target size={18} className="text-accent-primary opacity-50" /></div>
-                      <div>
-                        <div className="font-serif italic text-lg mb-1 text-main-primary">{p}</div>
-                        <div className="text-xs text-main-primary opacity-40">{desc}</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="bg-accent-primary text-app-primary p-8 rounded-tr-[40px] shadow-sm relative flex flex-col h-full overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-10">
-                  <Monitor size={150} />
-                </div>
-                <h3 className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-4 bg-white/10 inline-block px-2 py-1 self-start">Feature</h3>
-                <h3 className="text-2xl font-serif italic mb-4 relative z-10 text-app-primary">The Power of Levels Conversion</h3>
-                <div className="w-12 h-1 bg-app-primary my-6 relative z-10 opacity-30"></div>
-                <div className="text-app-primary opacity-70 leading-relaxed text-sm relative z-10 space-y-4 flex-1">
-                  <p>
-                    If you trade Futures (like ES or NQ), looking at futures volume alone is trading blind. FlowDynamics's "Levels Conversion" tool allows you to take the massive options data from indices (like SPX or NDX) and accurately overlay them onto your futures charts. 
-                  </p>
-                  <p>
-                    By applying an <strong>Auto Ratio</strong> or <strong>Manual Ratio</strong>, you can perfectly align institutional SPX options flow onto your ES futures chart in real-time.
-                  </p>
-                  <div className="mt-6 p-4 border border-app-primary/20 bg-app-primary/5 rounded-sm" style={{ color: '#ffffff' }}>
-                    <h4 className="font-bold text-app-primary mb-2 uppercase text-[10px] tracking-wider">Why Not ETFs?</h4>
-                    <p className="text-xs text-app-primary opacity-80">
-                      Levels conversion strictly applies to cash-settled Indices (like SPX and NDX) mapping to their respective Futures. ETFs (like SPY or QQQ) hold physical underlying shares and carry dividend payouts and early assignment risk. Because of these structural pricing differences, institutional options flow originating from an ETF cannot be mathematically mapped to a Futures contract with the precision required for institutional trading. We rely exclusively on the purest source: European-style Index Options.
-                    </p>
+                <div className="group relative">
+                  <div className="absolute inset-0 bg-emerald-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-700" />
+                  <div className="relative p-12 rounded-[3.5rem] bg-white/[0.01] border border-white/10 hover:border-emerald-500/20 hover:bg-white/[0.03] transition-all duration-500 flex flex-col lg:flex-row gap-12 items-start">
+                    <div className="lg:w-1/3">
+                      <h3 className="text-3xl font-light text-white tracking-tight">Liquidity Voids</h3>
+                      <div className="w-12 h-1 bg-emerald-500/40 mt-4 rounded-full" />
+                    </div>
+                    <div className="lg:w-2/3">
+                      <p className="text-lg text-white/40 leading-relaxed font-light">
+                        Zones where institutional limit orders have evaporated. When price enters a void, it accelerates violently due to lack of friction. Perfect for high R/R momentum trades.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Module 6 */}
-          <section id="module-6" className="scroll-mt-10 p-8 md:p-12 bg-accent-surface border border-main-primary rounded-[3rem] shadow-sm mb-12">
-            <div className="mb-6 flex items-center gap-4">
-              <span className="text-[11px] font-bold uppercase text-accent-primary bg-accent-primary/10 px-2 py-1 rounded">Module 06</span>
-            </div>
+          {/* Module 4 */}
+          <section id="module-4" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/10 to-transparent border border-white/5 rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] mb-32 relative group">
+            <div className="absolute inset-0 bg-[#0c0c0f]" />
             
-             <div className="mb-12 border-b border-main-primary/10 pb-8">
-              <h2 className="text-4xl md:text-5xl font-serif italic font-light leading-tight mb-4 title-elegant text-main-primary">Interactive Glossary</h2>
-              <p className="text-main-primary opacity-60 text-lg max-w-3xl">
-                A definitive reference for quantitative options trading terminology and market mechanics.
-              </p>
-            </div>
+            <div className="relative p-12 md:p-24">
+              <div className="mb-16 border-b border-white/5 pb-12">
+                <div className="flex items-center gap-4 mb-6">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-amber-500 bg-amber-500/10 px-4 py-1.5 rounded-full border border-amber-500/20">Tactical</span>
+                </div>
+                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Execution Playbook</h2>
+                <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
+                  Actionable strategies synchronized with the <span className="text-white/60">structural regime</span> of the session.
+                </p>
+              </div>
 
-            <InteractiveGlossary />
+              <div className="grid gap-10">
+                <StrategyCard 
+                  num="01"
+                  title="Mean Reversion"
+                  env="Underlying > HVL + Net GEX Positive"
+                  play="High probability range-bound chop. Market makers absorb volatility. Fade extremes at Core Walls and expect pinning near high-GEX strikes."
+                  color="emerald"
+                />
+                 <StrategyCard 
+                  num="02"
+                  title="Momentum Expansion"
+                  env="Underlying < HVL + Net GEX Negative"
+                  play="Pro-cyclical hedging cycle engaged. Volatility expands as dealers chase price. Trend-following is mandatory; avoiding contrarian 'dip buying'."
+                  color="red"
+                />
+                 <StrategyCard 
+                  num="03"
+                  title="Statistical Fades"
+                  env="Immediate 1-Day Min/Max touch early session"
+                  play="Reversion risk increases as market hits statistical limits. High R/R scalp opportunities using extremes as invalidation points."
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Module 5 */}
+          <section id="module-5" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-[4rem] shadow-2xl mb-32 relative">
+            <div className="absolute inset-0 bg-[#0a0a10]" />
+            
+            <div className="relative p-12 md:p-24">
+              <div className="mb-16 border-b border-white/5 pb-12">
+                <div className="flex items-center gap-4 mb-6">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20">Ecosystem</span>
+                </div>
+                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Platform Integration</h2>
+                <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
+                  Export institutional data streams to <span className="text-white/60">professional charting</span> software natively.
+                </p>
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-12 items-stretch">
+                <div className="space-y-8 flex flex-col">
+                  <h3 className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-white/20 mb-2">Native Connectors</h3>
+                  <div className="grid gap-6 flex-1">
+                    {[
+                      { name: 'MotiveWave', desc: 'Full architectural mapping of GEX, Walls, and Blind Spots.' },
+                      { name: 'Quantower', desc: 'Integrated liquidity overlays and order-flow synchronization.' }
+                    ].map((p) => (
+                      <div key={p.name} className="flex items-center gap-8 p-10 rounded-[3rem] bg-white/[0.02] border border-white/5 group hover:border-white/20 transition-all duration-500">
+                        <div className="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                          <Monitor size={24} className="text-blue-500" />
+                        </div>
+                        <div>
+                          <div className="text-2xl font-light text-white mb-2">{p.name}</div>
+                          <div className="text-sm text-white/40 font-light leading-relaxed">{p.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="relative p-12 rounded-[4rem] bg-gradient-to-br from-blue-600/20 to-transparent border border-white/10 overflow-hidden flex flex-col justify-end min-h-[500px] group">
+                   <div className="absolute top-12 right-12 opacity-5 scale-150 -rotate-12 group-hover:scale-175 transition-transform duration-1000">
+                      <Cpu size={200} />
+                   </div>
+                   <div className="space-y-8 relative z-10">
+                      <div className="w-16 h-1.5 bg-blue-500 rounded-full" />
+                      <h3 className="text-4xl font-thin text-white tracking-tight">Active Conversion</h3>
+                      <p className="text-base text-white/50 leading-relaxed font-light">
+                        The Alpha Lab engine allows you to mathematically bridge SPX index volatility onto liquid Futures (ES/NQ) with absolute precision using real-time institutional ratios.
+                      </p>
+                      <div className="p-8 bg-black/40 rounded-3xl border border-white/5 space-y-4">
+                         <div className="text-[10px] font-mono font-black text-blue-500/80 uppercase tracking-widest">Protocol Distinction</div>
+                         <p className="text-xs text-white/40 leading-relaxed">
+                            Index vs ETF: We ignore SPY/QQQ friction to focus on the purest source: European-style cash-settled Index Options. This eliminates dividend distortions and early assignment noise.
+                         </p>
+                      </div>
+                   </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Module 6 */}
+          <section id="module-6" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/5 to-transparent border border-white/5 rounded-[4rem] shadow-2xl mb-32 relative">
+            <div className="absolute inset-0 bg-[#08080a]" />
+            
+            <div className="relative p-12 md:p-24">
+              <div className="mb-16 border-b border-white/5 pb-12">
+                <div className="flex items-center gap-4 mb-6">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-white/20">Protocol</span>
+                </div>
+                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Neural Glossary</h2>
+                <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
+                  Definitive reference for quantitative <span className="text-white/60">market mechanics</span> and institutional terminology.
+                </p>
+              </div>
+
+              <InteractiveGlossary />
+            </div>
           </section>
 
           {/* Footer */}
-          <footer className="mt-10 pt-4 flex flex-col md:flex-row justify-between items-center text-[10px] pb-12 uppercase tracking-[0.2em] opacity-40 border-t border-main-primary gap-4 text-main-primary">
-            <span>© {new Date().getFullYear()} OptionsFlow Quantitative Research</span>
+          <footer className="mt-24 pt-12 flex flex-col md:flex-row justify-between items-center text-[9px] pb-24 uppercase tracking-[0.4em] opacity-20 border-t border-white/5 gap-6 text-white font-mono">
+            <div className="flex items-center gap-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <span>© {new Date().getFullYear()} OptionsFlow Quantitative Research</span>
+            </div>
             <span>Confidential Institutional Models</span>
-            <span>Page 042</span>
+            <div className="flex items-center gap-2">
+              <span className="opacity-40">Section ID</span>
+              <span className="text-blue-500/50">ALPHA-042</span>
+            </div>
           </footer>
         </motion.div>
       ) : (
@@ -1549,6 +1608,30 @@ export default function App() {
                   <GexDashboard />
                 )}
 
+                {activeModule === 'vip-menthorq' && (
+                  <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
+                    <div className="p-8 border border-main-primary/20 bg-surface-primary rounded-xl mb-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-main-primary text-surface-primary rounded-lg">
+                          <LayoutGrid size={20} />
+                        </div>
+                        <div>
+                           <h2 className="text-xl font-bold font-serif text-main-primary">MenthorQ API Integration Labs</h2>
+                           <p className="text-sm font-mono text-main-tertiary">Live institutional mapping engine replicating Quantower & MotiveWave</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-main-secondary leading-relaxed mb-6">
+                        This module connects directly to our proxy backend to receive real-time structural data mapping from standard MenthorQ outputs. We leverage LightWeight Charts to provide standard TV functionality (zooming, crosshairs) overlaid with structural liquidity bands and high volatility flags (HVL/GEX/Call Walls).
+                      </p>
+                    </div>
+                    
+                    {/* Hardcoded 5m SPY for demonstration */}
+                    <div className="h-[600px] w-full">
+                       <MenthorQLevelsChart ticker={activeTicker || "SPY"} />
+                    </div>
+                  </motion.div>
+                )}
+
                 {activeModule === 'vip-blackscholes' && (
                   <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
                      <BlackScholesCalculator />
@@ -1557,14 +1640,14 @@ export default function App() {
 
                 {activeModule === 'vip-conversion' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                    <div className="relative p-6 bg-card-primary text-main-primary border border-main-primary shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
+                    <div className="relative p-6 bg-card-primary text-main-primary shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
                        {/* Hardware/terminal accents */}
                        <div className="absolute top-0 left-0 w-full h-1 bg-main-primary flex">
                          <div className="w-1/3 h-full bg-accent-primary shadow-[0_0_15px_var(--accent-glow)]" />
                        </div>
                        
                        {/* Header */}
-                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 border-b border-main-primary pb-6">
+                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-6">
                          <div className="relative flex items-center gap-4">
                            <div className="w-3 h-3 rounded-sm bg-accent-primary shadow-[0_0_8px_var(--accent-glow)] animate-pulse" />
                            <div>
@@ -1575,11 +1658,11 @@ export default function App() {
 
 
                          <div className="flex flex-wrap items-center gap-4 mt-4 md:mt-0">
-                           <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-surface border border-main-primary rounded-md">
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-surface rounded-md">
                              <Cpu size={14} className="text-accent-primary" />
                              <span className="text-[10px] text-accent-primary tracking-wider font-bold">MODEL: V-PREDICT-7</span>
                            </div>
-                           <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-surface border border-main-primary rounded-md">
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-surface rounded-md">
                               <RefreshCcw size={12} className="text-main-primary opacity-40 animate-spin" />
                               <span className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-40">Syncing Fed Funds</span>
                            </div>
@@ -1588,18 +1671,18 @@ export default function App() {
 
                        <MacroNexus 
                           activeTicker={activeTicker} 
-                          spotPrice={gexMetrics.spot} 
-                          netGex={gexMetrics.netGex} 
+                          spotPrice={gexMetrics?.spot || 0} 
+                          netGex={gexMetrics?.totals?.net_gex || 0} 
                           chartData={combinedLiveChartData}
                           isDarkTheme={isDarkTheme}
                        />
                     </div>
 
                     <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
-                         <div className="relative p-8 bg-card-primary border border-main-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
+                         <div className="relative p-8 bg-card-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-primary/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                            <div className="flex items-center gap-3 mb-2">
-                              <div className="p-2.5 bg-accent-surface rounded-xl border border-accent-primary/20 shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
+                              <div className="p-2.5 bg-accent-surface rounded-xl shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
                               <h3 className="text-xl font-bold tracking-tight text-main-primary/90">SPY → ES Converter</h3>
                            </div>
                            <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
@@ -1609,17 +1692,17 @@ export default function App() {
                            </div>
 
                            <div className="grid grid-cols-2 gap-4 mb-6">
-                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
+                              <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">SPY Spot</div>
                                  <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios['SPY']?.spotPrice === 'number' ? conversionRatios['SPY']?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
-                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
+                              <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">ES Future</div>
                                  <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios['SPY']?.futurePrice === 'number' ? conversionRatios['SPY']?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
                            </div>
 
-                           <div className="p-5 bg-card-primary border border-main-primary/50 rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                           <div className="p-5 bg-card-primary rounded-xl flex justify-between items-center mb-8 shadow-inner">
                               <span className="text-sm text-main-primary/60 font-medium">Conversion Ratio (ES / SPY)</span>
                               <span className="text-lg font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios['SPY']?.ratio?.toFixed(4) || '---'}</span>
                            </div>
@@ -1629,7 +1712,7 @@ export default function App() {
                                  <ChevronRight size={16} className="text-accent-primary" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-card-primary border border-main-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-card-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
                                     const box = document.getElementById('spy-result');
                                     if (box) {
@@ -1637,11 +1720,11 @@ export default function App() {
                                     }
                                  }} />
                               </div>
-                              <div className="flex flex-col mt-4 bg-accent-surface rounded-xl border border-accent-primary/10 p-5 mt-6">
+                              <div className="flex flex-col mt-4 bg-accent-surface rounded-xl p-5 mt-6">
                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated ES Level</div>
                                  <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="spy-result">0.00</div>
                               </div>
-                              <div className="mt-6 p-4 bg-accent-surface border border-accent-primary/10 rounded-xl">
+                              <div className="mt-6 p-4 bg-accent-surface rounded-xl">
                                  <div className="flex items-center gap-2 mb-2">
                                     <Cpu size={12} className="text-accent-primary" />
                                     <span className="text-[9px] font-mono font-bold text-accent-primary uppercase tracking-widest leading-none">Macro AI Intel</span>
@@ -1651,67 +1734,67 @@ export default function App() {
                                  </p>
                               </div>
                            </div>
-                        </div>
+                         </div>
 
-                         <div className="relative p-8 bg-card-primary border border-main-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
-                           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-primary/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                           <div className="flex items-center gap-3 mb-2">
-                              <div className="p-2.5 bg-accent-surface rounded-xl border border-accent-primary/20 shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
-                              <h3 className="text-xl font-bold tracking-tight text-main-primary/90">QQQ → NQ Converter</h3>
-                           </div>
-                           <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
-                           
-                           <div className="flex items-center gap-2 mb-6 text-accent-primary text-xs font-medium tracking-wide uppercase">
-                              <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
-                           </div>
+                         <div className="relative p-8 bg-card-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-primary/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="flex items-center gap-3 mb-2">
+                               <div className="p-2.5 bg-accent-surface rounded-xl shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
+                               <h3 className="text-xl font-bold tracking-tight text-main-primary/90">QQQ → NQ Converter</h3>
+                            </div>
+                            <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
+                            
+                            <div className="flex items-center gap-2 mb-6 text-accent-primary text-xs font-medium tracking-wide uppercase">
+                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
+                            </div>
 
-                           <div className="grid grid-cols-2 gap-4 mb-6">
-                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">QQQ Spot</div>
-                                 <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
-                              </div>
-                              <div className="p-5 bg-accent-surface rounded-xl border border-main-primary/20 shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">NQ Future</div>
-                                 <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios['QQQ']?.futurePrice === 'number' ? conversionRatios['QQQ']?.futurePrice?.toFixed(2) : '---'}</div>
-                              </div>
-                           </div>
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                               <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
+                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">QQQ Spot</div>
+                                  <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
+                               </div>
+                               <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
+                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">NQ Future</div>
+                                  <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios['QQQ']?.futurePrice === 'number' ? conversionRatios['QQQ']?.futurePrice?.toFixed(2) : '---'}</div>
+                               </div>
+                            </div>
 
-                           <div className="p-5 bg-card-primary border border-main-primary/50 rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-main-primary/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
-                              <span className="text-lg font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '---'}</span>
-                           </div>
+                            <div className="p-5 bg-card-primary rounded-xl flex justify-between items-center mb-8 shadow-inner">
+                               <span className="text-sm text-main-primary/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
+                               <span className="text-lg font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '---'}</span>
+                            </div>
 
-                           <div className="space-y-4">
-                              <div className="flex items-center gap-2 text-sm text-main-primary/80 font-medium tracking-wide">
-                                 <ChevronRight size={16} className="text-accent-primary" /> Calculate Level
-                              </div>
-                              <div className="relative group/input">
-                                 <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-card-primary border border-main-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
-                                    const val = parseFloat(e.target.value);
-                                    const box = document.getElementById('qqq-result');
-                                    if (box) {
-                                       box.innerText = isNaN(val) ? '0.00' : (val * (conversionRatios['QQQ']?.ratio || 41.4269)).toFixed(2);
-                                    }
-                                 }} />
-                              </div>
-                              <div className="flex flex-col mt-4 bg-accent-surface rounded-xl border border-accent-primary/10 p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated NQ Level</div>
-                                 <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="qqq-result">0.00</div>
-                              </div>
-                              <div className="mt-6 p-4 bg-accent-surface border border-accent-primary/10 rounded-xl">
-                                 <div className="flex items-center gap-2 mb-2">
-                                    <Cpu size={12} className="text-accent-primary" />
-                                    <span className="text-[9px] font-mono font-bold text-accent-primary uppercase tracking-widest leading-none">Macro AI Intel</span>
-                                 </div>
-                                 <p className="text-[10px] text-main-primary opacity-40 font-sans italic leading-tight">
-                                    NQ premium expansion often correlates with tech liquidity surges. Watching for AI risk premium divergence.
-                                 </p>
-                              </div>
-                           </div>
-                        </div>
+                            <div className="space-y-4">
+                               <div className="flex items-center gap-2 text-sm text-main-primary/80 font-medium tracking-wide">
+                                  <ChevronRight size={16} className="text-accent-primary" /> Calculate Level
+                               </div>
+                               <div className="relative group/input">
+                                  <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-card-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
+                                     const val = parseFloat(e.target.value);
+                                     const box = document.getElementById('qqq-result');
+                                     if (box) {
+                                        box.innerText = isNaN(val) ? '0.00' : (val * (conversionRatios['QQQ']?.ratio || 41.4269)).toFixed(2);
+                                     }
+                                  }} />
+                               </div>
+                               <div className="flex flex-col mt-4 bg-accent-surface rounded-xl p-5 mt-6">
+                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated NQ Level</div>
+                                  <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="qqq-result">0.00</div>
+                               </div>
+                               <div className="mt-6 p-4 bg-accent-surface rounded-xl">
+                                  <div className="flex items-center gap-2 mb-2">
+                                     <Cpu size={12} className="text-accent-primary" />
+                                     <span className="text-[9px] font-mono font-bold text-accent-primary uppercase tracking-widest leading-none">Macro AI Intel</span>
+                                  </div>
+                                  <p className="text-[10px] text-main-primary opacity-40 font-sans italic leading-tight">
+                                     NQ premium expansion often correlates with tech liquidity surges. Watching for AI risk premium divergence.
+                                  </p>
+                               </div>
+                            </div>
+                         </div>
                     </div>
 
-                    <div className="p-0 border border-main-primary bg-card-primary text-main-primary rounded-sm overflow-hidden shadow-sm">
+                    <div className="p-0 bg-card-primary text-main-primary rounded-sm overflow-hidden shadow-sm">
                        <div className="p-6 border-b border-main-primary/10 bg-main-primary/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-main-primary/80 flex items-center gap-2">
                              <Target size={14} className="text-brand-emerald" />
@@ -1751,75 +1834,16 @@ export default function App() {
                              </thead>
                              <tbody>
                                {(() => {
-                                 const options = chainData?.data?.options || [];
+                                 if (!gexMetrics || !gexMetrics.agg) return null;
                                  const spot = gexMetrics.spot;
-                                 if (!spot || options.length === 0) return null;
-
-                                 const parsedOptions = options.map((o: any) => ({ ...o, parsed: parseOSISymbol(o.option) })).filter((o: any) => o.parsed);
-                                 
-                                 // Aggregate by strike
-                                 const strikesMap = new Map<number, { callGex: number, putGex: number, netGex: number, netDelta: number, netGamma: number, netVega: number, oi: number, ivSum: number, count: number }>();
-                                 
-                                 parsedOptions.forEach((opt: any) => {
-                                    const strike = opt.parsed.strike;
-                                    const type = opt.parsed.type;
-                                    const oi = parseInt(opt.open_interest) || 0;
-                                    
-                                    const t = Math.max((opt.parsed.expiration.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24 * 365), 0.001);
-                                    const div = DIV_YIELD[activeTicker] || 0.0;
-                                    
-                                    const marketPrice = parseFloat(opt.mark) || parseFloat(opt.last_trade_price) || 0;
-                                    let iv = parseFloat(opt.iv) || 0;
-                                    const calcIv = impliedVol(marketPrice, spot, strike, t, RISK_FREE_RATE, div, type as "C" | "P");
-                                    if (calcIv !== null && calcIv > 0) iv = calcIv;
-                                    
-                                    const gamma = opt.gamma !== undefined && opt.gamma !== null ? parseFloat(opt.gamma) : bsGamma(spot, strike, t, RISK_FREE_RATE, div, iv);
-                                    const delta = opt.delta !== undefined && opt.delta !== null ? parseFloat(opt.delta) : bsDelta(spot, strike, t, RISK_FREE_RATE, div, iv, type as "C" | "P");
-                                    const vega = opt.vega !== undefined && opt.vega !== null ? parseFloat(opt.vega) : bsVega(spot, strike, t, RISK_FREE_RATE, div, iv);
-
-                                    const gex = calculateGEX(gamma, oi, spot) || 0; // Return in Billions
-                                    
-                                    if (!strikesMap.has(strike)) {
-                                       strikesMap.set(strike, { callGex: 0, putGex: 0, netGex: 0, netDelta: 0, netGamma: 0, netVega: 0, oi: 0, ivSum: 0, count: 0 });
-                                    }
-                                    const cur = strikesMap.get(strike)!;
-                                    cur.oi += oi;
-                                    cur.ivSum += iv;
-                                    cur.count += 1;
-                                    
-                                    if (type === 'C') {
-                                       cur.callGex += gex;
-                                       cur.netGex += gex;
-                                       cur.netDelta += delta * oi * 100;
-                                       cur.netGamma += gamma * oi * 100;
-                                       cur.netVega += vega * oi * 100;
-                                    } else {
-                                       cur.putGex -= gex; // Put GEX is assigned negative
-                                       cur.netGex -= gex; 
-                                       cur.netDelta += delta * oi * 100; 
-                                       cur.netGamma += gamma * oi * 100; // Adding total aggregate gamma
-                                       cur.netVega += vega * oi * 100;
-                                    }
-                                 });
-
-                                 const strikes = Array.from(strikesMap.keys()).sort((a: number, b: number) => a - b);
-                                 let closestIdx = 0;
-                                 let minDiff = Infinity;
-                                 strikes.forEach((s: number, idx: number) => {
-                                   if (Math.abs(s - spot) < minDiff) { minDiff = Math.abs(s - spot); closestIdx = idx; }
-                                 });
-
-                                 // Show +/- 20 strikes from spot
-                                 const displayStrikes = strikes.slice(Math.max(0, closestIdx - 20), closestIdx + 21);
-                                 // Sort descending
-                                 displayStrikes.sort((a: number, b: number) => b - a);
                                  
                                  const ratio = conversionRatios[activeTicker]?.ratio || (activeTicker === 'SPY' ? 10.0869 : activeTicker === 'QQQ' ? 41.4269 : 1);
+                                 
+                                 const displayStrikes = [...gexMetrics.agg].sort((a, b) => b.strike - a.strike);
 
-                                 return displayStrikes.map((strike: number, i: number) => {
-                                   const data = strikesMap.get(strike)!;
-                                   const isClosest = strike === strikes[closestIdx];
-                                   const avgIv = data.count > 0 ? (data.ivSum / data.count) : 0;
+                                 return displayStrikes.map((data: any, i: number) => {
+                                   const strike = data.strike;
+                                   const isClosest = Math.abs(strike - spot) < 0.5;
                                    const futValue = strike * ratio;
                                    
                                    const formatGex = (val: number, forceSign = false, zeroString = '0.0000') => {
@@ -1829,7 +1853,7 @@ export default function App() {
                                    };
 
                                    return (
-                                     <tr key={strike} className={`border-b border-main-primary/10 last:border-0 hover:bg-main-primary/5 transition-colors ${isClosest ? 'bg-accent-primary/10' : (i % 2 === 0 ? 'bg-transparent' : 'bg-main-primary/[0.02]')}`}>
+                                     <tr key={strike} className={`hover:bg-main-primary/5 transition-colors ${isClosest ? 'bg-accent-primary/10' : (i % 2 === 0 ? 'bg-transparent' : 'bg-main-primary/[0.02]')}`}>
                                        <td className={`py-3 px-6 text-left font-bold ${isClosest ? 'text-accent-primary' : 'text-main-primary'}`}>
                                           <div className="flex items-center gap-2">
                                              {isClosest && <span className="w-1.5 h-1.5 rounded-full bg-accent-primary shadow-[0_0_8px_var(--accent-glow)]"></span>}
@@ -1837,16 +1861,16 @@ export default function App() {
                                           </div>
                                        </td>
                                        <td className="py-3 px-6 text-main-secondary">{Math.round(futValue)}</td>
-                                       <td className={`py-3 px-6 font-bold ${data.netGex > 0.00005 ? 'text-brand-emerald' : data.netGex < -0.00005 ? 'text-rose-500' : 'text-main-tertiary'}`}>
-                                          {formatGex(data.netGex, false, '-0.0000')}
+                                       <td className={`py-3 px-6 font-bold ${data.gex_net > 0.00005 ? 'text-brand-emerald' : data.gex_net < -0.00005 ? 'text-rose-500' : 'text-main-tertiary'}`}>
+                                          {formatGex(data.gex_net, false, '-0.0000')}
                                        </td>
-                                       <td className={`py-3 px-6 ${data.callGex > 0.00005 ? 'text-brand-emerald' : 'text-main-tertiary'}`}>{formatGex(data.callGex, false, '0.0000')}</td>
-                                       <td className={`py-3 px-6 ${data.putGex < -0.00005 ? 'text-rose-500' : 'text-main-tertiary'}`}>{formatGex(data.putGex, false, '-0.0000')}</td>
-                                       <td className={`py-3 px-6 font-semibold ${data.netDelta > 0 ? 'text-blue-500' : data.netDelta < 0 ? 'text-orange-500' : 'text-main-tertiary'}`}>{data.netDelta === 0 ? '0' : data.netDelta > 0 ? `+${Math.round(data.netDelta).toLocaleString()}` : Math.round(data.netDelta).toLocaleString()}</td>
-                                       <td className={`py-3 px-6 font-semibold ${data.netGamma > 0 ? 'text-purple-500' : data.netGamma < 0 ? 'text-pink-500' : 'text-main-tertiary'}`}>{data.netGamma === 0 ? '0' : data.netGamma > 0 ? `+${Math.round(data.netGamma).toLocaleString()}` : Math.round(data.netGamma).toLocaleString()}</td>
-                                       <td className={`py-3 px-6 font-semibold ${data.netVega > 0 ? 'text-teal-500' : data.netVega < 0 ? 'text-amber-500' : 'text-main-tertiary'}`}>{data.netVega === 0 ? '0' : data.netVega > 0 ? `+${Math.round(data.netVega).toLocaleString()}` : Math.round(data.netVega).toLocaleString()}</td>
+                                       <td className={`py-3 px-6 ${data.call_gex > 0.00005 ? 'text-brand-emerald' : 'text-main-tertiary'}`}>{formatGex(data.call_gex, false, '0.0000')}</td>
+                                       <td className={`py-3 px-6 ${data.put_gex < -0.00005 ? 'text-rose-500' : 'text-main-tertiary'}`}>{formatGex(data.put_gex, false, '-0.0000')}</td>
+                                       <td className={`py-3 px-6 font-semibold ${data.dex_net > 0 ? 'text-blue-500' : data.dex_net < 0 ? 'text-orange-500' : 'text-main-tertiary'}`}>{data.dex_net === 0 ? '0' : data.dex_net > 0 ? `+${Math.round(data.dex_net).toLocaleString()}` : Math.round(data.dex_net).toLocaleString()}</td>
+                                       <td className={`py-3 px-6 font-semibold ${data.cex_net > 0 ? 'text-purple-500' : data.cex_net < 0 ? 'text-pink-500' : 'text-main-tertiary'}`}>{data.cex_net === 0 ? '0' : data.cex_net > 0 ? `+${Math.round(data.cex_net).toLocaleString()}` : Math.round(data.cex_net).toLocaleString()}</td>
+                                       <td className={`py-3 px-6 font-semibold ${data.vex_net > 0 ? 'text-teal-500' : data.vex_net < 0 ? 'text-amber-500' : 'text-main-tertiary'}`}>{data.vex_net === 0 ? '0' : data.vex_net > 0 ? `+${Math.round(data.vex_net).toLocaleString()}` : Math.round(data.vex_net).toLocaleString()}</td>
                                        <td className="py-3 px-6 text-main-primary font-semibold">{data.oi}</td>
-                                       <td className="py-3 px-6 text-main-tertiary">{(avgIv * 100).toFixed(1)}</td>
+                                       <td className="py-3 px-6 text-main-tertiary">{(data.iv * 100).toFixed(1)}</td>
                                      </tr>
                                    );
                                  });
@@ -1855,12 +1879,12 @@ export default function App() {
                           </table>
                        </div>
                     </div>
-                  </motion.div>
-                )}
+                </motion.div>
+              )}
 
                 {activeModule === 'vip-journal' && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="bg-card-primary border border-main-primary shadow-[0_12px_40px_rgba(0,0,0,0.2)] text-main-primary p-8 md:p-10 rounded-2xl relative overflow-hidden group transition-colors duration-500">
+                    <div className="bg-card-primary shadow-[0_12px_40px_rgba(0,0,0,0.2)] text-main-primary p-8 md:p-10 rounded-2xl relative overflow-hidden group transition-colors duration-500">
                       <div className="absolute top-0 right-0 p-12 opacity-5 translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-1000 pointer-events-none text-main-primary">
                         <Book size={240} />
                       </div>
@@ -1874,7 +1898,7 @@ export default function App() {
                               <h2 className="text-4xl font-serif italic text-main-primary">Journal</h2>
                               <p className="opacity-40 text-xs mt-2">Log institutional executions — equity curve, session stats & alpha metrics</p>
                            </div>
-                           <div className="flex bg-surface-primary border border-main-primary p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
+                           <div className="flex bg-surface-primary p-1.5 rounded-xl shadow-inner self-start xl:self-auto overflow-x-auto max-w-full hide-scrollbar">
                               {[
                                 { id: 'journal', label: 'Journal', icon: Book },
                                 { id: 'curve', label: 'Equity Curve', icon: TrendingUp },
@@ -1904,7 +1928,7 @@ export default function App() {
                              { label: 'Total P&L', value: `$${journalStats.totalPnl.toLocaleString()}`, sub: 'Net Bottom Line', color: journalStats.totalPnl >= 0 ? 'text-brand-emerald' : 'text-rose-500' },
                              { label: 'Streak', value: journalStats.maxStreak, sub: 'Consistency', color: 'text-brand-amber' }
                            ].map(stat => (
-                             <div key={stat.label} className="p-5 bg-surface-primary border border-main-primary rounded-xl text-center hover:bg-surface-hover transition-colors">
+                             <div key={stat.label} className="p-5 bg-surface-primary rounded-xl text-center hover:bg-surface-hover transition-colors">
                                 <div className={`text-[9px] font-bold uppercase tracking-widest text-accent-primary/70 mb-2`}>{stat.label}</div>
                                 <div className={`text-2xl font-mono font-bold ${stat.color || 'text-main-primary'}`}>{stat.value}</div>
                                 <div className="text-[9px] text-main-tertiary font-bold uppercase mt-1">{stat.sub}</div>
@@ -1938,50 +1962,50 @@ export default function App() {
                                    <div className="grid grid-cols-2 md:grid-cols-11 gap-2">
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Date</div>
-                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-accent-surface border border-main-primary rounded grow py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="w-full bg-accent-surface rounded grow py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Ticker</div>
-                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="text" value={tradeSym} onChange={(e) => setTradeSym(e.target.value)} placeholder="ES/SPY" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Direction</div>
-                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50 appearance-none">
+                                         <select value={tradeDir} onChange={(e) => setTradeDir(e.target.value as any)} className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50 appearance-none">
                                             <option value="long">Long</option>
                                             <option value="short">Short</option>
                                          </select>
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Entry Price</div>
-                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="text" value={tradeEntry} onChange={(e) => setTradeEntry(e.target.value)} placeholder="e.g. 21450" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Stop Loss</div>
-                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="text" value={tradeStop} onChange={(e) => setTradeStop(e.target.value)} placeholder="e.g. 21420" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Exit Price</div>
-                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="text" value={tradeExit} onChange={(e) => setTradeExit(e.target.value)} placeholder="e.g. 21525" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Contracts</div>
-                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="number" value={tradeContracts} onChange={(e) => setTradeContracts(e.target.value)} placeholder="1" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">MAE</div>
-                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="text" value={tradeMAE} onChange={(e) => setTradeMAE(e.target.value)} placeholder="Max adverse" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">MFE</div>
-                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="text" value={tradeMFE} onChange={(e) => setTradeMFE(e.target.value)} placeholder="Max favorable" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Setup Grade</div>
-                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="text" value={tradeGrade} onChange={(e) => setTradeGrade(e.target.value)} placeholder="-" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">Outcome</div>
-                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50 appearance-none">
+                                         <select value={tradeOutcome} onChange={(e) => setTradeOutcome(e.target.value)} className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50 appearance-none">
                                             <option value="">-</option>
                                             <option value="win">Win</option>
                                             <option value="loss">Loss</option>
@@ -1990,7 +2014,7 @@ export default function App() {
                                       </div>
                                       <div className="space-y-1">
                                          <div className="text-[9px] uppercase tracking-widest text-main-primary opacity-40">P&L ($)</div>
-                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-accent-surface border border-main-primary rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
+                                         <input type="number" value={tradePnl} onChange={(e) => setTradePnl(e.target.value)} placeholder="auto" className="w-full bg-accent-surface rounded py-2 px-2 text-xs font-mono text-main-primary outline-none focus:border-accent-primary/50" />
                                       </div>
                                    </div>
 
@@ -2011,17 +2035,17 @@ export default function App() {
                                          <button onClick={logTrade} className="bg-main-primary hover:opacity-90 text-app-primary font-bold text-[11px] uppercase tracking-wider py-2 px-6 rounded transition-colors">
                                            Add Trade
                                          </button>
-                                         <button onClick={exportCSV} className="bg-transparent border border-main-primary/20 text-main-secondary hover:text-main-primary hover:border-main-primary/40 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
+                                         <button onClick={exportCSV} className="bg-transparent text-main-secondary hover:text-main-primary font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
                                             Export CSV
                                          </button>
                                       </div>
-                                      <button onClick={clearAllTrades} className="bg-transparent border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
+                                      <button onClick={clearAllTrades} className="bg-transparent text-rose-500 hover:bg-rose-500/10 font-bold text-[11px] uppercase tracking-wider py-2 px-4 rounded transition-colors">
                                          Clear All
                                       </button>
                                    </div>
                                 </div>
                                              {/* TRADE LOG */}
-                             <div className="mt-8 border border-main-primary rounded-lg bg-card-primary">
+                             <div className="mt-8 rounded-lg bg-card-primary">
                                 <div className="flex items-center justify-between p-4 border-b border-main-primary bg-surface-primary">
                                    <div className="text-[10px] font-bold uppercase tracking-widest text-main-tertiary">Trade Log</div>
                                    <div className="flex gap-6">
@@ -2258,7 +2282,7 @@ export default function App() {
                                            setJournalSubTab('journal');
                                          }
                                        }}
-                                       className={`min-h-[120px] p-4 border-r border-b border-main-primary relative group cursor-pointer transition-all ${
+                                       className={`min-h-[120px] p-4 relative group cursor-pointer transition-all ${
                                          !isThisMonth ? 'opacity-10 pointer-events-none' : 'hover:bg-surface-hover'
                                        } ${isToday ? 'bg-accent-primary/5' : ''}`}
                                      >
@@ -2533,7 +2557,7 @@ export default function App() {
                                 <Zap size={100} />
                               </div>
                               <div className="flex-1 flex flex-col z-10 pointer-events-none">
-                                <div className="flex items-center justify-between gap-3 mb-5 border-b border-main-primary pb-4">
+                                <div className="flex items-center justify-between gap-3 mb-5 pb-4">
                                   <div className="flex items-center gap-2 shrink-0">
                                     <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500">
                                       {getDisplaySource(item.source)}
@@ -2750,7 +2774,7 @@ export default function App() {
                                    setActiveStrategyId(strat.id);
                                    setActiveStepIndex(0);
                                  }}
-                                 className={`group text-left p-6 border transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-main-primary text-app-primary border-main-primary shadow-xl ring-2 ring-accent-primary/20' : 'bg-card-primary text-main-primary border-main-primary hover:border-main-strong hover:shadow-md'}`}
+                                 className={`group text-left p-6 transition-all relative overflow-hidden cursor-pointer min-h-[320px] flex flex-col justify-between ${activeStrategyId === strat.id ? 'bg-main-primary text-app-primary shadow-xl ring-2 ring-accent-primary/20' : 'bg-card-primary text-main-primary hover:shadow-md'}`}
                                >
                                  <div className="relative z-10">
                                    <div className="flex justify-between items-start mb-4">
@@ -3135,7 +3159,7 @@ export default function App() {
                           )}
                         </div>
                       </div>
-                   </motion.div>
+                  </motion.div>
                 )}
               </div>
             </div>
@@ -3172,7 +3196,7 @@ export default function App() {
               )}
 
               <div className="text-center space-y-6 mb-8">
-                <div className="w-16 h-16 mx-auto bg-white/5 border border-white/10 rounded-full flex items-center justify-center">
+                <div className="w-16 h-16 mx-auto bg-white/5 rounded-full flex items-center justify-center">
                   {isVerifying ? (
                     <ShieldCheck className="text-emerald-500 animate-pulse" size={24} />
                   ) : (
@@ -3357,15 +3381,15 @@ export default function App() {
 // Subcomponents
 
 function GlossaryCard({ title, subtitle, def, impact, color = 'black', idx = 0, style }: { title: string, subtitle: string, def: string, impact: string, color?: 'black' | 'emerald' | 'red', idx?: number, style?: React.CSSProperties }) {
-  const borderColors = {
-    black: 'border-black',
-    emerald: 'border-emerald-800',
-    red: 'border-red-800 text-red-800'
+  const accentColors = {
+    black: 'bg-blue-500/20',
+    emerald: 'bg-emerald-500/20',
+    red: 'bg-rose-500/20'
   };
   const textColors = {
-    black: 'opacity-50',
-    emerald: 'text-emerald-800',
-    red: 'text-red-800'
+    black: 'text-blue-400',
+    emerald: 'text-emerald-400',
+    red: 'text-rose-400'
   }
 
   return (
@@ -3373,21 +3397,26 @@ function GlossaryCard({ title, subtitle, def, impact, color = 'black', idx = 0, 
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -4, transition: { duration: 0.3, ease: 'easeOut' } }}
-      className={`p-5 border-l-4 ${borderColors[color]} border-solid bg-card-primary shadow-sm hover:shadow-md transition-shadow`}
-      style={{
-        borderWidth: style?.borderColor ? '0.25px 0.25px 0.25px 4px' : undefined,
-        ...style
-      }}
+      transition={{ duration: 0.8, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -8, scale: 1.02 }}
+      className="relative p-10 rounded-[3rem] bg-white/[0.02] border border-white/5 hover:border-white/20 transition-all duration-500 overflow-hidden group"
+      style={style}
     >
-      <div className="flex justify-between items-baseline mb-3">
-        <h4 className="font-serif italic text-xl text-main-primary">{title}</h4>
-        <span className={`font-mono text-xs ${textColors[color]}`}>"{subtitle}"</span>
+      <div className={`absolute top-0 right-0 w-24 h-24 blur-3xl opacity-0 group-hover:opacity-20 transition-opacity duration-1000 ${accentColors[color]}`} />
+      
+      <div className="flex justify-between items-baseline mb-8">
+        <h4 className="text-2xl font-light text-white tracking-tight">{title}</h4>
+        <span className={`text-[10px] font-mono font-black uppercase tracking-[0.3em] ${textColors[color]} opacity-50`}>{subtitle}</span>
       </div>
-      <div className="space-y-3">
-        <p className="text-[13px] leading-snug text-neutral-600"><strong>Def:</strong> {def}</p>
-        <p className="text-[13px] leading-snug text-neutral-600 border-t border-black/5 pt-2 italic transition-colors"><strong>Impact:</strong> {impact}</p>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <div className="text-[9px] font-mono font-black uppercase text-white/20 tracking-widest">Definition</div>
+          <p className="text-base font-light text-white/50 leading-relaxed">{def}</p>
+        </div>
+        <div className="space-y-2 pt-6 border-t border-white/5">
+          <div className="text-[9px] font-mono font-black uppercase text-white/20 tracking-widest">Market Impact</div>
+          <p className="text-base font-light text-white/80 leading-relaxed italic">{impact}</p>
+        </div>
       </div>
     </motion.div>
   );
@@ -3504,26 +3533,31 @@ function InteractiveGlossary() {
   );
 }
 
-function StrategyCard({ num, title, env, play, color = 'black', numberStyle }: { num: string, title: string, env: string, play: string, color?: 'black' | 'emerald' | 'red', numberStyle?: React.CSSProperties }) {
-  const numberColors = {
-    black: 'text-main-primary opacity-10',
-    emerald: 'text-brand-emerald opacity-10',
-    red: 'text-rose-500 opacity-10'
+function StrategyCard({ num, title, env, play, color = 'black' }: { num: string, title: string, env: string, play: string, color?: 'black' | 'emerald' | 'red' }) {
+  const accentColors = {
+    black: 'bg-blue-500',
+    emerald: 'bg-emerald-500',
+    red: 'bg-rose-500'
   }
   return (
-    <div className="relative pl-12 md:pl-20">
-      <div className={`absolute left-0 top-0 text-[50px] border-solid font-serif italic ${numberColors[color]}`} style={{ borderWidth: numberStyle?.borderColor ? '0.25px' : '0px', ...numberStyle }}>
+    <div className="relative pl-16 md:pl-24 group">
+      <div className="absolute left-0 top-0 text-[80px] font-thin text-white/5 leading-none select-none group-hover:text-blue-500/10 transition-colors duration-700">
         {num}
       </div>
-      <h5 className="font-bold text-xs uppercase border-b border-main-primary/10 pb-2 mb-4 tracking-wider text-main-primary">{title}</h5>
-      <div className="grid md:grid-cols-2 gap-8">
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-50 mb-2 border-l-2 pl-2 border-accent-primary">Environment</div>
-          <p className="text-main-primary opacity-60 text-[13px] leading-relaxed italic font-sans">{env}</p>
+      <div className="relative pt-4">
+        <div className="flex items-center gap-4 mb-8">
+          <div className={`h-[1px] w-12 ${accentColors[color]} opacity-50`} />
+          <h5 className="text-xl font-light text-white tracking-tight uppercase">{title}</h5>
         </div>
-        <div>
-           <div className="text-[10px] font-bold uppercase tracking-widest text-main-primary opacity-50 mb-2 border-l-2 pl-2 border-accent-primary">Strategy</div>
-          <p className="text-main-primary font-medium text-[13px] leading-relaxed font-sans">{play}</p>
+        <div className="grid lg:grid-cols-2 gap-12">
+          <div className="space-y-3">
+            <div className="text-[10px] font-mono font-black uppercase tracking-[0.3em] text-white/20">Market Context</div>
+            <p className="text-base text-white/50 leading-relaxed font-light italic">{env}</p>
+          </div>
+          <div className="space-y-3">
+            <div className="text-[10px] font-mono font-black uppercase tracking-[0.3em] text-white/20">Operational Protocol</div>
+            <p className="text-base text-white/80 leading-relaxed font-light">{play}</p>
+          </div>
         </div>
       </div>
     </div>

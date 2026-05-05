@@ -117,7 +117,7 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
       tooltipRef.current.style.display = 'block';
       tooltipRef.current.style.backgroundColor = isDark ? 'rgba(8, 12, 23, 0.9)' : 'rgba(255, 255, 255, 0.9)';
       tooltipRef.current.style.color = isDark ? '#f8fafc' : '#0f172a';
-      tooltipRef.current.style.border = isDark ? '1px solid rgba(248, 250, 252, 0.1)' : '1px solid rgba(0, 0, 0, 0.05)';
+      tooltipRef.current.style.border = 'none';
       tooltipRef.current.style.backdropFilter = 'blur(12px)';
       (tooltipRef.current.style as any).webkitBackdropFilter = 'blur(12px)';
       let leftPos = param.point.x + 15;
@@ -195,7 +195,7 @@ export const BeautifulChart: React.FC<BeautifulChartProps> = ({
       <div ref={chartContainerRef} className="w-full h-full" />
       <div 
         ref={tooltipRef} 
-        className="absolute z-50 pointer-events-none hidden bg-card-primary/90 backdrop-blur-md border border-main-primary rounded p-3 shadow-xl"
+        className="absolute z-50 pointer-events-none hidden bg-card-primary/90 backdrop-blur-md rounded p-3 shadow-xl"
         style={{ minWidth: '120px' }}
       />
     </div>

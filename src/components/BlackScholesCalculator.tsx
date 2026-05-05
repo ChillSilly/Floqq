@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Calculator, Zap, ArrowRight, Info, Target, TrendingUp, Activity } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import { bsPrice, bsDelta, bsGamma, bsVega, bsTheta, bsCharm, bsVanna, bsVomma, bsZomma } from '../lib/blackScholes';
 
 const C = {
   bg: 'var(--bg-app)', bg1: 'var(--bg-card)', border: 'var(--border-main)',
-  accent: 'var(--brand-purple)', neon: 'var(--accent-primary)', green: 'var(--brand-emerald)', pink: '#ff2d55',
-  amber: 'var(--brand-amber)', violet: 'var(--brand-purple)',
-  t1: 'var(--text-main)', t2: 'var(--text-main)', t3: 'var(--text-main)'
+  accent: 'var(--accent-main)', neon: 'var(--accent-main)', green: 'var(--success)', pink: 'var(--danger)',
+  amber: 'var(--warning)', violet: 'var(--accent-secondary)',
+  t1: 'var(--text-main)', t2: 'var(--text-secondary)', t3: 'var(--text-tertiary)'
 };
 
 function Slider({ label, value, onChange, min, max, step, unit = '', color = C.accent }: {
@@ -75,9 +75,10 @@ export function BlackScholesCalculator() {
     const maxSpot = spot * 1.3;
     const step = (maxSpot - minSpot) / 50;
 
-    for (let currentSpot = minSpot; currentSpot <= maxSpot; currentSpot += step) {
+    // Use a small epsilon to avoid floating point issues and ensure we get 51 points
+    for (let currentSpot = minSpot; currentSpot <= maxSpot + 0.001; currentSpot += step) {
       data.push({
-        spot: Math.round(currentSpot),
+        spot: parseFloat(currentSpot.toFixed(1)), // Use 1 decimal to prevent duplicate X-axis keys
         price: bsPrice(currentSpot, strike, T, rate, divYield, iv, flag),
         delta: bsDelta(currentSpot, strike, T, rate, divYield, iv, flag),
         gamma: bsGamma(currentSpot, strike, T, rate, divYield, iv),
@@ -90,12 +91,12 @@ export function BlackScholesCalculator() {
 
   const getPlotColor = () => {
     switch (plotType) {
-      case 'price': return C.neon;
-      case 'delta': return flag === 'C' ? C.green : C.pink;
-      case 'gamma': return C.neon;
-      case 'vega': return C.amber;
-      case 'theta': return C.pink;
-      default: return C.accent;
+      case 'price': return '#6366f1'; // accent-main
+      case 'delta': return flag === 'C' ? '#10b981' : '#f43f5e'; // success or danger
+      case 'gamma': return '#6366f1'; 
+      case 'vega': return '#f59e0b'; // warning
+      case 'theta': return '#f43f5e'; // danger
+      default: return '#6366f1';
     }
   };
 
@@ -209,7 +210,13 @@ export function BlackScholesCalculator() {
 
               <div className="h-64 w-full">
                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={plotData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                    <AreaChart data={plotData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                       <defs>
+                         <linearGradient id="plotGradient" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="5%" stopColor={getPlotColor()} stopOpacity={0.3}/>
+                           <stop offset="95%" stopColor={getPlotColor()} stopOpacity={0}/>
+                         </linearGradient>
+                       </defs>
                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-main)" opacity={0.2} vertical={false} />
                        <XAxis 
                          dataKey="spot" 
@@ -235,17 +242,20 @@ export function BlackScholesCalculator() {
                          formatter={(value: number) => [value.toFixed(4), plotType.toUpperCase()]}
                          labelFormatter={(label: number) => `SPOT: $${label}`}
                        />
-                       {/* Strike Line */}
-                       <Line 
+                       <ReferenceLine x={spot} stroke="var(--text-main)" strokeDasharray="3 3" opacity={0.5} label={{ position: 'top', value: 'SPOT', fill: 'var(--text-main)', opacity: 0.5, fontSize: 10, fontFamily: 'monospace' }} />
+                       <ReferenceLine x={strike} stroke={getPlotColor()} strokeDasharray="3 3" opacity={0.5} label={{ position: 'top', value: 'STRIKE', fill: getPlotColor(), opacity: 0.5, fontSize: 10, fontFamily: 'monospace' }} />
+                       {/* Line / Area */}
+                       <Area 
                          type="monotone" 
                          dataKey={plotType} 
                          stroke={getPlotColor()} 
                          strokeWidth={3} 
-                         dot={false}
+                         fillOpacity={1}
+                         fill="url(#plotGradient)"
                          activeDot={{ r: 6, fill: getPlotColor(), stroke: 'var(--bg-app)', strokeWidth: 2 }}
                          animationDuration={500}
                        />
-                    </LineChart>
+                    </AreaChart>
                  </ResponsiveContainer>
               </div>
            </div>

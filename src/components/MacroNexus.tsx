@@ -121,7 +121,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
           { label: 'Bitcoin Spot', key: 'BTC', icon: Binary },
           { label: 'Copper % Gold', key: 'HG_GC_RATIO', icon: Zap },
         ].map((item) => (
-          <div key={item.key} className={`bg-card-primary border border-main-primary p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group`}>
+          <div key={item.key} className={`bg-card-primary p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group`}>
             <div className="flex items-center gap-2 mb-2">
               <item.icon size={12} className="text-main-primary opacity-40 group-hover:text-brand-primary transition-colors" />
               <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">{item.label}</span>
@@ -141,8 +141,8 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
       <div className="grid lg:grid-cols-12 gap-6">
         {/* Left Column: AI Synthesis & Sentiment (4/12) */}
         <div className="lg:col-span-4 space-y-6">
-          <div className={`bg-card-primary border border-main-primary rounded-2xl overflow-hidden shadow-sm flex flex-col h-full hover:border-brand-primary/20 transition-colors`}>
-            <div className={`p-4 border-b border-main-primary bg-accent-surface flex items-center justify-between`}>
+          <div className={`bg-card-primary rounded-2xl overflow-hidden shadow-sm flex flex-col h-full hover:border-brand-primary/20 transition-colors`}>
+            <div className={`p-4 bg-accent-surface flex items-center justify-between`}>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-accent-primary animate-pulse" />
                 <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-main-primary opacity-50">Macro Analysis Nexus</span>
@@ -163,7 +163,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
               ) : synthesis ? (
                 <div className="space-y-6">
                   {/* Regime Badge */}
-                  <div className="p-4 bg-accent-surface border border-main-primary rounded-xl relative overflow-hidden group">
+                  <div className="p-4 bg-accent-surface rounded-xl relative overflow-hidden group">
                      <div className="absolute top-0 right-0 w-24 h-24 bg-accent-primary/5 blur-2xl group-hover:bg-accent-primary/10 transition-colors" />
                      <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">Economic Regime</span>
@@ -200,7 +200,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                     <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">Structural Bias</span>
                     <div className="grid grid-cols-2 gap-2">
                        {Object.entries(synthesis.assetClassViews).map(([asset, view]) => (
-                         <div key={asset} className="flex items-center justify-between px-3 py-2 bg-black/[0.01] dark:bg-white/[0.01] border border-main-primary rounded-lg">
+                         <div key={asset} className="flex items-center justify-between px-3 py-2 bg-black/[0.01] dark:bg-white/[0.01] rounded-lg">
                            <span className="text-[10px] font-mono font-bold uppercase text-main-primary opacity-40 truncate mr-2">{asset.replace('_', ' ')}</span>
                            <span className={`text-[10px] font-bold font-mono whitespace-nowrap ${getStatusColor(view as string)}`}>{view as string}</span>
                          </div>
@@ -211,7 +211,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
               ) : null}
             </div>
 
-            <div className="p-4 border-t border-main-primary mt-auto bg-card-primary flex justify-between items-center whitespace-nowrap overflow-hidden">
+            <div className="p-4 mt-auto bg-card-primary flex justify-between items-center whitespace-nowrap overflow-hidden">
                <div className="flex items-center gap-4">
                   <div className="flex flex-col">
                     <span className="text-[9px] text-main-primary opacity-40 uppercase font-bold tracking-tighter">Systemic Risk</span>
@@ -232,8 +232,8 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
 
         {/* Right Column: Interactive Widgets (8/12) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          <div className="bg-card-primary border border-main-primary rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden hover:border-brand-primary/20 transition-colors">
-            <div className="flex p-0 border-b border-main-primary overflow-x-auto no-scrollbar">
+          <div className="bg-card-primary rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden hover:border-brand-primary/20 transition-colors">
+            <div className="flex p-0 overflow-x-auto no-scrollbar">
               {['technical', 'synthesis', 'indicators', 'yields', 'liquidity', 'sectors'].map((tab) => (
                 <button
                   key={tab}
@@ -291,7 +291,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                           </h4>
                           <div className="space-y-2">
                              {synthesis?.economicCalendar?.map((event, i) => (
-                               <div key={i} className="p-3 border border-main-primary bg-accent-surface rounded-xl shadow-sm flex items-center justify-between group hover:border-accent-primary/30 transition-colors">
+                               <div key={i} className="p-3 bg-accent-surface rounded-xl shadow-sm flex items-center justify-between group hover:border-accent-primary/30 transition-colors">
                                   <div className="flex flex-col">
                                      <span className="text-[10px] font-mono font-bold text-main-primary uppercase">{event.event}</span>
                                      <span className="text-[9px] text-main-primary opacity-40 font-mono mt-0.5">{event.date}</span>
@@ -318,7 +318,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                           </h4>
                           <div className="space-y-3">
                             {synthesis?.riskAudit.map((risk, i) => (
-                              <div key={i} className="flex gap-4 p-4 border border-rose-500/10 bg-rose-500/5 rounded-xl">
+                              <div key={i} className="flex gap-4 p-4 bg-rose-500/5 rounded-xl">
                                  <ShieldAlert size={16} className="text-rose-500 shrink-0 mt-0.5" />
                                  <span className="text-xs text-main-primary opacity-70 font-sans leading-relaxed">{risk}</span>
                               </div>
@@ -332,7 +332,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                           <h4 className="text-xs font-mono font-bold uppercase tracking-widest text-accent-primary flex items-center gap-2">
                             <Layers size={14} /> Structural Playbook
                           </h4>
-                          <div className="p-5 border border-main-primary rounded-2xl bg-card-primary shadow-sm space-y-4 font-mono">
+                          <div className="p-5 rounded-2xl bg-card-primary shadow-sm space-y-4 font-mono">
                              <div className="flex justify-between items-center text-[11px]">
                                <span className="text-main-primary opacity-40">Yield Sync Mode</span>
                                <span className="text-brand-emerald font-bold">OPTIMAL</span>
@@ -345,7 +345,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                                <span className="text-main-primary opacity-40">Liquidity Window</span>
                                <span className="text-accent-primary font-bold">NEUTRAL-OPEN</span>
                              </div>
-                             <div className="pt-4 border-t border-main-primary">
+                             <div className="pt-4">
                                 <p className="text-[10px] text-main-primary opacity-40 uppercase mb-3 font-bold">Recommended Tactical Position</p>
                                 <div className="p-3 bg-black text-white rounded text-xs font-bold text-center tracking-widest border border-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
                                    {netGex < 0 ? 'DYNAMIC VOLATILITY LONG (VXM)' : 'YIELD CURVE NEUTRAL CARRY'}
@@ -384,14 +384,14 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                      <div className="grid md:grid-cols-3 gap-6">
                         {(synthesis?.keyIndicators || []).length > 0 ? (
                           synthesis?.keyIndicators.map((ind) => (
-                            <div key={ind.name} className="p-6 border border-main-primary bg-card-primary rounded-2xl shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                            <div key={ind.name} className="p-6 bg-card-primary rounded-2xl shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
                                <div className="absolute top-0 left-0 w-1 h-full bg-accent-primary/10 group-hover:bg-accent-primary transition-colors" />
                                <div className="flex items-center justify-between mb-4">
                                   <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">{ind.name}</span>
                                   <div className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${getStatusColor(ind.status)} bg-black/5 dark:bg-white/5`}>{ind.status}</div>
                                </div>
                                <div className="text-3xl font-mono font-bold text-main-primary mb-4 tracking-tighter tabular-nums">{ind.value}</div>
-                               <div className="p-4 bg-accent-surface border border-main-primary/10 rounded-xl flex items-start gap-3">
+                               <div className="p-4 bg-accent-surface rounded-xl flex items-start gap-3">
                                   <Info size={14} className="text-accent-primary shrink-0 mt-0.5" />
                                   <p className="text-[10px] text-main-primary opacity-50 leading-relaxed font-mono font-medium">
                                      <span className="text-main-primary/40 uppercase">IMPLICATION:</span> {ind.implication}
@@ -486,7 +486,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                       className="h-full flex flex-col space-y-6"
                     >
                       <div className="grid md:grid-cols-2 gap-6">
-                         <div className="p-6 border border-main-primary rounded-2xl bg-card-primary shadow-sm overflow-hidden relative">
+                         <div className="p-6 rounded-2xl bg-card-primary shadow-sm overflow-hidden relative">
                             <h5 className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest mb-4">M2 Growth (Simulated Proxy)</h5>
                             <div className="h-40">
                                <ResponsiveContainer width="100%" height="100%">
@@ -506,7 +506,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                             </div>
                          </div>
 
-                         <div className="p-6 border border-main-primary rounded-2xl bg-card-primary shadow-sm">
+                         <div className="p-6 rounded-2xl bg-card-primary shadow-sm">
                             <h5 className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest mb-4">Central Bank Assets (Aggregated)</h5>
                             <div className="h-40">
                                <ResponsiveContainer width="100%" height="100%">
@@ -528,7 +528,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                          </div>
                       </div>
                       
-                      <div className="p-5 bg-accent-surface border border-main-primary rounded-2xl flex items-center gap-4">
+                      <div className="p-5 bg-accent-surface rounded-2xl flex items-center gap-4">
                          <div className="p-3 bg-accent-primary rounded-xl text-white">
                             <RefreshCcw size={20} />
                          </div>
@@ -653,7 +653,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                 </button>
               </div>
               <div className="p-8 overflow-y-auto no-scrollbar flex-1 prose prose-invert max-w-none">
-                <div className="mockup-code bg-black text-brand-emerald p-4 mb-8 font-mono text-xs rounded-xl shadow-inner border border-white/5">
+                <div className="mockup-code bg-black text-brand-emerald p-4 mb-8 font-mono text-xs rounded-xl shadow-inner">
                    <pre><code>{`CORE REGIME: ${synthesis.regime.toUpperCase()}`}</code></pre>
                    <pre><code>{`PROBABILITY: ${synthesis.regimeScore}%`}</code></pre>
                    <pre><code>{`STATUS: ANALYZING CROSS-ASSET CORRELATIONS...`}</code></pre>
@@ -662,7 +662,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                   <Markdown>{synthesis.detailedReport || synthesis.narrative}</Markdown>
                 </div>
               </div>
-              <div className="p-6 bg-main-primary/5 border-t border-main-primary flex justify-end">
+              <div className="p-6 bg-main-primary/5 flex justify-end">
                 <button 
                   onClick={() => setIsReportOpen(false)}
                   className="px-6 py-2 bg-accent-primary text-white rounded-xl text-xs font-mono font-bold uppercase tracking-widest hover:bg-accent-primary/80 transition-colors"

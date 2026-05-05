@@ -117,7 +117,7 @@ export function impliedVol(marketPrice: number, S: number, K: number, T: number,
 // ── Constants ────────────────────────────────────────────────────────────────
 export const RISK_FREE_RATE = 0.043;
 export const DIV_YIELD: Record<string, number> = {
-  SPY: 0.013, QQQ: 0.006, IWM: 0.012,
+  SPY: 0.013, QQQ: 0.006, IWM: 0.012, DIA: 0.017,
   GLD: 0.0, SLV: 0.0, TLT: 0.04,
   XLF: 0.018, XLE: 0.035, IBIT: 0.0,
   AAPL: 0.005, NVDA: 0.001, TSLA: 0.0,
@@ -126,7 +126,7 @@ export const DIV_YIELD: Record<string, number> = {
 };
 
 export const TICKERS = [
-  'SPY', 'QQQ', 'IWM', 'GLD', 'SLV', 'TLT', 'XLF', 'XLE', 'IBIT',
+  'SPY', 'QQQ', 'IWM', 'DIA', 'GLD', 'SLV', 'TLT', 'XLF', 'XLE', 'IBIT',
   'AAPL', 'NVDA', 'TSLA', 'AMZN', 'MSFT', 'META', 'GOOGL',
 ] as const;
 export type Ticker = (typeof TICKERS)[number];

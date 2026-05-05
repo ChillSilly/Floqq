@@ -427,7 +427,7 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
   const TimeframeBtn = ({ label }: { label: string }) => (
     <button 
       onClick={() => setActiveTimeframe(label)}
-      className={`px-2 py-1 text-[10px] font-mono transition-all border-r border-black/10 last:border-r-0 ${activeTimeframe === label ? 'bg-black text-white font-bold' : 'bg-transparent text-black/50 hover:bg-black/5'}`}
+      className={`px-2 py-1 text-[10px] font-mono transition-all border-black/10 last:border-r-0 ${activeTimeframe === label ? 'bg-black text-white font-bold' : 'bg-transparent text-black/50 hover:bg-black/5'}`}
     >
       {label}
     </button>
@@ -436,9 +436,9 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
   return (
     <div className="w-full h-full flex flex-col bg-white relative z-10 overflow-hidden" style={{ borderRadius: '2px' }}>
       {/* Top Bar Navigation */}
-      <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-black/5 bg-white shrink-0">
+      <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-white shrink-0">
         <div className="flex items-center gap-3">
-          <div className="text-black/80 font-mono text-xs font-bold tracking-wider py-1 px-2 border border-black/10 rounded-sm">
+          <div className="text-black/80 font-mono text-xs font-bold tracking-wider py-1 px-2 rounded-sm">
             {activeTicker} <span className="text-black/30 mx-1">|</span> {activeTimeframe}
           </div>
           <div className="hidden sm:flex items-center gap-2">
@@ -448,7 +448,7 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="flex items-center bg-white border border-black/10 rounded-sm overflow-hidden">
+          <div className="flex items-center bg-white rounded-sm overflow-hidden">
             <TimeframeBtn label="1m" />
             <TimeframeBtn label="5m" />
             <TimeframeBtn label="15m" />
@@ -474,7 +474,7 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
         {/* Absolute Floating Tooltip */}
         <div 
           ref={tooltipRef} 
-          className="absolute z-50 pointer-events-none hidden bg-white/70 backdrop-blur-lg border border-black/10 rounded-[4px] shadow-2xl"
+          className="absolute z-50 pointer-events-none hidden bg-white/70 backdrop-blur-lg rounded-[4px] shadow-2xl"
           style={{ padding: '12px 16px', minWidth: '180px' }}
         />
       </div>
