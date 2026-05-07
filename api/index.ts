@@ -34,55 +34,59 @@ const SYSTEM_HEADERS_A = {
 // --- API ROUTES ---
 
 app.get('/api/market-status', (req, res) => {
-  const now = new Date();
-  const nyTime = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    weekday: 'short',
-    hour12: false,
-  }).formatToParts(now);
+  try {
+    const now = new Date();
+    const nyTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      weekday: 'short',
+      hour12: false,
+    }).formatToParts(now);
 
-  const hour = parseInt(nyTime.find(p => p.type === 'hour')?.value || '0');
-  const minute = parseInt(nyTime.find(p => p.type === 'minute')?.value || '0');
-  const weekday = nyTime.find(p => p.type === 'weekday')?.value || '';
-  
-  const isWeekend = ['Sat', 'Sun'].includes(weekday);
-  const totalMinutes = hour * 60 + minute;
-  
-  const isRegularHours = totalMinutes >= 570 && totalMinutes < 960;
-  const isPreMarket = totalMinutes >= 240 && totalMinutes < 570;
-  const isAfterHours = totalMinutes >= 960 && totalMinutes < 1200;
+    const hour = parseInt(nyTime.find(p => p.type === 'hour')?.value || '0');
+    const minute = parseInt(nyTime.find(p => p.type === 'minute')?.value || '0');
+    const weekday = nyTime.find(p => p.type === 'weekday')?.value || '';
+    
+    const isWeekend = ['Sat', 'Sun'].includes(weekday);
+    const totalMinutes = hour * 60 + minute;
+    
+    const isRegularHours = totalMinutes >= 570 && totalMinutes < 960;
+    const isPreMarket = totalMinutes >= 240 && totalMinutes < 570;
+    const isAfterHours = totalMinutes >= 960 && totalMinutes < 1200;
 
-  let status = 'CLOSED';
-  let label = 'Market Closed';
-  let color = '#ef4444'; 
+    let status = 'CLOSED';
+    let label = 'Market Closed';
+    let color = '#ef4444'; 
 
-  if (isWeekend) {
-    status = 'CLOSED';
-    label = 'Weekend - Closed';
-  } else if (isRegularHours) {
-    status = 'LIVE';
-    label = 'Market Live';
-    color = '#10b981';
-  } else if (isPreMarket) {
-    status = 'PRE';
-    label = 'Pre-Market';
-    color = '#f59e0b';
-  } else if (isAfterHours) {
-    status = 'AFTER';
-    label = 'After Hours';
-    color = '#3b82f6';
+    if (isWeekend) {
+      status = 'CLOSED';
+      label = 'Weekend - Closed';
+    } else if (isRegularHours) {
+      status = 'LIVE';
+      label = 'Market Live';
+      color = '#10b981';
+    } else if (isPreMarket) {
+      status = 'PRE';
+      label = 'Pre-Market';
+      color = '#f59e0b';
+    } else if (isAfterHours) {
+      status = 'AFTER';
+      label = 'After Hours';
+      color = '#3b82f6';
+    }
+
+    res.json({
+      status,
+      label,
+      color,
+      nyTime: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
+      isLive: status === 'LIVE',
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Market status failure', details: e.message });
   }
-
-  res.json({
-    status,
-    label,
-    color,
-    nyTime: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-    isLive: status === 'LIVE',
-  });
 });
 
 let aiClient: GoogleGenAI | null = null;
@@ -99,7 +103,7 @@ app.get('/api/ratio/:ticker', async (req, res) => {
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json(cache[cacheKey].data);
 
   try {
-    const symbolMapping = { 'SPY': 'ES=F', 'QQQ': 'NQ=F', 'IWM': 'RTY=F' };
+    const symbolMapping: Record<string, string> = { 'SPY': 'ES=F', 'QQQ': 'NQ=F', 'IWM': 'RTY=F' };
     const futuresTicker = symbolMapping[ticker] || 'ES=F';
     
     const [futureRes, spotRes] = await Promise.all([
@@ -113,9 +117,9 @@ app.get('/api/ratio/:ticker', async (req, res) => {
     const result = { ticker, futuresTicker, ratio: futurePrice / spotPrice, spotPrice, futurePrice, ts: Date.now() };
     cache[cacheKey] = { data: result, ts: Date.now() };
     res.json(result);
-  } catch (error) {
-    const fallbacks = { 'SPY': 10.0, 'QQQ': 42.0 };
-    res.json({ ticker, ratio: fallbacks[ticker] || 1.0, error: 'Remote fetch failed' });
+  } catch (error: any) {
+    const fallbacks: Record<string, number> = { 'SPY': 10.0, 'QQQ': 42.0 };
+    res.json({ ticker, ratio: fallbacks[ticker] || 1.0, error: 'Remote fetch failed', details: error.message });
   }
 });
 
@@ -130,7 +134,7 @@ app.get('/api/chain/:symbol', async (req, res) => {
 
   for (const v of variations) {
     try {
-      const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { headers: SYSTEM_HEADERS_A, timeout: 10000 });
+      const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { headers: SYSTEM_HEADERS_A, timeout: 5000 });
       if (response.data?.data?.options) {
            cache[cacheKey] = { data: response.data, ts: Date.now() };
            return res.json(response.data);
@@ -146,12 +150,12 @@ app.get('/api/spot/:ticker', async (req, res) => {
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json({ price: cache[cacheKey].data });
 
   try {
-    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A });
+    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A, timeout: 5000 });
     const price = response.data.data.current_price;
     cache[cacheKey] = { data: price, ts: Date.now() };
     res.json({ price });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch spot price', details: error.message });
   }
 });
 
@@ -166,8 +170,8 @@ app.get('/api/yahoo/chart/:ticker', async (req, res) => {
     const response = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 10000 });
     cache[cacheKey] = { data: response.data, ts: Date.now() };
     res.json(response.data);
-  } catch (error) {
-    res.status(500).json({ error: 'Chart Fetch Failed' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Chart Fetch Failed', details: error.message });
   }
 });
 
@@ -252,8 +256,8 @@ app.get('/api/news', async (req, res) => {
 
     cache[cacheKey] = { data: enhancedNews, ts: Date.now() };
     res.json(enhancedNews);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'News Fetch Failed', details: error.message });
   }
 });
 
@@ -261,7 +265,7 @@ app.get('/api/macro/benchmarks', async (req, res) => {
   const cacheKey = 'macro_benchmarks';
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 5 * 60 * 1000) return res.json(cache[cacheKey].data);
 
-  const tickers = {
+  const tickers: Record<string, string> = {
     'DXY': 'DX-Y.NYB', 'VIX': '^VIX', 'US10Y': '^TNX', 'US2Y': 'US2Y=X', 'GOLD': 'GC=F', 'OIL': 'CL=F', 'SPX': '^GSPC', 'BTC': 'BTC-USD'
   };
 
@@ -284,7 +288,8 @@ app.get('/api/gex', async (req, res) => {
     const data = await fetchGexData(ticker as string, parseInt(exps as string));
     res.json(data);
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    console.error("GEX Engine Error:", e.message);
+    res.status(500).json({ error: 'GEX processing failed', details: e.message });
   }
 });
 

@@ -16,9 +16,17 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
       const isJson = contentType.includes('application/json');
       
       if (!res.ok) {
-        const text = await res.text();
-        console.error(`GEX API Error ${res.status}: ${text.substring(0, 100)}`);
-        throw new Error(`HTTP error ${res.status}`);
+        let errorMsg = `HTTP error ${res.status}`;
+        try {
+          const json = await res.json();
+          if (json.error) errorMsg = json.error;
+          if (json.details) errorMsg += `: ${json.details}`;
+        } catch {
+          const text = await res.text();
+          if (text) errorMsg += ` - ${text.substring(0, 100)}`;
+        }
+        console.error(`GEX API Error ${res.status}: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
       
       if (!isJson) {

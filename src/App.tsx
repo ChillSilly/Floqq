@@ -16,19 +16,10 @@ import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, Use
 import { bsPrice, bsDelta, bsGamma, bsVega, impliedVol } from './lib/blackScholes';
 
 import { useGexMetrics } from './hooks/useGexMetrics';
-
-const RISK_FREE_RATE = 0.043;
-const DIV_YIELD: Record<string, number> = {
-  "SPY": 0.013, "QQQ": 0.006, "IWM": 0.012,
-  "SPX": 0.013, "NDX": 0.006, "DIA": 0.015, "GLD": 0.0,
-};
+import { MODULES, VIP_MODULES, GLOSSARY_TERMS, RISK_FREE_RATE, DIV_YIELD } from './constants';
 
 // GEX Formula (Perfiliev / SpotGamma / Barchart industry standard):
 // GEX = Gamma × OI × ContractSize(100) × Spot² × 0.01 / 1e9
-const calculateGEX = (gamma: number, oi: number, spot: number) => {
-  return gamma * oi * 100 * (spot * spot) * 0.01 / 1e9;
-};
-
 const parseOSISymbol = (sym: string) => {
   const match = sym.match(/(\d{6})([CP])(\d{8})$/);
   if (!match) return null;
@@ -46,42 +37,12 @@ const parseOSISymbol = (sym: string) => {
   return { expiration, type, strike };
 };
 
-const MODULES = [
-  { id: 'module-1', title: 'The Foundation', icon: Layers },
-  { id: 'module-2', title: 'Gamma Levels', icon: Activity },
-  { id: 'module-4', title: 'Trading Playbook', icon: MapIcon },
-  { id: 'module-5', title: 'Platform Setup', icon: Monitor },
-  { id: 'module-6', title: 'Glossary', icon: Book },
-];
-
-const VIP_MODULES = [
-  { id: 'vip-gex', title: 'Live GEX Dashboard', icon: Activity },
-  { id: 'vip-blackscholes', title: 'Black-Scholes Calculator', icon: Calculator },
-  { id: 'vip-conversion', title: 'Conversion Engine', icon: Cpu },
-  { id: 'vip-journal', title: 'Journal', icon: Book },
-  { id: 'vip-alpha', title: 'Alpha Intelligence', icon: Zap },
-  { id: 'vip-strategy', title: 'Institutional Playbook', icon: ShieldCheck },
-];
-
 type GlossaryTerm = {
   term: string;
   subtitle?: string;
   def: string;
   impact: string;
 };
-
-const GLOSSARY_TERMS: GlossaryTerm[] = [
-  { term: "Delta Hedging", def: "A strategy where market makers constantly buy/sell the underlying asset to keep their directional exposure neutral.", impact: "This mechanical buying/selling affects liquidity and heavily dictates price action." },
-  { term: "Gamma", def: "Measures how fast an option's delta changes as the underlying price moves.", impact: "High gamma forces rapid hedging, translating into massive buying/selling volume that amplifies price moves." },
-  { term: "Net GEX (Net Gamma Exposure)", def: "The overall balance of market maker gamma positioning (positive or negative).", impact: "Determines the 'regime' the market is in—either choppy and range-bound (positive) or aggressive and trending (negative)." },
-  { term: "Core Resistance", def: "The strike price with the highest net call gamma exposure.", impact: "Acts as a structural ceiling. Dealers sell the underlying to remain neutral, causing rallies to stall." },
-  { term: "Put Support", def: "The strike price with the highest net put gamma exposure.", impact: "Acts as a structural floor. Puts being monetized leads to dealers buying back the underlying, causing bounces." },
-  { term: "HVL", subtitle: "High Volatility Level", def: "The transition zone where the market's overall gamma flips from positive to negative.", impact: "Above it = positive gamma (range-bound chop). Below it = negative gamma (momentum, massive swings)." },
-  { term: "1-Day Expected Move", def: "A volatility indicator predicting the statistical high and low boundaries for the day.", impact: "The S&P 500 stays inside this range ~85% of the time. Used for take-profits and reversal trades." },
-  { term: "0DTE Levels", def: "Gamma levels calculated purely from options expiring today (Zero Days to Expiration).", impact: "Extremely sensitive levels that act as massive intraday magnets for price action." },
-  { term: "GEX Levels", def: "Secondary levels representing strikes with high net gamma after Core Resistance and Put Support.", impact: "Used by day traders for precise gamma scalping and take-profit targets." },
-  { term: "Blind Spots", def: "Hidden market reaction zones derived from correlated assets like bonds or commodities.", impact: "Helps you avoid opening trades into hidden institutional friction." }
-];
 
 type StrategyStep = {
   id: string;
