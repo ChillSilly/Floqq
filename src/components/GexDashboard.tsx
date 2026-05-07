@@ -117,12 +117,11 @@ export function GexDashboard() {
   return (
     <div className="space-y-8">
       {/* Controls & Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-10 pb-10 relative overflow-hidden">
+      <div className="pb-10 relative overflow-hidden">
         {/* Ambient glow behind header */}
         <div className="absolute -top-32 -left-32 w-80 h-80 bg-accent-primary/10 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute -top-10 right-0 w-64 h-64 bg-accent-primary/5 blur-[80px] rounded-full pointer-events-none" />
         
-        <div className="space-y-6 relative z-10">
+        <div className="space-y-8 relative z-10">
           <div className="flex items-center gap-3">
              <div className="w-2 h-2 rounded-full bg-accent-primary shadow-[0_0_15px_var(--accent-glow)] animate-pulse" />
              <span className="text-[9px] font-mono font-black tracking-[0.4em] text-accent-primary uppercase">Alpha Terminal — v3.0.0 Institutional</span>
@@ -141,70 +140,81 @@ export function GexDashboard() {
                </div>
              )}
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-10">
-            <div>
-              <h1 className="text-6xl font-black tracking-tighter text-main-primary drop-shadow-md uppercase italic leading-none mb-2">
-                GEX <span className="text-accent-primary">Terminal</span>
-              </h1>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-main-primary/20 uppercase tracking-[0.25em] mt-3 ml-1">
-                <Target size={12} className="opacity-50" />
-                Intraday Liquidity Analytics & Exposure Mapping
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-x-12 gap-y-10">
+            <div className="flex flex-col gap-6">
+              <div>
+                <h1 className="text-6xl font-black tracking-tighter text-main-primary drop-shadow-md uppercase italic leading-none mb-2">
+                  GEX <span className="text-accent-primary">Terminal</span>
+                </h1>
+                <div className="flex items-center gap-2 text-[10px] font-bold text-main-primary/20 uppercase tracking-[0.25em] mt-3 ml-1">
+                  <Target size={12} className="opacity-50" />
+                  Intraday Liquidity Analytics & Exposure Mapping
+                </div>
+              </div>
+
+              {/* Moved Syncing here */}
+              <div className="px-5 py-2.5 bg-brand-amber/5 border border-brand-amber/10 rounded-xl flex items-center gap-4 self-start group hover:bg-brand-amber/10 transition-all duration-300 shadow-xl">
+                 <div className="relative">
+                   <RefreshCcw size={12} className="text-brand-amber animate-spin-slow group-hover:rotate-180 transition-transform" />
+                   <div className="absolute inset-0 bg-brand-amber/30 blur-[10px] rounded-full animate-pulse" />
+                 </div>
+                 <div className="flex items-center gap-3">
+                   <span className="text-[10px] font-mono font-black text-brand-amber/60 leading-none tracking-widest">SYNCING</span>
+                   <span className="text-[14px] font-mono font-bold text-brand-amber tracking-tighter">{countdown}s</span>
+                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1 p-1 bg-accent-surface/50 backdrop-blur-xl rounded-2xl shadow-2xl self-start">
-               {['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].map(t => (
-                 <button 
-                   key={t}
-                   onClick={() => setTicker(t)}
-                   className={`px-6 py-2.5 text-[11px] font-mono font-bold rounded-xl transition-all duration-500 ${
-                     ticker === t 
-                      ? 'bg-accent-primary text-app-primary shadow-[0_8px_25px_rgba(var(--color-accent-primary),0.4)] scale-105 active:scale-95' 
-                      : 'text-main-primary opacity-30 hover:opacity-100 hover:bg-main-primary/5 active:scale-95'
-                   }`}
-                 >
-                   {t}
-                 </button>
-               ))}
-               <div className="w-[1px] h-4 bg-white/5 mx-2" />
-               <select 
-                 value={ticker} 
-                 onChange={e => setTicker(e.target.value)}
-                 className="bg-transparent text-[11px] font-mono font-bold text-main-primary opacity-50 outline-none px-4 cursor-pointer hover:text-accent-primary transition-colors pr-2"
-               >
-                 {TICKERS.filter(t => !['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].includes(t)).map(t => (
-                   <option key={t} value={t} className="bg-app-primary text-main-primary">{t}</option>
-                 ))}
-               </select>
-            </div>
-          </div>
-        </div>
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-6 relative z-10">
+              {/* Refined Exps */}
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] font-mono font-black text-main-primary/20 uppercase tracking-widest ml-1 hidden sm:block">Expiration</span>
+                <div className="flex bg-accent-surface/30 backdrop-blur-xl rounded-xl p-1 shadow-2xl border border-white/5">
+                  {[0, 1, 2, 4, 8, 99].map(n => (
+                    <button 
+                      key={n} 
+                      onClick={() => setExps(n)}
+                      className={`px-3.5 py-1.5 text-[10px] font-mono font-bold rounded-lg transition-all duration-400 ${
+                        exps === n 
+                         ? 'bg-accent-primary text-app-primary shadow-xl scale-105 active:scale-95' 
+                         : 'text-main-primary opacity-30 hover:opacity-80 hover:bg-main-primary/5 active:scale-95'
+                      }`}
+                    >
+                      {n === 0 ? '0D' : n === 99 ? 'ALL' : `${n}E`}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-        <div className="flex flex-wrap items-center gap-8 relative z-10">
-          <div className="flex bg-accent-surface/40 backdrop-blur-xl rounded-xl p-1 shadow-2xl">
-            {[0, 1, 2, 4, 8, 99].map(n => (
-              <button 
-                key={n} 
-                onClick={() => setExps(n)}
-                className={`px-5 py-2 text-[10px] font-mono font-bold rounded-lg transition-all duration-400 ${
-                  exps === n 
-                   ? 'bg-accent-primary text-app-primary shadow-xl scale-105 active:scale-95' 
-                   : 'text-main-primary opacity-30 hover:opacity-80 hover:bg-main-primary/5 active:scale-95'
-                }`}
-              >
-                {n === 0 ? '0-DTE' : n === 99 ? 'ALL EXPS' : `${n} EXP`}
-              </button>
-            ))}
-          </div>
-          <div className="px-6 py-3 bg-brand-amber/5 rounded-2xl flex items-center gap-4 group hover:bg-brand-amber/10 transition-all duration-300 shadow-xl">
-             <div className="relative">
-               <RefreshCcw size={14} className="text-brand-amber animate-spin-slow group-hover:rotate-180 transition-transform" />
-               <div className="absolute inset-0 bg-brand-amber/30 blur-[10px] rounded-full animate-pulse" />
-             </div>
-             <div className="flex flex-col">
-               <span className="text-[9px] font-mono font-black text-brand-amber/40 leading-none tracking-widest">SYNCING</span>
-               <span className="text-[14px] font-mono font-bold text-brand-amber mt-1 tracking-tighter">{countdown}s</span>
-             </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] font-mono font-black text-main-primary/20 uppercase tracking-widest ml-1 hidden sm:block">Ticker</span>
+                <div className="flex items-center gap-1 p-1 bg-accent-surface/50 backdrop-blur-xl rounded-2xl shadow-2xl self-start border border-white/5">
+                   {['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].map(t => (
+                     <button 
+                       key={t}
+                       onClick={() => setTicker(t)}
+                       className={`px-6 py-2.5 text-[11px] font-mono font-bold rounded-xl transition-all duration-500 ${
+                         ticker === t 
+                          ? 'bg-accent-primary text-app-primary shadow-[0_8px_25px_rgba(var(--color-accent-primary),0.4)] scale-105 active:scale-95' 
+                          : 'text-main-primary opacity-30 hover:opacity-100 hover:bg-main-primary/5 active:scale-95'
+                       }`}
+                     >
+                       {t}
+                     </button>
+                   ))}
+                   <div className="w-[1px] h-4 bg-white/5 mx-2" />
+                   <select 
+                     value={ticker} 
+                     onChange={e => setTicker(e.target.value)}
+                     className="bg-transparent text-[11px] font-mono font-bold text-main-primary opacity-50 outline-none px-4 cursor-pointer hover:text-accent-primary transition-colors pr-2"
+                   >
+                     {TICKERS.filter(t => !['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].includes(t)).map(t => (
+                       <option key={t} value={t} className="bg-app-primary text-main-primary">{t}</option>
+                     ))}
+                   </select>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

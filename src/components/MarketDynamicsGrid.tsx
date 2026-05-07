@@ -29,10 +29,30 @@ export function MarketDynamicsGrid({ ticker = 'SPY' }: { ticker?: string }) {
   const isPositive = netGex >= 0;
 
   const metrics = [
-    { label: 'Delta Wall', value: `$${(data.levels.call_wall / 1e9).toFixed(1)}B`, icon: Shield, color: 'text-blue-400' },
-    { label: 'Gamma Floor', value: `$${(Math.abs(data.levels.put_wall) / 1e9).toFixed(1)}B`, icon: Layers, color: 'text-rose-400' },
-    { label: 'Volatility Flip', value: data.levels.gamma_flip.toFixed(1), icon: Zap, color: 'text-amber-400' },
-    { label: 'Liquidity Void', value: '472.50', icon: Disc, color: 'text-purple-400' },
+    { 
+      label: 'Net Delta', 
+      value: `$${Math.abs(data.totals.dex * data.spot / 1e9).toFixed(1)}B`, 
+      icon: Shield, 
+      color: 'text-blue-400' 
+    },
+    { 
+      label: 'Net Gamma', 
+      value: `$${Math.abs(data.totals.net_gex).toFixed(1)}B`, 
+      icon: Layers, 
+      color: 'text-rose-400' 
+    },
+    { 
+      label: 'Gamma Flip', 
+      value: data.levels.gamma_flip.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), 
+      icon: Zap, 
+      color: 'text-amber-400' 
+    },
+    { 
+      label: 'Vol Trigger', 
+      value: data.levels.vol_trigger.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), 
+      icon: Cpu, 
+      color: 'text-emerald-400' 
+    },
   ];
 
   return (

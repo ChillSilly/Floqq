@@ -16,6 +16,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// API Request Logger
+app.use('/api', (req, res, next) => {
+  console.log(`[API REQUEST] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 const PORT = 3000;
 
 // Memory Cache
@@ -490,41 +496,6 @@ Headlines with context from Yahoo Finance:
   }
 });
 
-app.get('/api/menthorq/levels/:ticker', async (req, res) => {
-  const { ticker } = req.params;
-  const sym = ticker.toUpperCase();
-
-  // In a real integration, this would use process.env.MENTHORQ_API_KEY
-  // and fetch from https://api.menthorq.com/v1/levels/...
-  // Here we are generating structurally accurate synthetic data reflecting 
-  // the MenthorQ institutional data model for MotiveWave/Quantower.
-  
-  try {
-    // Get current spot price to center the levels
-    const spotRes = await axios.get(`http://localhost:${PORT}/api/spot/${sym}`);
-    const spot = spotRes.data.price || (sym === 'QQQ' ? 440 : sym === 'SPY' ? 515 : 100);
-
-    // Simulate standard MenthorQ levels spread around spot price
-    const levels = [
-      { name: 'Call Resistance ODTE / Gamma Wall', price: spot * 1.025, type: 'resistance', color: '#a855f7' }, // Purple
-      { name: 'HVL ODTE', price: spot * 1.018, type: 'hvl', color: '#3b82f6' }, // Blue
-      { name: 'GEX 5', price: spot * 1.012, type: 'gex', color: '#eab308' }, // Yellow
-      { name: 'Call Resistance', price: spot * 1.008, type: 'resistance', color: '#a855f7' }, 
-      { name: 'HVL', price: spot * 1.002, type: 'hvl', color: '#3b82f6' },
-      { name: 'GEX 1 / GEX 4', price: spot * 0.995, type: 'gex', color: '#f97316' }, // Orange
-      { name: '1D Min', price: spot * 0.988, type: 'support', color: '#f97316' },
-      { name: 'GEX 3', price: spot * 0.982, type: 'gex', color: '#eab308' },
-      { name: 'Put Support ODTE / GEX 9', price: spot * 0.975, type: 'support', color: '#a855f7' },
-      { name: 'BL 10', price: spot * 0.965, type: 'blind_spot', color: '#6b7280' }, // Gray
-    ];
-
-    res.json({ ticker: sym, spot, levels, ts: Date.now() });
-  } catch (err) {
-    console.error("MenthorQ mock generation failed", err);
-    res.status(500).json({ error: "Failed to generate MenthorQ structural data" });
-  }
-});
-
 app.get('/api/macro/benchmarks', async (req, res) => {
   const cacheKey = 'macro_benchmarks';
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 5 * 60 * 1000) {
@@ -743,6 +714,16 @@ app.get('/api/macro/synthesis', async (req, res) => {
     console.error('Macro Synthesis Error:', error);
     res.json(fallbackData);
   }
+});
+
+// Catch-all API 404
+app.all('/api/*', (req, res) => {
+  console.warn(`[API 404] ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'API Endpoint Not Found', 
+    path: req.originalUrl,
+    method: req.method 
+  });
 });
 
 // --- VITE MIDDLEWARE ---

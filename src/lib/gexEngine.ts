@@ -23,6 +23,7 @@ export interface AggRow {
 
 export interface KeyLevels {
   gamma_flip: number; call_wall: number; put_wall: number;
+  call_wall_gex: number; put_wall_gex: number;
   max_pain: number; vol_trigger: number;
   mom_wall: number | null; mom_val: number;
 }
@@ -320,8 +321,13 @@ function computeKeyLevels(agg: AggRow[], spot: number, raw: GexRow[]): KeyLevels
 
   const pos = agg.filter(a => a.gex_net > 0);
   const neg = agg.filter(a => a.gex_net < 0);
-  const callWall = pos.length ? pos.reduce((m, a) => a.gex_net > m.gex_net ? a : m).strike : spot * 1.01;
-  const putWall = neg.length ? neg.reduce((m, a) => a.gex_net < m.gex_net ? a : m).strike : spot * 0.99;
+  const callWallObj = pos.length ? pos.reduce((m, a) => a.gex_net > m.gex_net ? a : m) : null;
+  const putWallObj = neg.length ? neg.reduce((m, a) => a.gex_net < m.gex_net ? a : m) : null;
+  
+  const callWall = callWallObj ? callWallObj.strike : spot * 1.01;
+  const putWall = putWallObj ? putWallObj.strike : spot * 0.99;
+  const callWallGex = callWallObj ? callWallObj.gex_net : 0;
+  const putWallGex = putWallObj ? Math.abs(putWallObj.gex_net) : 0;
 
   const callOIByStrike: Record<number, number> = {};
   const putOIByStrike: Record<number, number> = {};
@@ -354,7 +360,17 @@ function computeKeyLevels(agg: AggRow[], spot: number, raw: GexRow[]): KeyLevels
     }
   }
 
-  return { gamma_flip: gammaFlip, call_wall: callWall, put_wall: putWall, max_pain: maxPain, vol_trigger: volTrigger, mom_wall: momWall, mom_val: momVal };
+  return { 
+    gamma_flip: gammaFlip, 
+    call_wall: callWall, 
+    put_wall: putWall, 
+    call_wall_gex: callWallGex,
+    put_wall_gex: putWallGex,
+    max_pain: maxPain, 
+    vol_trigger: volTrigger, 
+    mom_wall: momWall, 
+    mom_val: momVal 
+  };
 }
 
 function computeFlow(raw: GexRow[]): { ratio: number; net: number } {

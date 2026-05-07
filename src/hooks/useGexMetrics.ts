@@ -12,14 +12,21 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
     try {
       const url = `/api/gex?ticker=${ticker}&exps=${exps}${forced ? '&force=true' : ''}`;
       const res = await fetch(url);
-      const isJson = res.headers.get('content-type')?.includes('application/json');
+      const contentType = res.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+      
       if (!res.ok) {
-        const errData = isJson ? await res.json().catch(() => ({})) : {};
-        throw new Error(errData.error || `HTTP error ${res.status}`);
+        const text = await res.text();
+        console.error(`GEX API Error ${res.status}: ${text.substring(0, 100)}`);
+        throw new Error(`HTTP error ${res.status}`);
       }
+      
       if (!isJson) {
+        const text = await res.text();
+        console.error(`GEX Non-JSON Response (Type: ${contentType}): ${text.substring(0, 200)}`);
         throw new Error("Server returned non-JSON response");
       }
+      
       const json = await res.json();
       
       setData(prev => {

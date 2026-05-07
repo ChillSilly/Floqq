@@ -5,12 +5,11 @@ import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, Che
 import { TradingViewWidget } from './components/TradingViewWidget';
 import { BeautifulChart } from './components/BeautifulChart';
 import { GexDashboard } from './components/GexDashboard';
-import { GexRadarPremium } from './components/GexRadarPremium';
 import { BlackScholesCalculator } from './components/BlackScholesCalculator';
+import { QuantDashboard } from './components/QuantDashboard';
 import { MacroNexus } from './components/MacroNexus';
 import { GammaGauge } from './components/GammaGauge';
 import { HedgingAnimation } from './components/HedgingAnimation';
-import { MenthorQLevelsChart } from './components/MenthorQLevelsChart';
 import { MarketDynamicsGrid } from './components/MarketDynamicsGrid';
 import { THEMES } from './themes';
 
@@ -58,9 +57,8 @@ const MODULES = [
 ];
 
 const VIP_MODULES = [
-  { id: 'vip-gex-premium', title: 'GexRadar Premium', icon: Crown },
   { id: 'vip-gex', title: 'Live GEX Dashboard', icon: Activity },
-  { id: 'vip-menthorq', title: 'MenthorQ API Labs', icon: LayoutGrid },
+  { id: 'vip-quant', title: 'Quant Lab', icon: Cpu },
   { id: 'vip-blackscholes', title: 'Black-Scholes Calculator', icon: Calculator },
   { id: 'vip-conversion', title: 'Conversion Engine', icon: Cpu },
   { id: 'vip-journal', title: 'Journal', icon: Book },
@@ -676,7 +674,17 @@ export default function App() {
         const ratios: any = {};
         for (const symbol of symbols) {
           const res = await fetch(`/api/ratio/${symbol}`);
-          if (res.ok) ratios[symbol] = await res.json();
+          if (res.ok) {
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              ratios[symbol] = await res.json();
+            } else {
+              const text = await res.text();
+              console.error(`Ratio fetch for ${symbol} returned non-JSON (Type: ${contentType}): ${text.substring(0, 100)}`);
+            }
+          } else {
+            console.error(`Ratio fetch for ${symbol} failed with status ${res.status}`);
+          }
         }
         setConversionRatios(ratios);
         setLastUpdate(new Date());
@@ -714,16 +722,16 @@ export default function App() {
            return false;
         }
 
-        const text = await res.text();
+        const responseText = await res.text();
         let json;
         try {
-          if (text.trim().startsWith('<!')) {
-             console.error(`Received HTML instead of JSON from chart backend. Length: ${text.length}. Check if the backend is matching the route or returning error pages.`);
+          if (responseText.trim().startsWith('<!')) {
+             console.error(`Received HTML instead of JSON from chart backend. Length: ${responseText.length}. Sample: ${responseText.substring(0, 100)}`);
              return false;
           }
-          json = JSON.parse(text);
+          json = JSON.parse(responseText);
         } catch (e) {
-          console.error(`Failed to parse Yahoo JSON. Length: ${text.length}. Sample: ${text.substring(0, 100)}`);
+          console.error(`Failed to parse Yahoo JSON. Length: ${responseText.length}. Sample: ${responseText.substring(0, 100)}`);
           return false;
         }
         
@@ -1600,36 +1608,12 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               {/* Main Display Area */}
               <div className="space-y-8 lg:col-span-12">
-                {activeModule === 'vip-gex-premium' && (
-                  <GexRadarPremium />
-                )}
-
                 {activeModule === 'vip-gex' && (
                   <GexDashboard />
                 )}
 
-                {activeModule === 'vip-menthorq' && (
-                  <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
-                    <div className="p-8 border border-main-primary/20 bg-surface-primary rounded-xl mb-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-main-primary text-surface-primary rounded-lg">
-                          <LayoutGrid size={20} />
-                        </div>
-                        <div>
-                           <h2 className="text-xl font-bold font-serif text-main-primary">MenthorQ API Integration Labs</h2>
-                           <p className="text-sm font-mono text-main-tertiary">Live institutional mapping engine replicating Quantower & MotiveWave</p>
-                        </div>
-                      </div>
-                      <p className="text-sm text-main-secondary leading-relaxed mb-6">
-                        This module connects directly to our proxy backend to receive real-time structural data mapping from standard MenthorQ outputs. We leverage LightWeight Charts to provide standard TV functionality (zooming, crosshairs) overlaid with structural liquidity bands and high volatility flags (HVL/GEX/Call Walls).
-                      </p>
-                    </div>
-                    
-                    {/* Hardcoded 5m SPY for demonstration */}
-                    <div className="h-[600px] w-full">
-                       <MenthorQLevelsChart ticker={activeTicker || "SPY"} />
-                    </div>
-                  </motion.div>
+                {activeModule === 'vip-quant' && (
+                  <QuantDashboard />
                 )}
 
                 {activeModule === 'vip-blackscholes' && (
