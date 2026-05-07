@@ -247,11 +247,13 @@ app.get('/api/news', async (req, res) => {
       const genAI = getAI();
       if (genAI && newsData.length > 0) {
         const prompt = `Elite quant strategist. Analyze these and return JSON array [{index:number, sentiment:string, tickers:string[], description:string}] for: \n` + newsData.map((n: any, i: number) => `${i}: ${n.title}`).join('\n');
-        const result = await genAI.models.generateContent({
+        const aiPromise = genAI.models.generateContent({
            model: 'gemini-1.5-flash',
            contents: [prompt],
            config: { responseMimeType: "application/json" }
         });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
+        const result: any = await Promise.race([aiPromise, timeoutPromise]);
         const aiData = JSON.parse(result.text);
         enhancedNews = newsData.map((item: any, i: number) => {
             const analysis = aiData.find((a: any) => a.index === i);
@@ -317,11 +319,15 @@ app.get('/api/macro/synthesis', async (req, res) => {
   try {
     const genAI = getAI();
     if (!genAI) return res.json(fallbackData);
-    const result = await genAI.models.generateContent({
+    const aiPromise = genAI.models.generateContent({
       model: 'gemini-1.5-flash',
       contents: [{ role: 'user', parts: [{ text: "Elite macro strategist. Analyze current landscape. JSON format. Concise narrative (max 30 words)." }] }],
       config: { responseMimeType: "application/json" }
     });
+    
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
+    
+    const result: any = await Promise.race([aiPromise, timeoutPromise]);
     const data = JSON.parse(result.text);
     cache[cacheKey] = { data, ts: Date.now() };
     res.json(data);

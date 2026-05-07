@@ -67,96 +67,104 @@ const CBOE_HEADERS = {
 
 export async function getSpot(ticker: string): Promise<number> {
   const symUpper = ticker.toUpperCase();
+  const promises: Promise<number>[] = [];
   
   if (FLOQ_API_KEY) {
-    try {
-      const r = await axios.get(`${FLOQ_URL}/spot/${symUpper}`, { 
+    promises.push(
+      axios.get(`${FLOQ_URL}/spot/${symUpper}`, { 
         headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` },
-        timeout: 3000 
-      });
-      const price = parseFloat(r.data?.data?.current_price || r.data?.price || 0);
-      if (price > 0) return price;
-    } catch(e) {}
+        timeout: 2000 
+      }).then(r => {
+        const p = parseFloat(r.data?.data?.current_price || r.data?.price || 0);
+        if (p > 0) return p;
+        throw new Error('Invalid');
+      })
+    );
   }
 
   // Backup 1: Yahoo Finance
-  try {
-    const symbolMapping: Record<string, string> = { 
-      'SPX': '^GSPC', 'NDX': '^IXIC', 'RUT': '^RUT', 
-      'DIA': '^DJI', 'VIX': '^VIX', 'TYX': '^TYX', 'TNX': '^TNX' 
-    };
-    const yahooSym = symbolMapping[symUpper] || symUpper;
-    const r = await axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`, { 
+  const symbolMapping: Record<string, string> = { 
+    'SPX': '^GSPC', 'NDX': '^IXIC', 'RUT': '^RUT', 
+    'DIA': '^DJI', 'VIX': '^VIX', 'TYX': '^TYX', 'TNX': '^TNX' 
+  };
+  const yahooSym = symbolMapping[symUpper] || symUpper;
+  promises.push(
+    axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`, { 
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 3000
-    });
-    const meta = r.data.chart.result[0].meta;
-    const price = meta.regularMarketPrice || meta.previousClose;
-    if (price > 0) return price;
-  } catch(e) {}
+      timeout: 2000
+    }).then(r => {
+      const meta = r.data.chart.result[0].meta;
+      const p = meta.regularMarketPrice || meta.previousClose;
+      if (p > 0) return p;
+      throw new Error('Invalid');
+    })
+  );
   
   // Backup 2: CBOE Variations
   const variants = [symUpper];
   if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) variants.push(`_${symUpper}`);
 
-  try {
-    const spotPromises = variants.map(v => 
+  variants.forEach(v => {
+    promises.push(
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS,
         timeout: 2000
       }).then(r => {
-        const price = parseFloat(r.data.data?.current_price || r.data.data?.last_trade_price || 0);
-        if (price > 0) return price;
-        throw new Error('Invalid price');
+        const p = parseFloat(r.data.data?.current_price || r.data.data?.last_trade_price || 0);
+        if (p > 0) return p;
+        throw new Error('Invalid');
       })
     );
-    const spotResult = await Promise.any(spotPromises).catch(() => 0);
-    if (spotResult > 0) return spotResult;
-  } catch(e) {}
+  });
 
-  return 0;
+  try {
+    return await Promise.any(promises);
+  } catch (e) {
+    return 0;
+  }
 }
 
 async function getChain(ticker: string): Promise<any> {
   const sym = ticker.toUpperCase();
-  
-  // Prioritize CBOE data - try variations
   const variants = [sym];
   if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(sym)) {
     variants.unshift(`_${sym}`); 
   }
 
-  try {
-    const cboePromises = variants.map(v => 
+  const promises: Promise<any>[] = [];
+
+  variants.forEach(v => {
+    promises.push(
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS, 
-        timeout: 2500 
+        timeout: 3000 
       }).then(r => {
         if (r.data?.data?.options?.length) return r.data;
         throw new Error('No options');
       })
     );
-    const cboeResult = await Promise.any(cboePromises).catch(() => null);
-    if (cboeResult) return cboeResult;
-  } catch (e) {}
+  });
 
-  // Fallback to FloQ only if CBOE fails and we have a key
   if (FLOQ_API_KEY) {
-    try {
-      const r = await axios.get(`${FLOQ_URL}/chain/${sym}`, { 
+    promises.push(
+      axios.get(`${FLOQ_URL}/chain/${sym}`, { 
         headers: { 
           'Authorization': `Bearer ${FLOQ_API_KEY}`,
           'Accept': 'application/json' 
         },
         timeout: 3000
-      });
-      if (r.data?.data?.options?.length) return r.data;
-    } catch(e) {
-      console.warn("FloQ Chain API failed:", e);
-    }
+      }).then(r => {
+        if (r.data?.data?.options?.length) return r.data;
+        throw new Error('No options');
+      })
+    );
   }
-  
-  throw new Error(`Data Relay Offline: No options chain could be located for ${ticker}.`);
+
+  try {
+    return await Promise.any(promises);
+  } catch (e) {
+    throw new Error(`Data Relay Offline: No options chain could be located for ${ticker}.`);
+  }
 }
 
 function parseSymbol(sym: string): { expiry: string; flag: 'C' | 'P'; strike: number } | null {
@@ -407,10 +415,12 @@ async function computeIVRVSpread(raw: GexRow[], spot: number, ticker: string): P
     // Replace Yahoo data for FloQ API KEY
     if (FLOQ_API_KEY) {
       try {
-        const r = await fetch(`${FLOQ_URL}/chart/${ticker}?interval=1d&range=30d`, { headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` } });
-        if (r.ok) {
-           const d = await r.json();
-           closes = (d.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter((c: any) => c != null);
+        const r = await axios.get(`${FLOQ_URL}/chart/${ticker}?interval=1d&range=30d`, { 
+          headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` },
+          timeout: 2000
+        });
+        if (r.data) {
+           closes = (r.data.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter((c: any) => c != null);
         }
       } catch(e) {}
     }
@@ -418,10 +428,13 @@ async function computeIVRVSpread(raw: GexRow[], spot: number, ticker: string): P
     // Fallback to Yahoo API 
     if (closes.length === 0) {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=30d`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
-      if (!res.ok) return 0;
-      const data: any = await res.json();
-      closes = (data.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter((c: any) => c != null);
+      try {
+        const res = await axios.get(url, { 
+          headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
+          timeout: 2000
+        });
+        closes = (res.data.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter((c: any) => c != null);
+      } catch (e) {}
     }
     
     if (closes.length < 5) return 0;
@@ -437,14 +450,15 @@ async function computeIVRVSpread(raw: GexRow[], spot: number, ticker: string): P
 }
 
 export async function fetchGexData(ticker: string, maxExpirations = 4): Promise<GexResult> {
-  const chainData = await getChain(ticker);
-  let spot = parseFloat(chainData.data?.current_price || 0);
+  const [chainData, fresherSpot] = await Promise.all([
+    getChain(ticker),
+    getSpot(ticker).catch(() => 0)
+  ]);
   
-  // Try to get a fresher spot price
-  try {
-    const fresherSpot = await getSpot(ticker);
-    if (fresherSpot > 0) spot = fresherSpot;
-  } catch(e) {}
+  let spot = fresherSpot;
+  if (!spot || spot <= 0) {
+    spot = parseFloat(chainData.data?.current_price || 0);
+  }
 
   if (!spot || isNaN(spot)) throw new Error(`Pricing Failure: Unable to resolve spot price for ${ticker}`);
 
