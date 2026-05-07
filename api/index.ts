@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import { GoogleGenAI } from '@google/genai';
-import { fetchGexData } from '../src/lib/gexEngine.ts'; // Ensure .ts extension so Vercel trace works
+import { fetchGexData } from '../src/lib/gexEngine';
 
 const app = express();
 app.use(cors());
@@ -105,8 +105,8 @@ app.get('/api/ratio/:ticker', async (req, res) => {
     const futuresTicker = symbolMapping[ticker] || 'ES=F';
     
     const [futureRes, spotRes] = await Promise.all([
-      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 }),
-      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 })
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 }),
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000 })
     ]);
 
     const futurePrice = futureRes.data.chart.result[0].meta.regularMarketPrice || futureRes.data.chart.result[0].meta.previousClose;
@@ -130,15 +130,23 @@ app.get('/api/chain/:symbol', async (req, res) => {
   const variations = [symUpper];
   if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) variations.unshift(`_${symUpper}`);
 
-  for (const v of variations) {
-    try {
-      const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { headers: SYSTEM_HEADERS_A, timeout: 5000 });
-      if (response.data?.data?.options) {
-           cache[cacheKey] = { data: response.data, ts: Date.now() };
-           return res.json(response.data);
-      }
-    } catch (e) {}
-  }
+  try {
+    const promises = variations.map(v => 
+      axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
+        headers: SYSTEM_HEADERS_A, 
+        timeout: 2500 
+      }).then(r => {
+        if (r.data?.data?.options) return r.data;
+        throw new Error('No options');
+      })
+    );
+    const data = await Promise.any(promises).catch(() => null);
+    if (data) {
+      cache[cacheKey] = { data, ts: Date.now() };
+      return res.json(data);
+    }
+  } catch (e) {}
+
   res.status(500).json({ error: 'Failed to fetch chain data' });
 });
 
@@ -148,7 +156,7 @@ app.get('/api/spot/:ticker', async (req, res) => {
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json({ price: cache[cacheKey].data });
 
   try {
-    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A, timeout: 5000 });
+    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A, timeout: 2500 });
     const price = response.data.data.current_price;
     cache[cacheKey] = { data: price, ts: Date.now() };
     res.json({ price });
@@ -165,7 +173,7 @@ app.get('/api/yahoo/chart/:ticker', async (req, res) => {
 
   try {
     const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker.toUpperCase()}?interval=${interval}&range=${range}`;
-    const response = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 10000 });
+    const response = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 3000 });
     cache[cacheKey] = { data: response.data, ts: Date.now() };
     res.json(response.data);
   } catch (error: any) {
@@ -190,7 +198,7 @@ app.get('/api/news', async (req, res) => {
     
     let allNews: any[] = [];
     try {
-       const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_A, timeout: 10000 })));
+       const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_A, timeout: 5000 })));
        responses.forEach(r => {
           if (r.data && r.data.news) allNews = allNews.concat(r.data.news);
        });

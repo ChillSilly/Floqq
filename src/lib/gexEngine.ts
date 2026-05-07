@@ -2,7 +2,7 @@ import axios from 'axios';
 import {
   bsGamma, bsDelta, bsVega, bsCharm, bsVanna, bsVomma, bsZomma,
   impliedVol, RISK_FREE_RATE, DIV_YIELD,
-} from './blackScholes.ts';
+} from './blackScholes';
 
 export interface GexRow {
   strike: number; expiry: string; dte: number; flag: 'C' | 'P';
@@ -99,16 +99,20 @@ export async function getSpot(ticker: string): Promise<number> {
   const variants = [symUpper];
   if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) variants.push(`_${symUpper}`);
 
-  for (const v of variants) {
-    try {
-      const r = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
+  try {
+    const spotPromises = variants.map(v => 
+      axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS,
-        timeout: 3000
-      });
-      const price = parseFloat(r.data.data?.current_price || r.data.data?.last_trade_price || 0);
-      if (price > 0) return price;
-    } catch(e) {}
-  }
+        timeout: 2000
+      }).then(r => {
+        const price = parseFloat(r.data.data?.current_price || r.data.data?.last_trade_price || 0);
+        if (price > 0) return price;
+        throw new Error('Invalid price');
+      })
+    );
+    const spotResult = await Promise.any(spotPromises).catch(() => 0);
+    if (spotResult > 0) return spotResult;
+  } catch(e) {}
 
   return 0;
 }
@@ -122,13 +126,19 @@ async function getChain(ticker: string): Promise<any> {
     variants.unshift(`_${sym}`); 
   }
 
-  for (const v of variants) {
-    const url = `https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`;
-    try {
-      const response = await axios.get(url, { headers: CBOE_HEADERS, timeout: 3000 });
-      if (response.data?.data?.options?.length) return response.data;
-    } catch { continue; }
-  }
+  try {
+    const cboePromises = variants.map(v => 
+      axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
+        headers: CBOE_HEADERS, 
+        timeout: 2500 
+      }).then(r => {
+        if (r.data?.data?.options?.length) return r.data;
+        throw new Error('No options');
+      })
+    );
+    const cboeResult = await Promise.any(cboePromises).catch(() => null);
+    if (cboeResult) return cboeResult;
+  } catch (e) {}
 
   // Fallback to FloQ only if CBOE fails and we have a key
   if (FLOQ_API_KEY) {
