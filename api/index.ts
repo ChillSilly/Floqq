@@ -1,10 +1,8 @@
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import { GoogleGenAI } from '@google/genai';
-import * as cheerio from 'cheerio';
-import { fetchGexData } from '../src/lib/gexEngine';
+import { fetchGexData } from '../src/lib/gexEngine.ts'; // Ensure .ts extension so Vercel trace works
 
 const app = express();
 app.use(cors());
