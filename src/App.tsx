@@ -6,7 +6,6 @@ import { TradingViewWidget } from './components/TradingViewWidget';
 import { BeautifulChart } from './components/BeautifulChart';
 import { GexDashboard } from './components/GexDashboard';
 import { BlackScholesCalculator } from './components/BlackScholesCalculator';
-import { QuantDashboard } from './components/QuantDashboard';
 import { MacroNexus } from './components/MacroNexus';
 import { GammaGauge } from './components/GammaGauge';
 import { HedgingAnimation } from './components/HedgingAnimation';
@@ -50,7 +49,6 @@ const parseOSISymbol = (sym: string) => {
 const MODULES = [
   { id: 'module-1', title: 'The Foundation', icon: Layers },
   { id: 'module-2', title: 'Gamma Levels', icon: Activity },
-  { id: 'module-3', title: 'Quantitative Models', icon: Crosshair },
   { id: 'module-4', title: 'Trading Playbook', icon: MapIcon },
   { id: 'module-5', title: 'Platform Setup', icon: Monitor },
   { id: 'module-6', title: 'Glossary', icon: Book },
@@ -58,7 +56,6 @@ const MODULES = [
 
 const VIP_MODULES = [
   { id: 'vip-gex', title: 'Live GEX Dashboard', icon: Activity },
-  { id: 'vip-quant', title: 'Quant Lab', icon: Cpu },
   { id: 'vip-blackscholes', title: 'Black-Scholes Calculator', icon: Calculator },
   { id: 'vip-conversion', title: 'Conversion Engine', icon: Cpu },
   { id: 'vip-journal', title: 'Journal', icon: Book },
@@ -1399,70 +1396,6 @@ export default function App() {
             </div>
           </section>
 
-          {/* Module 3 */}
-          <section id="module-3" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/5 to-transparent rounded-[4rem] shadow-2xl mb-32 relative">
-            <div className="absolute inset-0 bg-[#08080c]" />
-            
-            <div className="relative p-12 md:p-24">
-              <div className="mb-16 border-b border-white/5 pb-12">
-                <div className="flex items-center gap-4 mb-6">
-                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-emerald-500 bg-emerald-500/10 px-4 py-1.5 rounded-full border border-emerald-500/20">Analytical</span>
-                </div>
-                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Quantitative Edge</h2>
-                <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
-                  Institutional models that map the <span className="text-white/60">invisible roadmap</span> of market friction and liquidity voids.
-                </p>
-              </div>
-
-              <div className="grid gap-8">
-                <div className="group relative">
-                  <div className="absolute inset-0 bg-blue-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-700" />
-                  <div className="relative p-12 rounded-[3.5rem] bg-white/[0.01] border border-white/10 hover:border-blue-500/20 hover:bg-white/[0.03] transition-all duration-500 flex flex-col lg:flex-row gap-12 items-start">
-                    <div className="lg:w-1/3">
-                      <h3 className="text-3xl font-light text-white tracking-tight">Blind Spots</h3>
-                      <div className="w-12 h-1 bg-blue-500/40 mt-4 rounded-full" />
-                    </div>
-                    <div className="lg:w-2/3">
-                      <p className="text-lg text-white/40 leading-relaxed font-light">
-                        Hidden Market reaction zones where multi-asset correlations influence intraday price. These friction nodes highlight where traditional charting fails to see institutional exhaustion.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="group relative">
-                  <div className="absolute inset-0 bg-purple-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-700" />
-                  <div className="relative p-12 rounded-[3.5rem] bg-white/[0.01] border border-white/10 hover:border-purple-500/20 hover:bg-white/[0.03] transition-all duration-500 flex flex-col lg:flex-row gap-12 items-start">
-                    <div className="lg:w-1/3">
-                      <h3 className="text-3xl font-light text-white tracking-tight">Dark Pools</h3>
-                      <div className="w-12 h-1 bg-purple-500/40 mt-4 rounded-full" />
-                    </div>
-                    <div className="lg:w-2/3">
-                      <p className="text-lg text-white/40 leading-relaxed font-light">
-                        Off-exchange data footprints. These large institutional block trades create immense structural magnets that often override retail sentiment and news-driven moves.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="group relative">
-                  <div className="absolute inset-0 bg-emerald-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-700" />
-                  <div className="relative p-12 rounded-[3.5rem] bg-white/[0.01] border border-white/10 hover:border-emerald-500/20 hover:bg-white/[0.03] transition-all duration-500 flex flex-col lg:flex-row gap-12 items-start">
-                    <div className="lg:w-1/3">
-                      <h3 className="text-3xl font-light text-white tracking-tight">Liquidity Voids</h3>
-                      <div className="w-12 h-1 bg-emerald-500/40 mt-4 rounded-full" />
-                    </div>
-                    <div className="lg:w-2/3">
-                      <p className="text-lg text-white/40 leading-relaxed font-light">
-                        Zones where institutional limit orders have evaporated. When price enters a void, it accelerates violently due to lack of friction. Perfect for high R/R momentum trades.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
           {/* Module 4 */}
           <section id="module-4" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/10 to-transparent border border-white/5 rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] mb-32 relative group">
             <div className="absolute inset-0 bg-[#0c0c0f]" />
@@ -1610,10 +1543,6 @@ export default function App() {
               <div className="space-y-8 lg:col-span-12">
                 {activeModule === 'vip-gex' && (
                   <GexDashboard />
-                )}
-
-                {activeModule === 'vip-quant' && (
-                  <QuantDashboard />
                 )}
 
                 {activeModule === 'vip-blackscholes' && (
