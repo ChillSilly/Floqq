@@ -72,7 +72,7 @@ export async function getSpot(ticker: string): Promise<number> {
     try {
       const r = await axios.get(`${FLOQ_URL}/spot/${symUpper}`, { 
         headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` },
-        timeout: 5000 
+        timeout: 3000 
       });
       const price = parseFloat(r.data?.data?.current_price || r.data?.price || 0);
       if (price > 0) return price;
@@ -88,7 +88,7 @@ export async function getSpot(ticker: string): Promise<number> {
     const yahooSym = symbolMapping[symUpper] || symUpper;
     const r = await axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`, { 
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 5000
+      timeout: 3000
     });
     const meta = r.data.chart.result[0].meta;
     const price = meta.regularMarketPrice || meta.previousClose;
@@ -103,7 +103,7 @@ export async function getSpot(ticker: string): Promise<number> {
     try {
       const r = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS,
-        timeout: 5000
+        timeout: 3000
       });
       const price = parseFloat(r.data.data?.current_price || r.data.data?.last_trade_price || 0);
       if (price > 0) return price;
@@ -125,7 +125,7 @@ async function getChain(ticker: string): Promise<any> {
   for (const v of variants) {
     const url = `https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`;
     try {
-      const response = await axios.get(url, { headers: CBOE_HEADERS, timeout: 8000 });
+      const response = await axios.get(url, { headers: CBOE_HEADERS, timeout: 3000 });
       if (response.data?.data?.options?.length) return response.data;
     } catch { continue; }
   }
@@ -138,7 +138,7 @@ async function getChain(ticker: string): Promise<any> {
           'Authorization': `Bearer ${FLOQ_API_KEY}`,
           'Accept': 'application/json' 
         },
-        timeout: 10000
+        timeout: 3000
       });
       if (r.data?.data?.options?.length) return r.data;
     } catch(e) {

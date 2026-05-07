@@ -15,27 +15,34 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
       const contentType = res.headers.get('content-type') || '';
       const isJson = contentType.includes('application/json');
       
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // Not JSON or empty
+      }
+      
       if (!res.ok) {
         let errorMsg = `HTTP error ${res.status}`;
-        try {
-          const json = await res.json();
-          if (json.error) errorMsg = json.error;
+        if (json && json.error) {
+          errorMsg = json.error;
           if (json.details) errorMsg += `: ${json.details}`;
-        } catch {
-          const text = await res.text();
-          if (text) errorMsg += ` - ${text.substring(0, 100)}`;
+        } else if (text) {
+          errorMsg += ` - ${text.substring(0, 100)}`;
         }
         console.error(`GEX API Error ${res.status}: ${errorMsg}`);
         throw new Error(errorMsg);
       }
       
       if (!isJson) {
-        const text = await res.text();
         console.error(`GEX Non-JSON Response (Type: ${contentType}): ${text.substring(0, 200)}`);
         throw new Error("Server returned non-JSON response");
       }
       
-      const json = await res.json();
+      if (!json) {
+        throw new Error("Failed to parse GEX response");
+      }
       
       setData(prev => {
         if (!prev) return json;
