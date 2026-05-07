@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import * as cheerio from 'cheerio';
+import { fetchGexData } from '../src/lib/gexEngine';
 
 const app = express();
 app.use(cors());
@@ -10,7 +12,8 @@ app.use(express.json());
 
 // Memory Cache
 const cache: Record<string, { data: any; ts: number }> = {};
-const CACHE_TTL = 58 * 1000; // 58 seconds
+const CACHE_TTL = 15 * 1000; 
+const CHART_CACHE_TTL = 15 * 1000; 
 
 const SYSTEM_HEADERS_B = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -24,11 +27,63 @@ const SYSTEM_HEADERS_B = {
 const SYSTEM_HEADERS_A = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   'Accept': 'application/json, text/plain, */*',
-  'Referer': 'https://www.google.com/',
-  'Origin': 'https://www.google.com/',
+  'Referer': 'https://www.cboe.com/',
+  'Origin': 'https://www.cboe.com',
 };
 
 // --- API ROUTES ---
+
+app.get('/api/market-status', (req, res) => {
+  const now = new Date();
+  const nyTime = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    weekday: 'short',
+    hour12: false,
+  }).formatToParts(now);
+
+  const hour = parseInt(nyTime.find(p => p.type === 'hour')?.value || '0');
+  const minute = parseInt(nyTime.find(p => p.type === 'minute')?.value || '0');
+  const weekday = nyTime.find(p => p.type === 'weekday')?.value || '';
+  
+  const isWeekend = ['Sat', 'Sun'].includes(weekday);
+  const totalMinutes = hour * 60 + minute;
+  
+  const isRegularHours = totalMinutes >= 570 && totalMinutes < 960;
+  const isPreMarket = totalMinutes >= 240 && totalMinutes < 570;
+  const isAfterHours = totalMinutes >= 960 && totalMinutes < 1200;
+
+  let status = 'CLOSED';
+  let label = 'Market Closed';
+  let color = '#ef4444'; 
+
+  if (isWeekend) {
+    status = 'CLOSED';
+    label = 'Weekend - Closed';
+  } else if (isRegularHours) {
+    status = 'LIVE';
+    label = 'Market Live';
+    color = '#10b981';
+  } else if (isPreMarket) {
+    status = 'PRE';
+    label = 'Pre-Market';
+    color = '#f59e0b';
+  } else if (isAfterHours) {
+    status = 'AFTER';
+    label = 'After Hours';
+    color = '#3b82f6';
+  }
+
+  res.json({
+    status,
+    label,
+    color,
+    nyTime: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
+    isLive: status === 'LIVE',
+  });
+});
 
 let aiClient: GoogleGenAI | null = null;
 const getAI = () => {
@@ -39,149 +94,56 @@ const getAI = () => {
 };
 
 app.get('/api/ratio/:ticker', async (req, res) => {
-  const { ticker } = (req.params as any);
+  const { ticker } = req.params;
   const cacheKey = `ratio_${ticker}`;
-
-  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
-    return res.json(cache[cacheKey].data);
-  }
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json(cache[cacheKey].data);
 
   try {
-    const symbolMapping: Record<string, string> = {
-      'SPY': 'ES=F',
-      'QQQ': 'NQ=F',
-      'IWM': 'RTY=F',
-    };
-
+    const symbolMapping = { 'SPY': 'ES=F', 'QQQ': 'NQ=F', 'IWM': 'RTY=F' };
     const futuresTicker = symbolMapping[ticker] || 'ES=F';
     
-    // Fetch Futures Price
-    const futureRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
-    const futureMeta = futureRes.data.chart.result[0].meta;
-    const futurePrice = futureMeta.regularMarketPrice || futureMeta.previousClose;
+    const [futureRes, spotRes] = await Promise.all([
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 }),
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 })
+    ]);
 
-    // Fetch Spot Price (the ETF)
-    const spotRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
-    const spotMeta = spotRes.data.chart.result[0].meta;
-    const spotPrice = spotMeta.regularMarketPrice || spotMeta.previousClose;
+    const futurePrice = futureRes.data.chart.result[0].meta.regularMarketPrice || futureRes.data.chart.result[0].meta.previousClose;
+    const spotPrice = spotRes.data.chart.result[0].meta.regularMarketPrice || spotRes.data.chart.result[0].meta.previousClose;
 
-    const ratio = futurePrice / spotPrice;
-    const result = { ticker, futuresTicker, ratio, spotPrice, futurePrice, ts: Date.now() };
-    
+    const result = { ticker, futuresTicker, ratio: futurePrice / spotPrice, spotPrice, futurePrice, ts: Date.now() };
     cache[cacheKey] = { data: result, ts: Date.now() };
     res.json(result);
   } catch (error) {
-    console.error('Ratio Fetch Error:', error);
-    const fallbacks: Record<string, number> = { 'SPY': 10.0, 'QQQ': 42.0 };
+    const fallbacks = { 'SPY': 10.0, 'QQQ': 42.0 };
     res.json({ ticker, ratio: fallbacks[ticker] || 1.0, error: 'Remote fetch failed' });
   }
 });
 
 app.get('/api/chain/:symbol', async (req, res) => {
-  const { symbol } = (req.params as any);
+  const { symbol } = req.params;
   const cacheKey = `chain_${symbol}`;
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json(cache[cacheKey].data);
 
-  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
-    return res.json(cache[cacheKey].data);
-  }
+  const symUpper = symbol.toUpperCase();
+  const variations = [symUpper];
+  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) variations.unshift(`_${symUpper}`);
 
-  try {
-    let spotPrice = 0;
+  for (const v of variations) {
     try {
-      const spotRes = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
-      const spotMeta = spotRes.data.chart.result[0].meta;
-      spotPrice = spotMeta.regularMarketPrice || spotMeta.previousClose;
-    } catch(err) {
-      console.warn("Could not fetch spot price for", symbol, "using fallback.");
-    }
-
-    const alpacaKey = process.env.APCA_API_KEY_ID || 'PKP6JPYFGE77PL32QB3DO6WVCH';
-    const alpacaSecret = process.env.APCA_API_SECRET_KEY || 'EVKt1FsFqJmWbMyZV4YekUVQYNgBqMPSoNm21b4emruR';
-    
-    let snapshots: Record<string, any> = {};
-    let pageToken = '';
-    
-    for (let i = 0; i < 3; i++) {
-        const url = `https://data.alpaca.markets/v1beta1/options/snapshots/${symbol.toUpperCase()}?feed=indicative&limit=1000` + (pageToken ? `&page_token=${pageToken}` : '');
-        try {
-           const response = await axios.get(url, {
-             headers: {
-               'APCA-API-KEY-ID': alpacaKey,
-               'APCA-API-SECRET-KEY': alpacaSecret
-             }
-           });
-           
-           if (response.data && response.data.snapshots) {
-               Object.assign(snapshots, response.data.snapshots);
-               pageToken = response.data.next_page_token;
-               if (!pageToken) break;
-           } else {
-               break;
-           }
-        } catch(e: any) {
-           console.error("Alpaca fetch error details:", e?.response?.data || e.message);
-           break;
-        }
-    }
-
-    const options = Object.entries(snapshots).map(([optSymbol, snap]: [string, any]) => {
-      return {
-         option: optSymbol,
-         open_interest: snap.dailyBar?.v || snap.latestTrade?.s || 100,
-         iv: snap.impliedVolatility,
-         gamma: snap.greeks?.gamma,
-         delta: snap.greeks?.delta,
-         vega: snap.greeks?.vega,
-         volume: snap.dailyBar?.v || 0,
-         mark: snap.latestQuote?.ap || 0
-      };
-    });
-
-    const data = {
-       data: {
-          current_price: spotPrice,
-          options: options
-       }
-    };
-
-    if (!options.length) {
-       throw new Error("No data from Alpaca");
-    }
-
-    cache[cacheKey] = { data, ts: Date.now() };
-    return res.json(data);
-  } catch (error) {
-    console.error('Chain Fetch Error (Alpaca):', error);
-    try {
-      const urls = [
-        `https://cdn.cboe.com/api/global/delayed_quotes/options/${symbol.toUpperCase()}.json`,
-        `https://cdn.cboe.com/api/global/delayed_quotes/options/_${symbol.toUpperCase()}.json`
-      ];
-
-      for (const url of urls) {
-        try {
-          const response = await axios.get(url, { headers: SYSTEM_HEADERS_A, timeout: 15000 });
-          if (response.data && response.data.data && response.data.data.options) {
-             cache[cacheKey] = { data: response.data, ts: Date.now() };
-             return res.json(response.data);
-          }
-        } catch (e) {
-          continue;
-        }
+      const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { headers: SYSTEM_HEADERS_A, timeout: 10000 });
+      if (response.data?.data?.options) {
+           cache[cacheKey] = { data: response.data, ts: Date.now() };
+           return res.json(response.data);
       }
-    } catch(fallbackErr) {}
-    
-    res.status(500).json({ error: 'Failed to fetch chain data' });
+    } catch (e) {}
   }
+  res.status(500).json({ error: 'Failed to fetch chain data' });
 });
 
 app.get('/api/spot/:ticker', async (req, res) => {
-  const { ticker } = (req.params as any);
+  const { ticker } = req.params;
   const cacheKey = `spot_${ticker}`;
-
-  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) {
-    return res.json({ price: cache[cacheKey].data });
-  }
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json({ price: cache[cacheKey].data });
 
   try {
     const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A });
@@ -194,57 +156,18 @@ app.get('/api/spot/:ticker', async (req, res) => {
 });
 
 app.get('/api/yahoo/chart/:ticker', async (req, res) => {
-  const { ticker } = (req.params as any);
+  const { ticker } = req.params;
   const { interval = '5m', range = '1d' } = req.query;
-  
-  if (!ticker || ticker === 'undefined') {
-    return res.status(400).json({ error: 'Ticker is required' });
-  }
+  const cacheKey = `chart_${ticker}_${interval}_${range}`;
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CHART_CACHE_TTL) return res.json(cache[cacheKey].data);
 
   try {
-    const symbolMapping: Record<string, string> = {
-      'SPY': 'SPY',
-      'QQQ': 'QQQ',
-      'IWM': 'IWM',
-    };
-    
-    const symbol = symbolMapping[ticker] || ticker;
-    
-    let url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
-    let fetchHeaders: any = SYSTEM_HEADERS_B;
-    
-    let response;
-    try {
-      response = await axios.get(url, { 
-        headers: fetchHeaders,
-        timeout: 8000,
-        validateStatus: (status) => status < 500
-      });
-    } catch (e: any) {
-      console.warn(`Yahoo API failed (${e.message || 'Error'}) for ${symbol}`);
-      return res.status(500).json({ error: 'Yahoo API threw an exception', message: e.message });
-    }
-
-    if (typeof response.data === 'string' && response.data.trim().startsWith('<!')) {
-      return res.status(response.status !== 200 ? response.status : 502).json({ error: 'Returned HTML instead of JSON. Potential block or captcha.' });
-    }
-
-    if (response.status !== 200) {
-      return res.status(response.status).json(typeof response.data === 'object' ? response.data : { error: 'Yahoo API Error', status: response.status });
-    }
-    
-    let finalData = response.data;
-    if (typeof finalData === 'string' && finalData.trim().startsWith('{')) {
-      try { finalData = JSON.parse(finalData); } catch(e) {}
-    }
-
-    res.json(finalData);
-  } catch (error: any) {
-    res.status(500).json({ 
-      error: 'Failed to fetch chart data',
-      message: error.message,
-      ticker
-    });
+    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker.toUpperCase()}?interval=${interval}&range=${range}`;
+    const response = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 10000 });
+    cache[cacheKey] = { data: response.data, ts: Date.now() };
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: 'Chart Fetch Failed' });
   }
 });
 
@@ -252,25 +175,22 @@ app.get('/api/news', async (req, res) => {
   const cacheKey = 'yahoo_news_ai_v3';
   const force = req.query.force === 'true';
 
-  if (!force && cache[cacheKey] && Date.now() - cache[cacheKey].ts < 3 * 60 * 1000) {
+  if (!force && cache[cacheKey] && Date.now() - cache[cacheKey].ts < 3 * 60 * 1000) { 
     return res.json(cache[cacheKey].data);
   }
 
   try {
     const urls = [
-      'https://query2.finance.yahoo.com/v1/finance/search?q=financial%20news&quotesCount=0&newsCount=40',
-      'https://query2.finance.yahoo.com/v1/finance/search?q=us%20equities&quotesCount=0&newsCount=40',
-      'https://query2.finance.yahoo.com/v1/finance/search?q=tech%20stocks&quotesCount=0&newsCount=40'
+      'https://query2.finance.yahoo.com/v1/finance/search?q=financial%20news&quotesCount=0&newsCount=10',
+      'https://query2.finance.yahoo.com/v1/finance/search?q=us%20equities&quotesCount=0&newsCount=10',
+      'https://query2.finance.yahoo.com/v1/finance/search?q=tech%20stocks&quotesCount=0&newsCount=10'
     ];
     
     let allNews: any[] = [];
-    
     try {
        const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_A, timeout: 10000 })));
        responses.forEach(r => {
-          if (r.data && r.data.news) {
-             allNews = allNews.concat(r.data.news);
-          }
+          if (r.data && r.data.news) allNews = allNews.concat(r.data.news);
        });
     } catch(e) {
        console.error("Yahoo News Fetch error", e);
@@ -278,26 +198,24 @@ app.get('/api/news', async (req, res) => {
 
     const uniqueNews = new Map();
     for (const item of allNews) {
-        if (!uniqueNews.has(item.uuid)) {
-            uniqueNews.set(item.uuid, item);
-        }
+        if (!uniqueNews.has(item.uuid)) uniqueNews.set(item.uuid, item);
     }
     const mergedNews = Array.from(uniqueNews.values())
         .sort((a: any, b: any) => b.providerPublishTime - a.providerPublishTime)
-        .slice(0, 60);
+        .slice(0, 15);
 
     const newsData = mergedNews.map((item: any) => ({
       date: new Date(item.providerPublishTime * 1000).toISOString(),
       title: item.title,
       url: item.link,
       source: item.publisher || 'Yahoo Finance',
-      original_symbols: item.relatedTickers || []
+      original_symbols: item.relatedTickers || [],
+      summary: item.summary || ''
     }));
 
     const getHeuristicAnalysis = (title: string) => {
       const lower = title.toLowerCase();
-      let posScore = 0;
-      let negScore = 0;
+      let posScore = 0, negScore = 0;
       const posWords = ['surge', 'up', 'gain', 'buy', 'bull', 'rally', 'beat', 'soar', 'jump', 'upgrade', 'higher', 'growth', 'strong'];
       const negWords = ['plunge', 'down', 'loss', 'sell', 'bear', 'crash', 'miss', 'drop', 'fall', 'downgrade', 'lower', 'weak', 'risk', 'burn', 'cut'];
       posWords.forEach(w => { if (lower.includes(w)) posScore++; });
@@ -307,73 +225,98 @@ app.get('/api/news', async (req, res) => {
       if (negScore > posScore) sentiment = 'Negative';
       let desc = title;
       if (desc.length > 100) desc = desc.substring(0, 97) + '...';
-      if (sentiment === 'Positive') desc += ' (Bullish catalyst observed)';
-      if (sentiment === 'Negative') desc += ' (Bearish pressure indicated)';
       return { sentiment, desc };
     };
 
     let enhancedNews = newsData.map((item: any) => {
       const heur = getHeuristicAnalysis(item.title);
-      return {
-        ...item,
-        sentiment: heur.sentiment,
-        tickers: item.original_symbols || ['Macro'],
-        ai_description: heur.desc
-      };
+      return { ...item, sentiment: heur.sentiment, tickers: item.original_symbols || ['Macro'], ai_description: heur.desc };
     });
 
     try {
       const genAI = getAI();
       if (genAI && newsData.length > 0) {
-        const prompt = `You are an elite quantitative analyst. Analyze these headlines and return a JSON array with one object per headline index.
-
-CRITICAL INSTRUCTIONS:
-- strictly limit to 1-2 sentences focusing ON 1-2 critical action items or market implications relevant to institutional traders.
-- DO NOT mention the news publisher (e.g., "Benzinga", "Yahoo", "Bloomberg") in your description unless they are explicitly mentioned in the article as the primary subject.
-- DO NOT default to classifying everything as 'SPY' or 'IWM'. Remove all mentions of 'Benzinga', 'SPY', and 'IWM' unless they are explicitly mentioned in the article as the primary subject. Use specific stock tickers (e.g., 'NVDA', 'AAPL', 'TSLA') if the news implies them. If no specific ticker, use macro ETFs (but avoid SPY and IWM unless explicitly mentioned).
-- Focus ONLY on critical action items or pure market implications for institutional flow. Remove all fluff and narrative.
-
-Headlines with context from Yahoo Finance:
-` + newsData.map((n: any, i: number) => `${i}: Title: ${n.title} (Related Tickers: ${n.original_symbols.join(', ') || 'None'})`).join('\n');
-
+        const prompt = `Elite quant strategist. Analyze these and return JSON array [{index:number, sentiment:string, tickers:string[], description:string}] for: \n` + newsData.map((n: any, i: number) => `${i}: ${n.title}`).join('\n');
         const result = await genAI.models.generateContent({
-           model: 'gemini-3-flash-preview',
-           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-           config: {
-              responseMimeType: "application/json",
-           }
+           model: 'gemini-1.5-flash',
+           contents: [prompt],
+           config: { responseMimeType: "application/json" }
         });
-
-        const aiText = result.text;
-        if (aiText) {
-           let cleanText = aiText.trim();
-           try {
-              const aiData = JSON.parse(cleanText);
-              enhancedNews = newsData.map((item: any, i: number) => {
-                  const analysis = aiData.find((a: any) => a.index === i);
-                  if (analysis && analysis.sentiment) {
-                      return { 
-                        ...item, 
-                        sentiment: analysis.sentiment, 
-                        tickers: analysis.tickers && analysis.tickers.length > 0 ? analysis.tickers : item.original_symbols, 
-                        ai_description: analysis.description 
-                      };
-                  }
-                  return { ...item, sentiment: 'Neutral', ai_description: item.title };
-              });
-           } catch(e) {}
-        }
+        const aiData = JSON.parse(result.text);
+        enhancedNews = newsData.map((item: any, i: number) => {
+            const analysis = aiData.find((a: any) => a.index === i);
+            return analysis ? { ...item, sentiment: analysis.sentiment, tickers: analysis.tickers || item.original_symbols, ai_description: analysis.description } : item;
+        });
       }
-    } catch (aiError) {
-      console.error("Gemini AI Analysis Error:", aiError);
-    }
+    } catch (aiError) {}
 
     cache[cacheKey] = { data: enhancedNews, ts: Date.now() };
     res.json(enhancedNews);
   } catch (error) {
-    console.error('News Fetch Error:', error);
     res.status(500).json({ error: 'Failed' });
   }
 });
+
+app.get('/api/macro/benchmarks', async (req, res) => {
+  const cacheKey = 'macro_benchmarks';
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 5 * 60 * 1000) return res.json(cache[cacheKey].data);
+
+  const tickers = {
+    'DXY': 'DX-Y.NYB', 'VIX': '^VIX', 'US10Y': '^TNX', 'US2Y': 'US2Y=X', 'GOLD': 'GC=F', 'OIL': 'CL=F', 'SPX': '^GSPC', 'BTC': 'BTC-USD'
+  };
+
+  const results: any = {};
+  await Promise.all(Object.entries(tickers).map(async ([key, symbol]) => {
+    try {
+      const resp = await axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
+      const meta = resp.data.chart.result[0].meta;
+      const price = meta.regularMarketPrice || meta.previousClose;
+      results[key] = { price, change: price - meta.previousClose, changePercent: ((price-meta.previousClose)/meta.previousClose)*100, symbol };
+    } catch { results[key] = { price: 0, change: 0, changePercent: 0, error: true }; }
+  }));
+  cache[cacheKey] = { data: results, ts: Date.now() };
+  res.json(results);
+});
+
+app.get('/api/gex', async (req, res) => {
+  const { ticker = 'SPY', exps = '1' } = req.query;
+  try {
+    const data = await fetchGexData(ticker as string, parseInt(exps as string));
+    res.json(data);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/macro/synthesis', async (req, res) => {
+  const cacheKey = 'macro_synthesis';
+  if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 30 * 60 * 1000) return res.json(cache[cacheKey].data);
+
+  const fallbackData = {
+    regime: "Expansion", regimeScore: 65, narrative: "Global growth resilient.",
+    keyIndicators: [{ name: "Real GDP", status: "Stable", value: "2.4%", implication: "Supportive" }],
+    sectors: [{ name: "Tech", performance: 1.2, status: "Leading" }],
+    economicCalendar: [{ event: "FOMC", date: "TBD", impact: "High", forecast: "Pause" }],
+    policyWatch: { fed: "Data-Dependent", action: "Pause", nextMeeting: "Scheduled", quantTightening: "Active" },
+    assetClassViews: { equities: "Neutral", fixed_income: "Overweight", commodities: "Neutral", forex_carry: "Neutral" },
+    riskAudit: ["Geopolitical escalation"],
+    detailedReport: "# Macro Report\n\nResilient expansion observed."
+  };
+
+  try {
+    const genAI = getAI();
+    if (!genAI) return res.json(fallbackData);
+    const result = await genAI.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts: [{ text: "Elite macro strategist. Analyze current landscape. JSON format. Concise narrative (max 30 words)." }] }],
+      config: { responseMimeType: "application/json" }
+    });
+    const data = JSON.parse(result.text);
+    cache[cacheKey] = { data, ts: Date.now() };
+    res.json(data);
+  } catch (error) { res.json(fallbackData); }
+});
+
+app.all('/api/*', (req, res) => res.status(404).json({ error: 'API Not Found' }));
 
 export default app;
