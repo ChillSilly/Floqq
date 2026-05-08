@@ -24,8 +24,8 @@ async function startServer() {
     next();
   });
 
-  // Mount API routes
-  app.use('/api', apiRouter);
+  // Mount API routes (apiRouter itself handles the /api prefix now)
+  app.use(apiRouter);
 
   // Global Error Handler
   app.use((err: any, req: any, res: any, next: any) => {

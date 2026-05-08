@@ -4,6 +4,10 @@ import axios from 'axios';
 import { GoogleGenAI } from '@google/genai';
 import { fetchGexData } from '../src/lib/gexEngine.ts';
 
+const app = express();
+app.use(cors());
+app.use(express.json());
+
 const router = express.Router();
 
 // Memory Cache
@@ -334,4 +338,6 @@ router.get('/macro/synthesis', async (req, res) => {
 
 router.all('/*', (req, res) => res.status(404).json({ error: 'API route not found' }));
 
-export default router;
+app.use('/api', router);
+
+export default app;
