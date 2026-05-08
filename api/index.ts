@@ -2,11 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import { GoogleGenAI } from '@google/genai';
-import { fetchGexData } from '../src/lib/gexEngine.js';
+import { fetchGexData } from '../src/lib/gexEngine.ts';
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const router = express.Router();
 
 // Memory Cache
 const cache: Record<string, { data: any; ts: number }> = {};
@@ -31,7 +29,7 @@ const SYSTEM_HEADERS_A = {
 
 // --- API ROUTES ---
 
-app.get('/api/market-status', (req, res) => {
+router.get('/market-status', (req, res) => {
   try {
     const now = new Date();
     const nyTime = new Intl.DateTimeFormat('en-US', {
@@ -95,7 +93,7 @@ const getAI = () => {
   return aiClient;
 };
 
-app.get('/api/ratio/:ticker', async (req, res) => {
+router.get('/ratio/:ticker', async (req, res) => {
   const { ticker } = req.params;
   const cacheKey = `ratio_${ticker}`;
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json(cache[cacheKey].data);
@@ -121,7 +119,7 @@ app.get('/api/ratio/:ticker', async (req, res) => {
   }
 });
 
-app.get('/api/chain/:symbol', async (req, res) => {
+router.get('/chain/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const cacheKey = `chain_${symbol}`;
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json(cache[cacheKey].data);
@@ -150,7 +148,7 @@ app.get('/api/chain/:symbol', async (req, res) => {
   res.status(500).json({ error: 'Failed to fetch chain data' });
 });
 
-app.get('/api/spot/:ticker', async (req, res) => {
+router.get('/spot/:ticker', async (req, res) => {
   const { ticker } = req.params;
   const cacheKey = `spot_${ticker}`;
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json({ price: cache[cacheKey].data });
@@ -165,7 +163,7 @@ app.get('/api/spot/:ticker', async (req, res) => {
   }
 });
 
-app.get('/api/yahoo/chart/:ticker', async (req, res) => {
+router.get('/yahoo/chart/:ticker', async (req, res) => {
   const { ticker } = req.params;
   const { interval = '5m', range = '1d' } = req.query;
   const cacheKey = `chart_${ticker}_${interval}_${range}`;
@@ -181,7 +179,7 @@ app.get('/api/yahoo/chart/:ticker', async (req, res) => {
   }
 });
 
-app.get('/api/news', async (req, res) => {
+router.get('/news', async (req, res) => {
   const cacheKey = 'yahoo_news_ai_v3';
   const force = req.query.force === 'true';
 
@@ -269,7 +267,7 @@ app.get('/api/news', async (req, res) => {
   }
 });
 
-app.get('/api/macro/benchmarks', async (req, res) => {
+router.get('/macro/benchmarks', async (req, res) => {
   const cacheKey = 'macro_benchmarks';
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 5 * 60 * 1000) return res.json(cache[cacheKey].data);
 
@@ -290,7 +288,7 @@ app.get('/api/macro/benchmarks', async (req, res) => {
   res.json(results);
 });
 
-app.get('/api/gex', async (req, res) => {
+router.get('/gex', async (req, res) => {
   const { ticker = 'SPY', exps = '1' } = req.query;
   try {
     const data = await fetchGexData(ticker as string, parseInt(exps as string));
@@ -301,7 +299,7 @@ app.get('/api/gex', async (req, res) => {
   }
 });
 
-app.get('/api/macro/synthesis', async (req, res) => {
+router.get('/macro/synthesis', async (req, res) => {
   const cacheKey = 'macro_synthesis';
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < 30 * 60 * 1000) return res.json(cache[cacheKey].data);
 
@@ -334,6 +332,6 @@ app.get('/api/macro/synthesis', async (req, res) => {
   } catch (error) { res.json(fallbackData); }
 });
 
-app.all('/api/*', (req, res) => res.status(404).json({ error: 'API Not Found' }));
+router.all('/*', (req, res) => res.status(404).json({ error: 'API route not found' }));
 
-export default app;
+export default router;
