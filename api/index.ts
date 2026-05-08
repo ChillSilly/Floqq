@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import { GoogleGenAI } from '@google/genai';
-import { fetchGexData } from '../src/lib/gexEngine.ts';
+import { fetchGexData } from '../src/lib/gexEngine.js';
 
 const app = express();
 app.use(cors());

@@ -2,7 +2,7 @@ import axios from 'axios';
 import {
   bsGamma, bsDelta, bsVega, bsCharm, bsVanna, bsVomma, bsZomma,
   impliedVol, RISK_FREE_RATE, DIV_YIELD,
-} from './blackScholes.ts';
+} from './blackScholes.js';
 
 export interface GexRow {
   strike: number; expiry: string; dte: number; flag: 'C' | 'P';
