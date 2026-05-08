@@ -162,7 +162,7 @@ export function BlackScholesCalculator() {
               <div className="flex items-center justify-between relative z-10">
                  <div>
                     <div className="text-[10px] font-mono font-bold text-main-primary opacity-30 uppercase tracking-[0.4em] mb-4">Theoretical Value</div>
-                    <div className="text-6xl font-black tracking-tighter text-main-primary tabular-nums drop-shadow-[0_0_15px_var(--accent-glow)]">
+                    <div className="text-4xl sm:text-6xl font-black tracking-tighter text-main-primary tabular-nums drop-shadow-[0_0_15px_var(--accent-glow)]">
                       ${greeks.price.toFixed(3)}
                     </div>
                  </div>
@@ -184,19 +184,19 @@ export function BlackScholesCalculator() {
            </div>
 
            {/* Plot Profile Section */}
-           <div className="bg-accent-surface border border-main-primary rounded-2xl p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+           <div className="bg-accent-surface border border-main-primary rounded-2xl p-4 sm:p-6">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-8">
                  <div className="flex items-center gap-2">
                     <Activity size={16} className="text-accent-primary" />
                     <span className="text-xs font-mono font-bold text-main-primary opacity-60 uppercase tracking-widest">Risk Profile Plot</span>
                  </div>
                  
-                 <div className="flex gap-2">
+                 <div className="flex flex-wrap gap-2">
                     {(['price', 'delta', 'gamma', 'vega', 'theta'] as const).map(type => (
                        <button
                          key={type}
                          onClick={() => setPlotType(type)}
-                         className={`px-3 py-1.5 text-[10px] font-mono font-bold uppercase rounded-lg border transition-all ${
+                         className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-mono font-bold uppercase rounded-lg border transition-all ${
                            plotType === type 
                              ? 'bg-accent-primary text-app-primary border-accent-primary shadow-[0_0_10px_var(--accent-glow)]' 
                              : 'bg-transparent border-main-primary/20 text-main-primary opacity-60 hover:opacity-100 hover:border-main-primary/50'

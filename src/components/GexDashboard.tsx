@@ -38,15 +38,15 @@ function MetricCard({ label, value, sub, color, icon: Icon }: {
   label: string; value: string; sub?: string; color: string; icon: any 
 }) {
   return (
-    <div className="flex-1 min-w-[160px] bg-card-primary rounded-2xl p-6 relative overflow-hidden group transition-all duration-500 shadow-lg shadow-black/20">
+    <div className="flex-1 min-w-0 bg-card-primary rounded-2xl p-4 sm:p-5 relative overflow-hidden group transition-all duration-500 shadow-lg shadow-black/20">
       <div className="absolute -top-4 -right-4 p-3 opacity-[0.03] group-hover:opacity-[0.1] transition-all duration-700 group-hover:scale-110">
-        <Icon size={96} style={{ color }} />
+        <Icon size={80} style={{ color }} />
       </div>
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-3">
         <div className="w-1.5 h-1.5 rounded-full" style={{ background: color, boxShadow: `0 0 15px ${color}` }} />
         <div className="text-[9px] font-mono font-bold tracking-[0.25em] text-main-primary opacity-40 uppercase">{label}</div>
       </div>
-      <div className="text-3xl font-mono font-bold tracking-tighter mb-1.5" style={{ color, textShadow: `0 0 25px ${color}11` }}>{value}</div>
+      <div className="text-2xl font-mono font-bold tracking-tighter mb-1.5" style={{ color, textShadow: `0 0 25px ${color}11` }}>{value}</div>
       {sub && <div className="text-[9px] text-main-primary opacity-20 font-semibold tracking-wide uppercase">{sub}</div>}
       
       {/* Interactive scanline effect on hover */}
@@ -58,9 +58,9 @@ function MetricCard({ label, value, sub, color, icon: Icon }: {
 // ── Exposure Card ────────────────────────────────────────────────────────────
 function ExpoCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
   return (
-    <div className="flex-1 min-w-[140px] bg-accent-surface/30 backdrop-blur-sm rounded-xl p-5 transition-all duration-300 group">
-      <div className="text-[8px] font-mono font-black text-main-primary opacity-20 uppercase tracking-[0.2em] mb-4 group-hover:opacity-40 transition-opacity">{label}</div>
-      <div className="text-xl font-mono font-bold mb-1.5" style={{ color, textShadow: `0 0 15px ${color}11` }}>{value}</div>
+    <div className="flex-1 min-w-0 bg-accent-surface/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 transition-all duration-300 group">
+      <div className="text-[8px] font-mono font-black text-main-primary opacity-20 uppercase tracking-[0.2em] mb-3 group-hover:opacity-40 transition-opacity">{label}</div>
+      <div className="text-lg font-mono font-bold mb-1.5" style={{ color, textShadow: `0 0 15px ${color}11` }}>{value}</div>
       <div className="text-[8px] text-main-primary/30 font-bold truncate uppercase tracking-tighter group-hover:text-main-primary/50 transition-colors">{sub}</div>
     </div>
   );
@@ -115,69 +115,68 @@ export function GexDashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Controls & Header */}
-      <div className="pb-10 relative overflow-hidden">
+      <div className="pb-6 relative overflow-hidden">
         {/* Ambient glow behind header */}
         <div className="absolute -top-32 -left-32 w-80 h-80 bg-accent-primary/10 blur-[120px] rounded-full pointer-events-none" />
         
-        <div className="space-y-8 relative z-10">
-          <div className="flex items-center gap-3">
-             <div className="w-2 h-2 rounded-full bg-accent-primary shadow-[0_0_15px_var(--accent-glow)] animate-pulse" />
-             <span className="text-[9px] font-mono font-black tracking-[0.4em] text-accent-primary uppercase">Alpha Terminal — v3.0.0 Institutional</span>
-             <div className="h-[1px] w-16 bg-accent-primary/20" />
+        <div className="space-y-6 relative z-10">
+          <div className="flex items-center gap-2">
+             <div className="w-1.5 h-1.5 rounded-full bg-accent-primary shadow-[0_0_15px_var(--accent-glow)] animate-pulse" />
+             <span className="text-[8px] font-mono font-black tracking-[0.4em] text-accent-primary uppercase">Alpha Terminal — Institutional</span>
+             <div className="h-[1px] w-12 bg-accent-primary/20" />
              {marketStatus && (
                <div 
-                 className="flex items-center gap-2 px-3 py-1 rounded-full border text-[9px] font-mono font-black uppercase tracking-widest transition-all duration-500"
+                 className="flex items-center gap-2 px-2.5 py-0.5 rounded-full border text-[8px] font-mono font-black uppercase tracking-widest transition-all duration-500"
                  style={{ 
                    borderColor: `${marketStatus.color}44`, 
                    color: marketStatus.color,
                    backgroundColor: `${marketStatus.color}11`
                  }}
                >
-                 <div className={`w-1.5 h-1.5 rounded-full ${marketStatus.isLive ? 'animate-pulse' : ''}`} style={{ backgroundColor: marketStatus.color }} />
-                 {marketStatus.label} ({marketStatus.nyTime} NY)
+                 <div className={`w-1 h-1 rounded-full ${marketStatus.isLive ? 'animate-pulse' : ''}`} style={{ backgroundColor: marketStatus.color }} />
+                 {marketStatus.label} ({marketStatus.nyTime})
                </div>
              )}
           </div>
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-x-12 gap-y-10">
-            <div className="flex flex-col gap-6">
-              <div>
-                <h1 className="text-6xl font-black tracking-tighter text-main-primary drop-shadow-md uppercase italic leading-none mb-2">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-x-10 gap-y-6">
+            <div className="flex flex-col gap-3 sm:gap-4">
+              <div className="space-y-0.5">
+                <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter text-main-primary drop-shadow-md uppercase italic leading-none">
                   GEX <span className="text-accent-primary">Terminal</span>
                 </h1>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-main-primary/20 uppercase tracking-[0.25em] mt-3 ml-1">
-                  <Target size={12} className="opacity-50" />
-                  Intraday Liquidity Analytics & Exposure Mapping
+                <div className="flex items-center gap-2 text-[8px] sm:text-[9px] font-bold text-main-primary/20 uppercase tracking-[0.2em] ml-1">
+                  <Target size={10} className="opacity-50 shrink-0" />
+                  <span className="truncate">Intraday Liquidity Analytics & Exposure Mapping</span>
                 </div>
               </div>
 
-              {/* Moved Syncing here */}
-              <div className="px-5 py-2.5 bg-brand-amber/5 border border-brand-amber/10 rounded-xl flex items-center gap-4 self-start group hover:bg-brand-amber/10 transition-all duration-300 shadow-xl">
+              <div className="px-3 py-1.5 bg-brand-amber/5 border border-brand-amber/10 rounded-lg flex items-center gap-2 self-start group hover:bg-brand-amber/10 transition-all duration-300 shadow-lg">
                  <div className="relative">
-                   <RefreshCcw size={12} className="text-brand-amber animate-spin-slow group-hover:rotate-180 transition-transform" />
-                   <div className="absolute inset-0 bg-brand-amber/30 blur-[10px] rounded-full animate-pulse" />
+                   <RefreshCcw size={8} className="text-brand-amber animate-spin-slow group-hover:rotate-180 transition-transform" />
+                   <div className="absolute inset-0 bg-brand-amber/30 blur-[4px] rounded-full animate-pulse" />
                  </div>
-                 <div className="flex items-center gap-3">
-                   <span className="text-[10px] font-mono font-black text-brand-amber/60 leading-none tracking-widest">SYNCING</span>
-                   <span className="text-[14px] font-mono font-bold text-brand-amber tracking-tighter">{countdown}s</span>
+                 <div className="flex items-center gap-2">
+                   <span className="text-[8px] font-mono font-black text-brand-amber/60 leading-none tracking-widest uppercase">SYNC</span>
+                   <span className="text-[10px] font-mono font-bold text-brand-amber tracking-tighter">{countdown}s</span>
                  </div>
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6 relative z-10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 relative z-10">
               {/* Refined Exps */}
-              <div className="flex items-center gap-2">
-                <span className="text-[8px] font-mono font-black text-main-primary/20 uppercase tracking-widest ml-1 hidden sm:block">Expiration</span>
-                <div className="flex bg-accent-surface/30 backdrop-blur-xl rounded-xl p-1 shadow-2xl border border-white/5">
+              <div className="flex flex-col gap-1 w-full sm:w-auto">
+                <span className="text-[7px] font-mono font-black text-main-primary/20 uppercase tracking-widest ml-1">Expiration</span>
+                <div className="flex bg-accent-surface/30 backdrop-blur-xl rounded-lg p-1 shadow-xl border border-white/5 w-full sm:w-auto overflow-x-auto no-scrollbar">
                   {[0, 1, 2, 4, 8, 99].map(n => (
                     <button 
                       key={n} 
                       onClick={() => setExps(n)}
-                      className={`px-3.5 py-1.5 text-[10px] font-mono font-bold rounded-lg transition-all duration-400 ${
+                      className={`flex-1 sm:flex-none px-2.5 py-1 text-[9px] font-mono font-bold rounded-md transition-all duration-400 whitespace-nowrap ${
                         exps === n 
-                         ? 'bg-accent-primary text-app-primary shadow-xl scale-105 active:scale-95' 
-                         : 'text-main-primary opacity-30 hover:opacity-80 hover:bg-main-primary/5 active:scale-95'
+                         ? 'bg-accent-primary text-app-primary shadow-lg scale-105' 
+                         : 'text-main-primary opacity-30 hover:opacity-80 hover:bg-main-primary/5'
                       }`}
                     >
                       {n === 0 ? '0D' : n === 99 ? 'ALL' : `${n}E`}
@@ -186,17 +185,17 @@ export function GexDashboard() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[8px] font-mono font-black text-main-primary/20 uppercase tracking-widest ml-1 hidden sm:block">Ticker</span>
-                <div className="flex items-center gap-1 p-1 bg-accent-surface/50 backdrop-blur-xl rounded-2xl shadow-2xl self-start border border-white/5">
+              <div className="flex flex-col gap-1 w-full sm:w-auto">
+                <span className="text-[7px] font-mono font-black text-main-primary/20 uppercase tracking-widest ml-1">Ticker</span>
+                <div className="flex items-center gap-1 p-1 bg-accent-surface/50 backdrop-blur-xl rounded-xl shadow-xl w-full sm:w-auto border border-white/5 overflow-x-auto no-scrollbar">
                    {['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].map(t => (
                      <button 
                        key={t}
                        onClick={() => setTicker(t)}
-                       className={`px-6 py-2.5 text-[11px] font-mono font-bold rounded-xl transition-all duration-500 ${
+                       className={`flex-1 sm:flex-none px-4 sm:px-5 py-1.5 text-[9px] sm:text-[10px] font-mono font-bold rounded-lg transition-all duration-500 whitespace-nowrap ${
                          ticker === t 
-                          ? 'bg-accent-primary text-app-primary shadow-[0_8px_25px_rgba(var(--color-accent-primary),0.4)] scale-105 active:scale-95' 
-                          : 'text-main-primary opacity-30 hover:opacity-100 hover:bg-main-primary/5 active:scale-95'
+                          ? 'bg-accent-primary text-app-primary shadow-[0_5px_15px_rgba(var(--color-accent-primary),0.3)] scale-105' 
+                          : 'text-main-primary opacity-30 hover:opacity-100 hover:bg-main-primary/5'
                        }`}
                      >
                        {t}
@@ -206,7 +205,7 @@ export function GexDashboard() {
                    <select 
                      value={ticker} 
                      onChange={e => setTicker(e.target.value)}
-                     className="bg-transparent text-[11px] font-mono font-bold text-main-primary opacity-50 outline-none px-4 cursor-pointer hover:text-accent-primary transition-colors pr-2"
+                     className="bg-transparent text-[10px] font-mono font-bold text-main-primary opacity-50 outline-none px-3 cursor-pointer hover:text-accent-primary transition-colors pr-1"
                    >
                      {TICKERS.filter(t => !['SPY', 'QQQ', 'DIA', 'IWM', 'GLD'].includes(t)).map(t => (
                        <option key={t} value={t} className="bg-app-primary text-main-primary">{t}</option>
@@ -222,14 +221,14 @@ export function GexDashboard() {
       <GexMetricsTicker data={d} />
       
       {loading && !d ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 animate-pulse">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 animate-pulse">
           {[1,2,3,4,5,6].map(i => <div key={i} className="h-32 bg-white/5 rounded-2xl" />)}
         </div>
       ) : d && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
           {/* Main Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-             <div className="col-span-2 bg-accent-surface rounded-2xl p-5 relative overflow-hidden group transition-all duration-300 shadow-[0_0_20px_rgba(var(--color-accent-primary),0.05)]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+             <div className="sm:col-span-2 bg-accent-surface rounded-2xl p-4 sm:p-5 relative overflow-hidden group transition-all duration-300 shadow-[0_0_20px_rgba(var(--color-accent-primary),0.05)]">
                <div className="absolute top-0 right-0 p-3 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
                  <Crosshair size={64} style={{ color: C.t1 }} />
                </div>
@@ -244,7 +243,7 @@ export function GexDashboard() {
                  </div>
                </div>
                <div className="flex items-baseline gap-3 mt-2">
-                  <div className="text-4xl font-mono font-black tracking-tighter text-main-primary drop-shadow-md">
+                  <div className="text-3xl font-mono font-black tracking-tighter text-main-primary drop-shadow-md">
                     ${fmt(d.spot)}
                   </div>
                   {d.summary?.price_change_percent !== undefined && (
@@ -291,25 +290,25 @@ export function GexDashboard() {
 
           {/* Regime Banner */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-             <div className="lg:col-span-8 bg-card-primary shadow-2xl rounded-3xl p-10 relative overflow-hidden group">
+             <div className="lg:col-span-8 bg-card-primary shadow-2xl rounded-3xl p-6 sm:p-8 relative overflow-hidden group">
                 <div className={`absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r ${d.regime.is_long_gamma ? 'from-brand-emerald via-brand-emerald/50' : 'from-rose-500 via-rose-500/50'} to-transparent opacity-80`} />
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/[0.01] to-transparent pointer-events-none" />
                 
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-10 relative z-10">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-10 relative z-10">
                   <div>
-                    <div className="text-[9px] font-mono font-bold text-main-primary opacity-20 uppercase tracking-[0.5em] mb-4">Structural Market Regime</div>
-                    <div className={`text-5xl font-black italic uppercase tracking-tighter ${d.regime.is_long_gamma ? 'text-brand-emerald' : 'text-rose-500'} drop-shadow-[0_0_20px_currentColor]`}>
+                    <div className="text-[9px] font-mono font-bold text-main-primary opacity-20 uppercase tracking-[0.4em] mb-3">Structural Market Regime</div>
+                    <div className={`text-3xl sm:text-4xl md:text-5xl font-black italic uppercase tracking-tighter ${d.regime.is_long_gamma ? 'text-brand-emerald' : 'text-rose-500'} drop-shadow-[0_0_20px_currentColor]`}>
                       {d.regime.label}
                     </div>
                   </div>
                   <div className="text-left md:text-right">
-                    <div className="text-[9px] font-mono font-bold text-main-primary opacity-20 uppercase tracking-[0.3em] mb-4">Institutional Alpha Bias</div>
-                    <div className="text-3xl font-black italic uppercase text-main-primary tracking-widest leading-none" style={{ color: d.regime.bias_color, textShadow: `0 0 30px ${d.regime.bias_color}44` }}>
+                    <div className="text-[9px] font-mono font-bold text-main-primary opacity-20 uppercase tracking-[0.2em] mb-3">Institutional Alpha Bias</div>
+                    <div className="text-2xl sm:text-3xl font-black italic uppercase text-main-primary tracking-widest leading-none" style={{ color: d.regime.bias_color, textShadow: `0 0 30px ${d.regime.bias_color}44` }}>
                       {d.regime.bias}
                     </div>
                   </div>
                 </div>
-                <div className="mt-12 pt-10 grid grid-cols-2 sm:grid-cols-4 gap-10 relative z-10">
+                <div className="mt-8 pt-8 grid grid-cols-2 sm:grid-cols-4 gap-6 md:gap-10 relative z-10">
                   {[
                     { label: 'ATM IV', val: `${d.totals.atm_iv.toFixed(1)}%`, color: 'text-main-primary' },
                     { label: 'IV-RV Spread', val: `${d.iv_rv_spread >= 0 ? '+' : ''}${d.iv_rv_spread}pp`, color: d.iv_rv_spread >= 0 ? 'text-brand-emerald' : 'text-rose-500' },

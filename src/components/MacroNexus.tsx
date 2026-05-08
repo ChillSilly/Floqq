@@ -112,7 +112,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
   return (
     <div className="space-y-6">
       {/* Top Banner: Macro Context */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
         {[
           { label: 'DXY Index', key: 'DXY', icon: Globe },
           { label: 'VIX Intensity', key: 'VIX', icon: Activity },
@@ -121,16 +121,16 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
           { label: 'Bitcoin Spot', key: 'BTC', icon: Binary },
           { label: 'Copper % Gold', key: 'HG_GC_RATIO', icon: Zap },
         ].map((item) => (
-          <div key={item.key} className={`bg-card-primary p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group`}>
+          <div key={item.key} className={`bg-card-primary p-3 sm:p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group`}>
             <div className="flex items-center gap-2 mb-2">
               <item.icon size={12} className="text-main-primary opacity-40 group-hover:text-brand-primary transition-colors" />
-              <span className="text-[10px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest">{item.label}</span>
+              <span className="text-[9px] font-mono font-bold text-main-primary opacity-40 uppercase tracking-widest truncate">{item.label}</span>
             </div>
-            <div className="flex items-baseline justify-between">
-              <span className={`text-lg font-mono font-bold text-main-primary leading-none`}>
+            <div className="flex items-baseline justify-between gap-1">
+              <span className={`text-base sm:text-lg font-mono font-bold text-main-primary leading-none`}>
                 {benchmarks[item.key]?.price ? benchmarks[item.key].price.toFixed(2) : '---'}
               </span>
-              <span className={`text-[10px] font-mono font-bold ${benchmarks[item.key]?.change >= 0 ? 'text-brand-emerald' : 'text-rose-500'}`}>
+              <span className={`text-[9px] sm:text-[10px] font-mono font-bold ${benchmarks[item.key]?.change >= 0 ? 'text-brand-emerald' : 'text-rose-500'}`}>
                 {benchmarks[item.key]?.changePercent ? `${benchmarks[item.key].changePercent > 0 ? '+' : ''}${benchmarks[item.key].changePercent.toFixed(2)}%` : ''}
               </span>
             </div>
@@ -138,7 +138,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: AI Synthesis & Sentiment (4/12) */}
         <div className="lg:col-span-4 space-y-6">
           <div className={`bg-card-primary rounded-2xl overflow-hidden shadow-sm flex flex-col h-full hover:border-brand-primary/20 transition-colors`}>
@@ -150,7 +150,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
               <Cpu size={14} className="text-main-primary opacity-20" />
             </div>
 
-            <div className="p-6 flex-1 flex flex-col">
+            <div className="p-4 sm:p-6 flex-1 flex flex-col">
               {isLoading ? (
                 <div className="flex-1 flex items-center justify-center p-12">
                    <div className="relative">
@@ -233,13 +233,13 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
         {/* Right Column: Interactive Widgets (8/12) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           <div className="bg-card-primary rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden hover:border-brand-primary/20 transition-colors">
-            <div className="flex p-0 overflow-x-auto no-scrollbar">
+            <div className="flex p-0 overflow-x-auto no-scrollbar scroll-smooth bg-accent-surface/50 border-b border-white/5">
               {['technical', 'synthesis', 'indicators', 'yields', 'liquidity', 'sectors'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab as any)}
-                  className={`flex-1 min-w-[80px] py-4 text-[10px] font-mono font-bold uppercase tracking-[0.2em] transition-all relative ${
-                    activeTab === tab ? `text-accent-primary bg-accent-primary/5` : 'text-main-primary opacity-40 hover:bg-black/5 dark:hover:bg-white/5'
+                  className={`flex-none sm:flex-1 min-w-[100px] sm:min-w-0 py-4 text-[10px] font-mono font-bold uppercase tracking-[0.2em] transition-all relative ${
+                    activeTab === tab ? `text-accent-primary bg-accent-primary/10` : 'text-main-primary opacity-40 hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
                   {tab}

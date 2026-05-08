@@ -35,11 +35,8 @@ export function CboeMarketStatistics({ data }: { data: GexResult | null }) {
      totalPutOi += a.put_oi;
   });
   
-  // Using flow metrics to estimate relative volume distribution since raw volume isn't directly exposed in standard agg. 
-  // Wait, let's just use the flow.net and flow.ratio, but we really want raw PCR
-  
   return (
-    <div className="bg-[#0b0f19] rounded-3xl p-8 relative overflow-hidden group">
+    <div className="bg-[#0b0f19] rounded-3xl p-4 sm:p-8 relative overflow-hidden group">
       <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none">
         <PieChartIcon size={120} />
       </div>

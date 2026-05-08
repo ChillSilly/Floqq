@@ -11,32 +11,32 @@ export function UnusualOptionsActivity({ data }: { data: GexResult | null }) {
   if (!data || !data.uoa || data.uoa.length === 0) return null;
 
   return (
-    <div className="bg-[#0b0f19] rounded-3xl p-8 relative overflow-hidden group">
-      <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none">
-        <ShieldAlert size={120} />
+    <div className="bg-[#0b0f19] rounded-2xl p-4 sm:p-5 relative overflow-hidden group">
+      <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none">
+        <ShieldAlert size={100} />
       </div>
       
-      <div className="flex items-center gap-3 mb-6 relative z-10">
-        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-          <Zap className="w-5 h-5 text-purple-400" />
+      <div className="flex items-center gap-3 mb-4 relative z-10">
+        <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+          <Zap className="w-4 h-4 text-purple-400" />
         </div>
         <div>
-          <h2 className="text-xl font-black text-white tracking-widest uppercase">Unusual Options Activity</h2>
-          <div className="text-xs font-mono font-bold text-slate-500 tracking-wider">Volume &gt; Open Interest (New Positioning)</div>
+          <h2 className="text-lg font-black text-white tracking-widest uppercase">Unusual Activity</h2>
+          <div className="text-[10px] font-mono font-bold text-slate-500 tracking-wider">Volume &gt; Open Interest</div>
         </div>
       </div>
 
-      <div className="overflow-x-auto relative z-10">
-        <table className="w-full text-left border-collapse">
+      <div className="overflow-x-auto relative z-10 no-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[700px]">
           <thead>
-            <tr className="uppercase text-[10px] font-mono tracking-widest text-slate-500">
-              <th className="py-3 px-4 font-bold">Contract</th>
-              <th className="py-3 px-4 font-bold">DTE</th>
-              <th className="py-3 px-4 font-bold">Vol / OI</th>
-              <th className="py-3 px-4 font-bold">Vol</th>
-              <th className="py-3 px-4 font-bold">OI</th>
-              <th className="py-3 px-4 font-bold">Prem Flow</th>
-              <th className="py-3 px-4 font-bold">Nature</th>
+            <tr className="uppercase text-[9px] sm:text-[10px] font-mono tracking-widest text-slate-500 whitespace-nowrap">
+              <th className="py-3 px-2 sm:px-4 font-bold">Contract</th>
+              <th className="py-3 px-2 sm:px-4 font-bold">DTE</th>
+              <th className="py-3 px-2 sm:px-4 font-bold">Vol / OI</th>
+              <th className="py-3 px-2 sm:px-4 font-bold">Vol</th>
+              <th className="py-3 px-2 sm:px-4 font-bold">OI</th>
+              <th className="py-3 px-2 sm:px-4 font-bold">Prem Flow</th>
+              <th className="py-3 px-2 sm:px-4 font-bold">Nature</th>
             </tr>
           </thead>
           <tbody>
@@ -45,8 +45,8 @@ export function UnusualOptionsActivity({ data }: { data: GexResult | null }) {
               const isITM = isCall ? data.spot > row.strike : data.spot < row.strike;
               const PremiumFlow = row.volume * row.mid * 100;
               return (
-                <tr key={`${row.strike}-${row.expiration}-${row.flag}-${i}`} className="hover:bg-white/[0.02] transition-colors group">
-                  <td className="py-3 px-4">
+                <tr key={`${row.strike}-${row.expiration}-${row.flag}-${i}`} className="hover:bg-white/[0.02] transition-colors group whitespace-nowrap">
+                  <td className="py-3 px-2 sm:px-4">
                     <div className="flex items-center gap-2">
                       <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${isCall ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
                         {row.flag}

@@ -118,12 +118,12 @@
     background: var(--border-main);
     border-radius: 10px;
   }
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .hide-scrollbar {
+  .hide-scrollbar, .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
   
   .glass-card {
@@ -131,6 +131,16 @@
     backdrop-filter: blur(12px);
     border: 1px solid var(--border-main);
   }
+}
+
+html, body {
+  font-size: clamp(13px, 1vw, 15px);
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
 }
 
 body {

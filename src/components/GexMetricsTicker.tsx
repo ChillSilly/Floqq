@@ -15,7 +15,7 @@ export function GexMetricsTicker({ data }: { data: GexResult | null }) {
   const totalPutGex = data.totals.put_gex || 0;
   
   return (
-    <div className="flex flex-wrap gap-10 p-5 bg-card-primary/40 backdrop-blur-xl rounded-2xl shadow-xl shadow-black/40 relative overflow-hidden group">
+    <div className="flex flex-wrap gap-4 sm:gap-10 p-4 sm:p-5 bg-card-primary/40 backdrop-blur-xl rounded-2xl shadow-xl shadow-black/40 relative overflow-hidden group">
       <div className="absolute inset-0 bg-gradient-to-r from-accent-primary/5 to-transparent pointer-events-none" />
       
       <div className="flex items-center gap-4 pr-10">

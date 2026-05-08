@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
-import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info, Clock } from 'lucide-react';
+import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info, Clock, Menu } from 'lucide-react';
 import { TradingViewWidget } from './components/TradingViewWidget';
 import { BeautifulChart } from './components/BeautifulChart';
 import { GexDashboard } from './components/GexDashboard';
@@ -63,6 +63,8 @@ type InstitutionalStrategy = {
 
 
 export default function App() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // View Transition Helper
   const transition = (fn: () => void) => {
     if (document.startViewTransition) {
@@ -94,11 +96,36 @@ export default function App() {
     transition(() => setActiveModule(modId));
   };
 
+  // Auto-scroll sidebar to active element
+  useEffect(() => {
+    const activeEl = document.getElementById(`nav-${activeModule}`);
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [activeModule]);
+
+  // Auto-scale logic for smaller resolutions to ensure everything fits
+  useEffect(() => {
+    const checkScale = () => {
+      if (window.innerWidth < 1600 && window.innerWidth >= 1280) {
+        setUiScale(0.92);
+      } else if (window.innerWidth < 1280 && window.innerWidth >= 768) {
+        setUiScale(0.88);
+      } else {
+        setUiScale(1);
+      }
+    };
+    window.addEventListener('resize', checkScale, { passive: true });
+    checkScale();
+    return () => window.removeEventListener('resize', checkScale);
+  }, []);
+
   const handleSetActiveTheme = (themeId: string) => {
     transition(() => setActiveTheme(themeId));
   };
 
   const [isVIPOpen, setIsVIPOpen] = useState(false);
+  const [uiScale, setUiScale] = useState(1);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   
   // Auth State
@@ -913,21 +940,21 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen bg-app-primary text-main-primary flex font-sans scroll-smooth transition-colors duration-500 overflow-x-hidden`}>
+    <div className={`min-h-screen bg-app-primary text-main-primary flex font-sans scroll-smooth transition-colors duration-500 overflow-x-hidden ${uiScale === 0.9 ? 'text-[0.92em]' : ''}`}>
       {/* Sidebar Navigation */}
-      <nav className={`fixed hidden md:flex flex-col w-72 h-screen border-r border-white/5 bg-[#0a0a0c] p-8 z-10 transition-colors duration-500 overflow-hidden relative`}>
+      <nav className={`fixed top-0 left-0 hidden md:flex flex-col w-60 xl:w-64 h-screen border-r border-white/5 bg-[#0a0a0c] p-5 xl:p-6 z-30 transition-all duration-500 overflow-y-auto no-scrollbar`}>
         <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/5 to-transparent shadow-[0_1px_10px_rgba(255,255,255,0.05)]" />
         
-        <div className="mb-12 flex items-center justify-between">
+        <div className="mb-8 flex items-center justify-between">
           <div className="group cursor-pointer">
-            <h1 className={`font-mono font-black text-2xl tracking-[0.2em] uppercase ${isDarkTheme ? 'text-white' : 'text-indigo-900'} drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>FLO<span className="text-blue-500">Q</span></h1>
+            <h1 className={`font-mono font-black text-xl tracking-[0.2em] uppercase ${isDarkTheme ? 'text-white' : 'text-indigo-900'} drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>FLO<span className="text-blue-500">Q</span></h1>
             <div className="h-[2px] w-0 group-hover:w-full bg-blue-500 transition-all duration-500" />
           </div>
-          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse border border-blue-500/50 shadow-[0_0_8px_#3b82f6]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse border border-blue-500/50 shadow-[0_0_8px_#3b82f6]" />
         </div>
         
-        <div className="space-y-1 mb-10">
-          <div className={`text-[9px] font-black uppercase tracking-[0.4em] ${hasAccess ? 'text-blue-500/40' : 'text-white/20'} mb-4 flex items-center gap-3`}>
+        <div className="space-y-1 mb-6">
+          <div className={`text-[8px] font-black uppercase tracking-[0.3em] ${hasAccess ? 'text-blue-500/40' : 'text-white/20'} mb-3 flex items-center gap-2`}>
             <span>Core Systems</span>
             <div className="h-[1px] flex-1 bg-white/5" />
           </div>
@@ -936,34 +963,35 @@ export default function App() {
         {!hasAccess && (
           <button
             onClick={() => setIsVIPOpen(true)}
-            className="flex items-center gap-3 px-3 py-3 text-left transition-all mb-4 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm group relative overflow-hidden"
+            className="flex items-center gap-3 px-3 py-2 text-left transition-all mb-3 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm group relative overflow-hidden"
           >
             <div className="absolute inset-0 bg-linear-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-            <Crown size={14} className="text-brand-amber fill-brand-amber/20" />
-            <span className="text-[11px] font-bold uppercase tracking-wider flex-1 text-brand-amber">VIP Access</span>
-            <ChevronRight size={14} className="text-brand-amber opacity-50 group-hover:opacity-100 transition-opacity" />
+            <Crown size={12} className="text-brand-amber fill-brand-amber/20" />
+            <span className="text-[10px] font-bold uppercase tracking-wider flex-1 text-brand-amber">VIP Access</span>
+            <ChevronRight size={12} className="text-brand-amber opacity-50 group-hover:opacity-100 transition-opacity" />
           </button>
         )}
         
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {(hasAccess ? VIP_MODULES : MODULES).map((mod, idx) => {
             const isActive = activeModule === mod.id;
             return (
               <button
                 key={mod.id}
+                id={`nav-${mod.id}`}
                 onClick={() => {
                   if (hasAccess) handleSetModule(mod.id);
                   else scrollToModule(mod.id);
                 }}
-                className={`flex items-center gap-3 px-3 py-3 text-left transition-all ${
+                className={`flex items-center gap-3 px-3 py-2 text-left transition-all ${
                   isActive 
                     ? 'border-r-2 border-accent-primary text-accent-primary bg-accent-primary/5' 
                     : 'opacity-40 hover:opacity-100 hover:border-r-2 hover:border-accent-primary/50 text-main-primary'
                 }`}
               >
-                <span className={`font-serif italic text-xs ${isActive ? 'text-accent-primary' : 'text-main-primary opacity-40'}`}>0{idx + 1}</span>
-                <span className="text-[11px] font-bold uppercase tracking-wider flex-1">{mod.title}</span>
-                {isActive && <ChevronRight size={14} className="text-accent-primary" />}
+                <span className={`font-serif italic text-[10px] ${isActive ? 'text-accent-primary' : 'text-main-primary opacity-40'}`}>0{idx + 1}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider flex-1">{mod.title}</span>
+                {isActive && <ChevronRight size={12} className="text-accent-primary" />}
               </button>
             );
           })}
@@ -1045,7 +1073,15 @@ export default function App() {
         
         <div className="pt-6 space-y-4">
           <div className="flex flex-col gap-3">
-            <span className="text-[10px] uppercase tracking-widest text-main-primary opacity-40 font-bold">Theme Engine</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-widest text-main-primary opacity-40 font-bold">Theme Engine</span>
+              <button 
+                onClick={() => setUiScale(prev => prev === 1 ? 0.9 : 1)}
+                className={`text-[9px] px-2 py-1 rounded-sm border font-bold uppercase transition-all ${uiScale === 0.9 ? 'border-blue-500 text-blue-500 bg-blue-500/5' : 'border-white/10 text-white/40 hover:text-white'}`}
+              >
+                {uiScale === 0.9 ? 'Compact On' : 'Compact Off'}
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {THEMES.map((t) => (
                 <button
@@ -1069,99 +1105,228 @@ export default function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-72 relative overflow-x-hidden bg-app-primary">
+      <main className="flex-1 md:ml-60 xl:ml-64 relative overflow-x-hidden bg-app-primary">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#3b82f605,transparent_50%)] pointer-events-none" />
         
 
         {/* Mobile Header */}
-        <div className="md:hidden sticky top-0 bg-card-primary/70 backdrop-blur-xl p-4 flex items-center justify-between z-20">
+        <div className="md:hidden sticky top-0 bg-card-primary/70 backdrop-blur-xl p-3 flex items-center justify-between z-20 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <h1 className="font-serif font-black text-lg tracking-tight uppercase title-elegant text-indigo-900">FloQ</h1>
-            <span className="text-[10px] uppercase tracking-widest font-bold opacity-40">{hasAccess ? 'Enterprise' : 'Academy'}</span>
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-1.5 -ml-1 text-main-primary hover:bg-white/5 rounded-lg transition-all"
+            >
+              <Menu size={18} />
+            </button>
+            <h1 className="font-serif font-black text-lg tracking-tight uppercase title-elegant text-blue-500">FloQ</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {!hasAccess && (
               <button
                  onClick={() => setIsVIPOpen(true)}
-                 className="p-2 border border-amber-500/20 hover:bg-amber-500/5 transition-colors bg-amber-50 shadow-sm rounded-sm"
+                 className="p-1.5 border border-brand-amber/20 hover:bg-brand-amber/5 transition-colors bg-brand-amber/5 shadow-sm rounded-sm"
                  aria-label="VIP Access"
               >
-                <Crown size={14} className="text-amber-600 fill-amber-600/10" />
+                <Crown size={14} className="text-brand-amber fill-brand-amber/20" />
               </button>
+            )}
+            {user?.photoURL ? (
+              <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-white/10 ring-2 ring-white/5 shadow-lg shadow-black/20" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
+                <UserIcon size={14} className="opacity-40" />
+              </div>
             )}
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] md:hidden"
+              />
+              <motion.div
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed inset-y-0 left-0 w-[85%] max-w-[320px] bg-[#0a0a0c] border-r border-white/5 z-[101] md:hidden flex flex-col p-6 overflow-y-auto"
+              >
+                <div className="flex items-center justify-between mb-10">
+                  <h1 className="font-mono font-black text-xl tracking-[0.2em] uppercase text-white">FLO<span className="text-blue-500">Q</span></h1>
+                  <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-white/40 hover:text-white transition-colors bg-white/5 rounded-full">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="space-y-8 flex-1">
+                  <div className="space-y-4">
+                    <div className="text-[9px] font-black uppercase tracking-[0.4em] text-white/20 flex items-center gap-3">
+                      <span>Intelligence Suite</span>
+                      <div className="h-[1px] flex-1 bg-white/5" />
+                    </div>
+                    
+                    <div className="flex flex-col gap-2">
+                      {(hasAccess ? VIP_MODULES : MODULES).map((mod, idx) => {
+                        const isActive = activeModule === mod.id;
+                        return (
+                          <button
+                            key={mod.id}
+                            onClick={() => {
+                              if (hasAccess) handleSetModule(mod.id);
+                              else scrollToModule(mod.id);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`flex items-center gap-3 px-4 py-4 text-left transition-all rounded-xl border ${
+                              isActive 
+                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.1)]' 
+                                : 'text-white/40 hover:text-white border-transparent hover:bg-white/5'
+                            }`}
+                          >
+                            <span className="text-[11px] font-bold uppercase tracking-widest flex-1">{mod.title}</span>
+                            {isActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {!hasAccess && (
+                    <div className="p-1 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-600/20">
+                      <button
+                        onClick={() => {
+                          setIsVIPOpen(true);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="flex items-center gap-4 w-full p-6 bg-black/90 border border-white/5 rounded-2xl group transition-all"
+                      >
+                        <div className="p-2 bg-amber-400/10 rounded-lg">
+                          <Crown size={20} className="text-amber-500" />
+                        </div>
+                        <div className="flex flex-col items-start">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-0.5">Premium Unlock</span>
+                          <span className="text-xs font-bold text-white/80">Activate Enterprise</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-white/5 space-y-8">
+                  <div className="flex flex-col gap-4">
+                    <span className="text-[9px] uppercase tracking-[0.3em] text-white/20 font-black">Visual Preference</span>
+                    <div className="grid grid-cols-2 gap-2">
+                       {THEMES.slice(0, 4).map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => handleSetActiveTheme(t.id)}
+                          className={`px-3 py-3 rounded-lg text-[9px] uppercase font-black tracking-widest text-center transition-all ${activeTheme === t.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/5 text-white/40 border border-white/5'}`}
+                        >
+                          {t.id}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {user ? (
+                    <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
+                      <img src={user.photoURL || ''} className="w-10 h-10 rounded-full border border-white/10 ring-4 ring-white/5" />
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-xs font-bold text-white truncate">{user.displayName}</span>
+                        <button onClick={handleLogout} className="text-[10px] font-black uppercase tracking-widest text-rose-500 text-left mt-1 hover:text-rose-400">Sign Out</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={handleLogin}
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20"
+                    >
+                      Login to Terminal
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence mode="wait">
           {!hasAccess ? (
             <motion.div 
               key="guide-content"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-              className="max-w-[1600px] mx-auto px-4 md:px-8 xl:px-16 py-12 md:py-24 space-y-48"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+            style={{ transform: `scale(${uiScale})`, transformOrigin: 'top center' }}
+            className="w-full max-w-[1300px] mx-auto px-4 sm:px-6 xl:px-8 py-6 md:py-10 space-y-20 md:space-y-28 transition-all duration-500"
+          >
+            {/* Header Section */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4 max-w-4xl pb-10 border-b border-white/5"
             >
-              {/* Header Section */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-8 max-w-3xl pb-16 border-b border-white/5"
-              >
-                <div className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-blue-500/50 flex items-center gap-3">
-                  <div className="w-8 h-[1px] bg-blue-500/30" />
-                  Terminal Journal
-                </div>
-                <h1 className="text-6xl md:text-8xl font-light leading-[0.95] text-white tracking-tighter">
-                  Options Flow <br />
-                  <span className="text-blue-500 italic font-serif opacity-90">Intelligence</span>
-                </h1>
-                <p className="text-xl text-white/40 leading-relaxed max-w-xl font-light">
-                  An institutional approach to the financial ecosystem. Quantifying the invisible forces of market maker hedging and liquidity dynamics.
-                </p>
-              </motion.div>
+              <div className="text-[9px] font-mono font-black uppercase tracking-[0.4em] text-blue-500/50 flex items-center gap-3">
+                <div className="w-6 h-[1px] bg-blue-500/30" />
+                Terminal Journal
+              </div>
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-light leading-[0.95] text-white tracking-tighter">
+                Options Flow <br />
+                <span className="text-blue-500 italic font-serif opacity-90">Intelligence</span>
+              </h1>
+              <p className="text-sm sm:text-base text-white/40 leading-relaxed max-w-xl font-light">
+                An institutional approach to the financial ecosystem. Quantifying the invisible forces of market maker hedging and liquidity dynamics.
+              </p>
+            </motion.div>
 
           {/* Module 1 */}
-          <section id="module-1" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/10 to-transparent rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] mb-32 relative group">
-            <div className="absolute inset-0 bg-[#0c0c10]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#3b82f608,transparent_50%)]" />
+          <section id="module-1" className="scroll-mt-24 p-[1px] bg-gradient-to-br from-white/10 to-transparent rounded-3xl sm:rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] mb-16 md:mb-24 relative group w-full">
+            <div className="absolute inset-0 bg-[#0c0c10] rounded-3xl sm:rounded-[4rem]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#3b82f608,transparent_50%)] rounded-3xl sm:rounded-[4rem]" />
             
-            <div className="relative p-8 md:p-16 xl:p-20">
-              <div className="mb-16 flex flex-col md:flex-row md:items-center justify-between gap-10 pb-12">
-                <div className="space-y-4">
+            <div className="relative p-6 sm:p-10 md:p-14 xl:p-16 overflow-hidden">
+              <div className="mb-10 md:mb-16 flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-10 pb-6 md:pb-10 border-b border-white/5">
+                <div className="space-y-3">
                   <div className="flex items-center gap-4">
-                    <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.1)]">Level 01</span>
-                    <div className="h-[1px] w-16 bg-gradient-to-r from-blue-500/50 to-transparent" />
+                    <span className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.1)]">Level 01</span>
+                    <div className="h-[1px] w-12 bg-gradient-to-r from-blue-500/50 to-transparent" />
                   </div>
-                  <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none">Market Foundation</h2>
+                  <h2 className="text-2xl sm:text-4xl md:text-6xl font-thin text-white tracking-tighter leading-none">Market Foundation</h2>
                 </div>
-                <div className="flex items-center gap-6">
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-[9px] font-mono font-black text-white/10 uppercase tracking-[0.3em]">Core Protocol</span>
-                    <span className="text-sm font-mono text-white/40 bg-white/5 px-3 py-1 rounded-lg">ARCH-V4.2</span>
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="text-[8px] font-mono font-black text-white/10 uppercase tracking-[0.3em]">Core Protocol</span>
+                    <span className="text-xs font-mono text-white/30 bg-white/5 px-2.5 py-1 rounded-lg">ARCH-V4.2</span>
                   </div>
-                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center shadow-inner">
-                    <Layers size={28} className="text-blue-500 opacity-80" />
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center shadow-inner">
+                    <Layers size={22} className="text-blue-500 opacity-80" />
                   </div>
                 </div>
               </div>
-                    <div className="space-y-32">
+                    <div className="space-y-24">
                 {/* Thesis & Intelligence Layer */}
-                <div className="grid lg:grid-cols-12 gap-12 lg:gap-24 items-center">
-                  <div className="lg:col-span-8 space-y-12">
-                    <div className="space-y-6">
+                <div className="grid lg:grid-cols-12 gap-10 lg:gap-20 items-center">
+                  <div className="lg:col-span-8 space-y-10">
+                    <div className="space-y-5">
                       <div className="flex items-center gap-4">
-                        <div className="h-[1px] w-12 bg-blue-500/50" />
+                        <div className="h-[1px] w-10 bg-blue-500/50" />
                         <h3 className="text-[10px] font-mono font-black uppercase tracking-[0.4em] text-blue-500/80">
                           Analytical Thesis
                         </h3>
                       </div>
-                      <h4 className="text-5xl md:text-7xl xl:text-[5rem] font-thin text-white tracking-tighter leading-[1.05]">
+                      <h4 className="text-2xl sm:text-4xl md:text-5xl xl:text-[3.5rem] font-thin text-white tracking-tighter leading-[1.05]">
                         Structural <span className="text-blue-500 italic opacity-80">Supremacy</span>
                       </h4>
-                      <p className="text-white/40 leading-relaxed text-xl font-light max-w-2xl">
+                      <p className="text-white/40 leading-relaxed text-lg font-light max-w-2xl">
                         The global financial ecosystem has experienced a fundamental transition. 
-                        Since 2021, <span className="text-white/80">options trading volumes</span> have systematically eclipsed the volumes of underlying cash equity markets, forcing price discovery into the derivatives space.
+                        Since 2021, <span className="text-white/80">options trading volumes</span> have systematically eclipsed the volumes of underlying cash equity markets.
                       </p>
                     </div>
                     
@@ -1217,32 +1382,32 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="bg-[#08080c] rounded-[4rem] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.9)] relative">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#3b82f604,transparent_70%)] rounded-[4rem]" />
-                    <div className="flex flex-col xl:flex-row bg-gradient-to-br from-white/[0.03] to-transparent p-6 md:p-12 xl:p-16 gap-12 xl:gap-24 items-center relative z-10 w-full">
-                      <div className="w-full xl:w-1/2 flex flex-col items-center justify-center gap-12 group/item">
-                        <div className="w-full max-w-[540px] aspect-square bg-black/60 rounded-[3rem] flex items-center justify-center p-8 sm:p-12 transition-all duration-700 shadow-inner relative overflow-hidden">
+                  <div className="bg-[#08080c] rounded-3xl sm:rounded-[4rem] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.9)] relative overflow-hidden border border-white/5">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#3b82f604,transparent_70%)] rounded-2xl sm:rounded-3xl" />
+                    <div className="flex flex-col lg:flex-row bg-gradient-to-br from-white/[0.03] to-transparent p-6 sm:p-8 md:p-12 lg:p-16 xl:p-20 gap-8 lg:gap-16 items-center relative z-10 w-full">
+                      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center gap-8 group/item">
+                        <div className="w-full max-w-[480px] aspect-square bg-black/60 rounded-2xl md:rounded-3xl flex items-center justify-center p-6 transition-all duration-700 shadow-inner relative overflow-hidden ring-1 ring-white/5">
                           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#3b82f605,transparent_70%)]" />
-                          <div className="absolute top-10 left-10 flex items-center gap-3">
-                             <div className="w-2 h-2 rounded-full bg-blue-500/80 animate-pulse" />
-                             <span className="text-[10px] font-mono font-black text-white/20 uppercase tracking-[0.3em]">Live Engine</span>
+                          <div className="absolute top-8 left-8 flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse" />
+                            <span className="text-[10px] font-mono font-black text-white/30 uppercase tracking-[0.4em]">Live Engine</span>
                           </div>
                           <div className="w-full h-full flex items-center justify-center scale-90 sm:scale-100">
                              <HedgingAnimation />
                           </div>
                         </div>
-                        <div className="space-y-4 text-center max-w-md">
-                          <h5 className="text-2xl font-thin text-white tracking-tight">Delta-Neutral Sync</h5>
-                          <p className="text-sm font-light text-white/40 leading-relaxed">
-                            Market makers neutralize price risk through mechanical balancing, creating structured liquidity channels that govern intraday volatility.
+                        <div className="space-y-6 text-center max-w-lg px-4">
+                          <h5 className="text-2xl sm:text-3xl font-thin text-white tracking-tighter">Delta-Neutral Sync</h5>
+                          <p className="text-sm sm:text-base font-light text-white/30 leading-relaxed">
+                            Market makers neutralize price risk through mechanical balancing, creating structured liquidity channels that govern intraday volatility and forced trends.
                           </p>
                         </div>
                       </div>
                       
-                      <div className="hidden xl:block w-[1px] h-[500px] bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+                      <div className="hidden lg:block w-[1px] h-[600px] bg-gradient-to-b from-transparent via-white/10 to-transparent" />
                       
-                      <div className="w-full xl:w-1/2 flex flex-col items-center justify-center group/item scale-100">
-                        <div className="w-full max-w-[540px] p-4 hover:scale-[1.02] transition-transform duration-1000 ease-out flex justify-center">
+                      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center group/item scale-100">
+                        <div className="w-full max-w-[600px] p-2 sm:p-4 hover:scale-[1.02] transition-transform duration-1000 ease-out flex justify-center">
                           <MarketDynamicsGrid ticker={activeTicker} />
                         </div>
                       </div>
@@ -1256,48 +1421,47 @@ export default function App() {
                      <h3 className="text-[10px] font-mono font-black text-white/20 uppercase tracking-[0.5em]">Regime Logic</h3>
                      <div className="h-[1px] flex-1 bg-white/5" />
                   </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-10">
+                               <div className="grid sm:grid-cols-2 gap-6 md:gap-10">
                     <div className="group relative">
                       <div className="absolute inset-0 bg-emerald-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-1000" />
-                      <div className="relative p-16 rounded-[4rem] bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-700 space-y-10 group/card overflow-hidden">
+                      <div className="relative p-8 md:p-16 rounded-2xl sm:rounded-[4rem] bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-700 space-y-8 md:space-y-10 group/card overflow-hidden">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[80px] -mr-16 -mt-16" />
                         <div className="w-20 h-1 bg-emerald-500/30 mb-2 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)] group-hover:w-32 transition-all duration-700" />
                         <div className="space-y-4">
-                          <h4 className="text-4xl font-thin text-white tracking-tighter">Positive Gamma</h4>
+                          <h4 className="text-2xl sm:text-4xl font-thin text-white tracking-tighter">Positive Gamma</h4>
                           <div className="flex items-center gap-3">
-                            <div className="text-[10px] font-mono font-black text-emerald-500/60 uppercase tracking-[0.3em]">Mean Reverting Regime</div>
+                            <div className="text-[9px] sm:text-[10px] font-mono font-black text-emerald-500/60 uppercase tracking-[0.3em]">Mean Reverting Regime</div>
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/40" />
                           </div>
                         </div>
-                        <p className="text-lg text-white/30 leading-relaxed font-light">
+                        <p className="text-base sm:text-lg text-white/30 leading-relaxed font-light">
                           Market makers trade against the trend to maintain neutral books. This absorbs volatility, trapping price in predictable structural corridors.
                         </p>
                         <div className="pt-6 flex items-center justify-between">
-                           <div className="text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Volatility Floor: Active</div>
-                           <ChevronRight size={20} className="text-emerald-500/20 group-hover:text-emerald-500 group-hover:translate-x-2 transition-all" />
+                           <div className="text-[9px] sm:text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Volatility Floor: Active</div>
+                           <ChevronRight size={18} className="text-emerald-500/20 group-hover:text-emerald-500 group-hover:translate-x-2 transition-all" />
                         </div>
                       </div>
                     </div>
 
                     <div className="group relative">
                       <div className="absolute inset-0 bg-rose-500/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full duration-1000" />
-                      <div className="relative p-16 rounded-[4rem] bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-700 space-y-10 group/card overflow-hidden">
+                      <div className="relative p-8 md:p-16 rounded-2xl sm:rounded-[4rem] bg-white/[0.01] hover:bg-white/[0.02] transition-all duration-700 space-y-8 md:space-y-10 group/card overflow-hidden">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 blur-[80px] -mr-16 -mt-16" />
                         <div className="w-20 h-1 bg-rose-500/30 mb-2 rounded-full shadow-[0_0_20px_rgba(244,63,94,0.3)] group-hover:w-32 transition-all duration-700" />
                         <div className="space-y-4">
-                          <h4 className="text-4xl font-thin text-white tracking-tighter">Negative Gamma</h4>
+                          <h4 className="text-2xl sm:text-4xl font-thin text-white tracking-tighter">Negative Gamma</h4>
                           <div className="flex items-center gap-3">
-                            <div className="text-[10px] font-mono font-black text-rose-500/60 uppercase tracking-[0.3em]">Directional Regime</div>
+                            <div className="text-[9px] sm:text-[10px] font-mono font-black text-rose-500/60 uppercase tracking-[0.3em]">Directional Regime</div>
                             <div className="w-1.5 h-1.5 rounded-full bg-rose-500/40" />
                           </div>
                         </div>
-                        <p className="text-lg text-white/30 leading-relaxed font-light">
+                        <p className="text-base sm:text-lg text-white/30 leading-relaxed font-light">
                           Hedging flow accelerates price movement as dealers chase the underlying. This triggers aggressive expansion and high-velocity trends.
                         </p>
                         <div className="pt-6 flex items-center justify-between">
-                           <div className="text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Expansion Risk: Critical</div>
-                           <ChevronRight size={20} className="text-rose-500/20 group-hover:text-rose-500 group-hover:translate-x-2 transition-all" />
+                           <div className="text-[9px] sm:text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Expansion Risk: Critical</div>
+                           <ChevronRight size={18} className="text-rose-500/20 group-hover:text-rose-500 group-hover:translate-x-2 transition-all" />
                         </div>
                       </div>
                     </div>
@@ -1316,7 +1480,7 @@ export default function App() {
                 <div className="flex items-center gap-4 mb-6">
                   <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-purple-500 bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20">Operational</span>
                 </div>
-                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Mastering Gamma Levels</h2>
+                <h2 className="text-4xl md:text-6xl font-thin text-white tracking-tighter leading-none mb-6">Mastering Gamma Levels</h2>
                 <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
                   Strategic price zones derived from options positioning, revealing exactly where institutions are <span className="text-white/60">forced to hedge</span>.
                 </p>
@@ -1366,7 +1530,7 @@ export default function App() {
                 <div className="flex items-center gap-4 mb-6">
                   <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-amber-500 bg-amber-500/10 px-4 py-1.5 rounded-full border border-amber-500/20">Tactical</span>
                 </div>
-                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Execution Playbook</h2>
+                <h2 className="text-4xl md:text-6xl font-thin text-white tracking-tighter leading-none mb-6">Execution Playbook</h2>
                 <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
                   Actionable strategies synchronized with the <span className="text-white/60">structural regime</span> of the session.
                 </p>
@@ -1406,7 +1570,7 @@ export default function App() {
                 <div className="flex items-center gap-4 mb-6">
                   <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20">Ecosystem</span>
                 </div>
-                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Platform Integration</h2>
+                <h2 className="text-4xl md:text-6xl font-thin text-white tracking-tighter leading-none mb-6">Platform Integration</h2>
                 <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
                   Export institutional data streams to <span className="text-white/60">professional charting</span> software natively.
                 </p>
@@ -1464,7 +1628,7 @@ export default function App() {
                 <div className="flex items-center gap-4 mb-6">
                   <span className="text-[10px] font-mono font-black uppercase tracking-[0.5em] text-white/20">Protocol</span>
                 </div>
-                <h2 className="text-5xl md:text-7xl font-thin text-white tracking-tighter leading-none mb-6">Neural Glossary</h2>
+                <h2 className="text-4xl md:text-6xl font-thin text-white tracking-tighter leading-none mb-6">Neural Glossary</h2>
                 <p className="text-white/40 text-xl max-w-3xl font-light leading-relaxed">
                   Definitive reference for quantitative <span className="text-white/60">market mechanics</span> and institutional terminology.
                 </p>
@@ -1493,9 +1657,10 @@ export default function App() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
-          className="min-h-screen bg-transparent"
+          style={{ transform: `scale(${uiScale})`, transformOrigin: 'top center' }}
+          className="min-h-screen bg-transparent w-full transition-all duration-500"
         >
-          <div className={`max-w-[1600px] w-full mx-auto px-4 md:px-8 py-8 md:py-12 space-y-12 ${hasAccess ? 'bg-app-primary' : 'bg-transparent shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-main-primary'}`}>
+          <div className={`max-w-[1300px] w-full mx-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8 space-y-8 ${hasAccess ? 'bg-app-primary' : 'bg-transparent shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-main-primary'}`}>
 
 
             {/* VIP Content Switcher */}
