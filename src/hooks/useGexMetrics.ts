@@ -36,7 +36,12 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
       }
       
       if (!isJson) {
-        console.error(`GEX Non-JSON Response (Status: ${res.status}, Type: ${contentType}): ${text.substring(0, 200)}`);
+        // If the proxy returns an HTML page (e.g. "Starting your application..." during server restart)
+        if (contentType.includes('text/html')) {
+          console.warn('Backend temporarily unavailable or restarting (received HTML instead of JSON). Ignoring poll.');
+          // Skip setting error so we don't tear down the UI - just keep showing old data
+          return;
+        }
         throw new Error(`Server returned non-JSON response [Status: ${res.status}, Type: ${contentType}]`);
       }
       
