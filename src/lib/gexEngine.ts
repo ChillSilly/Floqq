@@ -65,54 +65,95 @@ const CBOE_HEADERS = {
   'Origin': 'https://www.cboe.com',
 };
 
+const SYSTEM_HEADERS_B = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
+  'Referer': 'https://finance.yahoo.com/',
+  'Origin': 'https://finance.yahoo.com'
+};
+
 export async function getSpot(ticker: string): Promise<number> {
   const symUpper = ticker.toUpperCase();
   const promises: Promise<number>[] = [];
   
+  console.log(`[Engine] Resolving spot for ${symUpper}`);
+
   if (FLOQ_API_KEY) {
-    promises.push(
-      axios.get(`${FLOQ_URL}/spot/${symUpper}`, { 
-        headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` },
-        timeout: 2000 
-      }).then(r => {
-        const p = parseFloat(r.data?.data?.current_price || r.data?.price || 0);
-        if (p > 0) return p;
-        throw new Error('Invalid');
-      })
-    );
+    // Try both /spot/ and /price/ for FloQ as coverage varies
+    const floqSources = [`${FLOQ_URL}/spot/${symUpper}`, `${FLOQ_URL}/price/${symUpper}`];
+    floqSources.forEach(urlShort => {
+      promises.push(
+        axios.get(urlShort, { 
+          headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` },
+          timeout: 6000 
+        }).then(r => {
+          const p = parseFloat(r.data?.data?.current_price || r.data?.price || r.data?.data?.price || 0);
+          if (p > 0) {
+            console.log(`[Engine] Spot for ${symUpper} found via Floq (${urlShort.includes('spot') ? 'spot' : 'price'}): ${p}`);
+            return p;
+          }
+          throw new Error('Invalid');
+        }).catch(e => {
+          if (e.response?.status !== 404) {
+            console.warn(`[Engine] Floq source fail for ${urlShort}: ${e.message}`);
+          }
+          throw e; // Promise.any will handle it
+        })
+      );
+    });
   }
 
-  // Backup 1: Yahoo Finance
   const symbolMapping: Record<string, string> = { 
     'SPX': '^GSPC', 'NDX': '^IXIC', 'RUT': '^RUT', 
-    'DIA': '^DJI', 'VIX': '^VIX', 'TYX': '^TYX', 'TNX': '^TNX' 
+    'DIA': '^DJI', 'VIX': '^VIX', 'TYX': '^TYX', 'TNX': '^TNX',
+    'IWM': 'IWM', 'QQQ': 'QQQ', 'SPY': 'SPY'
   };
   const yahooSym = symbolMapping[symUpper] || symUpper;
-  promises.push(
-    axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`, { 
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 2000
-    }).then(r => {
-      const meta = r.data.chart.result[0].meta;
-      const p = meta.regularMarketPrice || meta.previousClose;
-      if (p > 0) return p;
-      throw new Error('Invalid');
-    })
-  );
   
-  // Backup 2: CBOE Variations
+  // Try Query2 first, fallback to Query1
+  ['query2', 'query1'].forEach(sub => {
+    promises.push(
+      axios.get(`https://${sub}.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`, { 
+        headers: SYSTEM_HEADERS_B,
+        timeout: 6000
+      }).then(r => {
+        const meta = r.data.chart.result[0].meta;
+        const p = meta.regularMarketPrice || meta.previousClose;
+        if (p > 0) {
+          console.log(`[Engine] Spot for ${symUpper} found via Yahoo (${sub}): ${p}`);
+          return p;
+        }
+        throw new Error('Invalid');
+      }).catch(e => {
+        console.warn(`[Engine] Yahoo (${sub}) spot fail for ${symUpper}: ${e.message}`);
+        throw e;
+      })
+    );
+  });
+  
   const variants = [symUpper];
-  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) variants.push(`_${symUpper}`);
+  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA', 'QQQ', 'SPY'].includes(symUpper)) variants.push(`_${symUpper}`);
 
   variants.forEach(v => {
     promises.push(
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS,
-        timeout: 2000
+        timeout: 6000
       }).then(r => {
         const p = parseFloat(r.data.data?.current_price || r.data.data?.last_trade_price || 0);
-        if (p > 0) return p;
+        if (p > 0) {
+          console.log(`[Engine] Spot for ${symUpper} found via CBOE (${v}): ${p}`);
+          return p;
+        }
         throw new Error('Invalid');
+      }).catch(e => {
+        if (e.response?.status !== 404) {
+          console.warn(`[Engine] CBOE spot fail for ${v}: ${e.message}`);
+        }
+        throw e;
       })
     );
   });
@@ -120,6 +161,7 @@ export async function getSpot(ticker: string): Promise<number> {
   try {
     return await Promise.any(promises);
   } catch (e) {
+    console.error(`[Engine] Total spot resolve failure for ${symUpper} - All sources exhausted.`);
     return 0;
   }
 }
@@ -127,7 +169,7 @@ export async function getSpot(ticker: string): Promise<number> {
 async function getChain(ticker: string): Promise<any> {
   const sym = ticker.toUpperCase();
   const variants = [sym];
-  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(sym)) {
+  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA', 'QQQ', 'SPY'].includes(sym)) {
     variants.unshift(`_${sym}`); 
   }
 
@@ -137,33 +179,49 @@ async function getChain(ticker: string): Promise<any> {
     promises.push(
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS, 
-        timeout: 3000 
+        timeout: 12000 
       }).then(r => {
-        if (r.data?.data?.options?.length) return r.data;
+        if (r.data?.data?.options?.length) {
+          console.log(`[Engine] Chain for ${sym} found via CBOE (${v})`);
+          return r.data;
+        }
         throw new Error('No options');
       })
     );
   });
 
   if (FLOQ_API_KEY) {
-    promises.push(
-      axios.get(`${FLOQ_URL}/chain/${sym}`, { 
-        headers: { 
-          'Authorization': `Bearer ${FLOQ_API_KEY}`,
-          'Accept': 'application/json' 
-        },
-        timeout: 3000
-      }).then(r => {
-        if (r.data?.data?.options?.length) return r.data;
-        throw new Error('No options');
-      })
-    );
+    // Try both /chain/ and /options/ endpoints if one is 404
+    const floqChainUrls = [`${FLOQ_URL}/chain/${sym}`, `${FLOQ_URL}/options/${sym}`];
+    floqChainUrls.forEach(url => {
+       promises.push(
+        axios.get(url, { 
+          headers: { 
+            'Authorization': `Bearer ${FLOQ_API_KEY}`,
+            'Accept': 'application/json' 
+          },
+          timeout: 10000
+        }).then(r => {
+          if (r.data?.data?.options?.length || r.data?.options?.length) {
+            console.log(`[Engine] Chain for ${sym} found via Floq (${url.includes('chain') ? 'chain' : 'options'})`);
+            return r.data;
+          }
+          throw new Error('No options');
+        }).catch(e => {
+           if (e.response?.status !== 404) {
+             console.warn(`[Engine] Floq chain source fail for ${url}: ${e.message}`);
+           }
+           throw e;
+        })
+      );
+    });
   }
 
   try {
     return await Promise.any(promises);
   } catch (e) {
-    throw new Error(`Data Relay Offline: No options chain could be located for ${ticker}.`);
+    console.error(`[Engine] Total chain resolve failure for ${sym}. Sources checked: ${variants.length + (FLOQ_API_KEY ? 2 : 0)}`);
+    throw new Error(`Data Relay Offline: No options chain could be located for ${sym} from any provider.`);
   }
 }
 

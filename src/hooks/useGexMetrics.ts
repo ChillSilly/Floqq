@@ -10,8 +10,12 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
   const fetchMetrics = useCallback(async (forced = false) => {
     if (!ticker) return;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+      
       const url = `/api/v1/options-data?ticker=${encodeURIComponent(ticker)}&exps=${exps}${forced ? '&force=true' : ''}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
       const contentType = res.headers.get('content-type') || '';
       const isJson = contentType.includes('application/json');
       
@@ -38,8 +42,10 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
       if (!isJson) {
         // If the proxy returns an HTML page (e.g. "Starting your application..." during server restart)
         if (contentType.includes('text/html')) {
-          console.warn('Backend temporarily unavailable or restarting (received HTML instead of JSON). Ignoring poll.');
-          // Skip setting error so we don't tear down the UI - just keep showing old data
+          console.warn('Backend temporarily unavailable or restarting (received HTML instead of JSON).');
+          if (!data) {
+             throw new Error('Backend initializing or unavailable. Please retry in a moment.');
+          }
           return;
         }
         throw new Error(`Server returned non-JSON response [Status: ${res.status}, Type: ${contentType}]`);
@@ -61,7 +67,7 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
       setLastUpdated(Date.now());
     } catch (e: any) {
       console.error('GEX Fetch Error:', e);
-      setError(e.message);
+      setError(e.message || 'An unexpected error occurred during data synchronization.');
     } finally {
       setLoading(false);
     }

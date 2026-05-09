@@ -8,8 +8,18 @@ const router = express.Router();
 
 // Memory Cache
 const cache: Record<string, { data: any; ts: number }> = {};
-const CACHE_TTL = 15 * 1000; 
-const CHART_CACHE_TTL = 15 * 1000; 
+const CACHE_TTL = 30 * 1000; 
+const CHART_CACHE_TTL = 60 * 1000; 
+
+// Logging Middleware for the router
+router.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[API] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
 
 const SYSTEM_HEADERS_B = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -102,16 +112,18 @@ router.get('/ratio/:ticker', async (req, res) => {
       'USO': 'CL=F',
       'UNG': 'NG=F',
       'TLT': 'ZB=F',
-      'XLE': 'CL=F' // approximate correlation
+      'XLE': 'CL=F' 
     };
     const futuresTicker = symbolMapping[ticker.toUpperCase()] || ticker.toUpperCase();
     
+    console.log(`[API] Fetching ratio for ${ticker} / ${futuresTicker}`);
     const [futureRes, spotRes] = await Promise.all([
-      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 3000 }),
-      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 3000 })
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 }),
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 })
     ]);
 
     if (!futureRes.data.chart?.result || !spotRes.data.chart?.result) {
+      console.warn(`[API] Ratio fetch yielded no results for ${ticker}`);
       return res.status(404).json({ error: 'Ticker not found', ticker });
     }
 
@@ -122,6 +134,7 @@ router.get('/ratio/:ticker', async (req, res) => {
     cache[cacheKey] = { data: result, ts: Date.now() };
     res.json(result);
   } catch (error: any) {
+    console.error(`[API] Ratio fetch failed for ${ticker}:`, error.message);
     const fallbacks: Record<string, number> = { 'SPY': 10.0, 'QQQ': 42.0 };
     res.json({ ticker, ratio: fallbacks[ticker] || 1.0, error: 'Remote fetch failed', details: error.message });
   }
@@ -317,17 +330,17 @@ router.get('/v1/options-data', async (req, res) => {
   const force = req.query.force === 'true';
   const cacheKey = `gex_data_${ticker}_${exps}`;
 
-  // Serve from cache if available and not forced. (TTL 15 minutes = 15 * 60 * 1000 since CBOE data updates roughly that often)
-  if (!force && cache[cacheKey] && Date.now() - cache[cacheKey].ts < 15 * 60 * 1000) {
+  if (!force && cache[cacheKey] && Date.now() - cache[cacheKey].ts < 5 * 60 * 1000) {
     return res.json(cache[cacheKey].data);
   }
 
   try {
+    console.log(`[API] Processing GEX data for ${ticker} (Exps: ${exps})`);
     const data = await fetchGexData(ticker as string, parseInt(exps as string));
     cache[cacheKey] = { data, ts: Date.now() };
     res.json(data);
   } catch (e: any) {
-    console.error("GEX Engine Error:", e.message);
+    console.error(`[API] GEX Engine Error for ${ticker}:`, e.message);
     const status = (e.message.includes('No GEX data') || e.message.includes('No options chain')) ? 404 : 500;
     res.status(status).json({ error: 'GEX processing failed', details: e.message });
   }
@@ -504,6 +517,19 @@ router.get('/macro/synthesis', async (req, res) => {
     console.error("Synthesis AI Error:", error);
     res.json(fallbackData); 
   }
+});
+
+router.get('/system/health', (req, res) => {
+  res.json({
+    status: 'online',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      HAS_GEMINI: !!process.env.GEMINI_API_KEY,
+      HAS_FLOQ: !!process.env.FLOQ_API_KEY
+    }
+  });
 });
 
 router.all('/*', (req, res) => res.status(404).json({ error: 'API route not found' }));

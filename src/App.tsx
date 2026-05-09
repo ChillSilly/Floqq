@@ -438,7 +438,9 @@ export default function App() {
            setNewsError("Strategic intelligence decoding failed.");
         } else {
            console.warn("Dev server restarting, intercepted news fetch.");
-           // Silent retry or just leave it
+           if (news.length === 0) {
+             setNewsError("Intelligence relay initializing. Reconnecting...");
+           }
         }
       }
     } catch (err) {
