@@ -2,7 +2,7 @@ import axios from 'axios';
 import {
   bsGamma, bsDelta, bsVega, bsCharm, bsVanna, bsVomma, bsZomma,
   impliedVol, RISK_FREE_RATE, DIV_YIELD,
-} from './blackScholes.ts';
+} from './blackScholes.js';
 
 export interface GexRow {
   strike: number; expiry: string; dte: number; flag: 'C' | 'P';
@@ -179,7 +179,7 @@ async function getChain(ticker: string): Promise<any> {
     promises.push(
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS, 
-        timeout: 12000 
+        timeout: 5000 
       }).then(r => {
         if (r.data?.data?.options?.length) {
           console.log(`[Engine] Chain for ${sym} found via CBOE (${v})`);
@@ -200,7 +200,7 @@ async function getChain(ticker: string): Promise<any> {
             'Authorization': `Bearer ${FLOQ_API_KEY}`,
             'Accept': 'application/json' 
           },
-          timeout: 10000
+          timeout: 5000
         }).then(r => {
           if (r.data?.data?.options?.length || r.data?.options?.length) {
             console.log(`[Engine] Chain for ${sym} found via Floq (${url.includes('chain') ? 'chain' : 'options'})`);

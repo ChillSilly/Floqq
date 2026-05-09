@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import { GoogleGenAI } from '@google/genai';
-import { fetchGexData } from '../src/lib/gexEngine.ts';
+import { fetchGexData } from '../src/lib/gexEngine.js';
 
 const app = express();
 app.use(cors());
@@ -539,13 +539,10 @@ router.get('/system/health', (req, res) => {
 
 router.all('/*', (req, res) => res.status(404).json({ error: 'API route not found' }));
 
-import serverless from 'serverless-http';
-
 // Mount router on app for serverless environments
 app.use('/api', router);
 // Also mount on root in case the rewrite strips /api
 app.use('/', router);
 
-export const handler = serverless(app);
 export { router };
 export default app;
