@@ -4,7 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
-import { router as apiRouter } from './api/index.js';
+import { router as apiRouter } from './api/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,8 +29,15 @@ async function startServer() {
     res.json({ status: 'active', platform: 'Elite Terminal', timestamp: new Date().toISOString() });
   });
 
+  app.get('/api/test-direct', (req, res) => {
+    res.json({ message: 'direct success' });
+  });
+
   // Mount API router
-  app.use('/api', apiRouter);
+  app.use('/api', (req, res, next) => {
+    console.log(`[API Gateway] ${req.method} ${req.url}`);
+    apiRouter(req, res, next);
+  });
 
   // Global Error Handler
   app.use((err: any, req: any, res: any, next: any) => {

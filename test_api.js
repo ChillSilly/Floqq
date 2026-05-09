@@ -1,20 +1,22 @@
 async function test() {
   try {
-    console.log("Fetching /api/gex...");
-    const res = await fetch('http://localhost:3000/api/gex?ticker=SPY');
-    console.log("Status:", res.status);
-    console.log("Text:", (await res.text()).substring(0, 200));
+    console.log("Fetching /api/health...");
+    const resH = await fetch('http://localhost:3000/api/health');
+    console.log("Health Status:", resH.status);
+    console.log("Health Text:", await resH.text());
   } catch (e) {
-    console.error("Fetch 1 failed:", e);
+    console.error("Health Fetch failed:", e);
   }
-  
+
   try {
-    console.log("Fetching /api/yahoo/chart/SPY...");
-    const res2 = await fetch('http://localhost:3000/api/yahoo/chart/SPY?interval=1m&range=1d');
-    console.log("Status:", res2.status);
-    console.log("Text:", (await res2.text()).substring(0, 200));
+    console.log("Fetching /api/v1/options-data?ticker=SPY...");
+    const res = await fetch('http://localhost:3000/api/v1/options-data?ticker=SPY');
+    console.log("Status:", res.status);
+    console.log("Content-Type:", res.headers.get('content-type'));
+    const text = await res.text();
+    console.log("Text snapshot:", text.substring(0, 200));
   } catch (e) {
-    console.error("Fetch 2 failed:", e);
+    console.error("Fetch failed:", e);
   }
 }
 

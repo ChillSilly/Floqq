@@ -576,7 +576,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
                                       <div className="p-3 font-mono">
                                         <div className="text-[10px] text-white/40 uppercase tracking-widest mb-1">{label} Treasury</div>
                                         <div className="text-lg font-bold text-accent-primary leading-none">
-                                          {payload[0].value?.toFixed(2)}%
+                                          {Number(payload[0].value).toFixed(2)}%
                                         </div>
                                         <div className="text-[8px] text-brand-emerald uppercase mt-1 tracking-tighter">Yield-to-Maturity</div>
                                       </div>
