@@ -4,7 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
-import apiRouter from './api/index.js';
+import { router as apiRouter } from './api/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,12 +20,17 @@ async function startServer() {
 
   // Debug logging
   app.use((req, res, next) => {
-    console.log(`[API] ${req.method} ${req.url}`);
+    console.log(`[Elite Terminal] ${req.method} ${req.url}`);
     next();
   });
 
-  // Mount API routes (apiRouter itself handles the /api prefix now)
-  app.use(apiRouter);
+  // Health check
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'active', platform: 'Elite Terminal', timestamp: new Date().toISOString() });
+  });
+
+  // Mount API router
+  app.use('/api', apiRouter);
 
   // Global Error Handler
   app.use((err: any, req: any, res: any, next: any) => {

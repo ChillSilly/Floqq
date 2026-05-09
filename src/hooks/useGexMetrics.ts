@@ -10,7 +10,7 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
   const fetchMetrics = useCallback(async (forced = false) => {
     if (!ticker) return;
     try {
-      const url = `/api/gex?ticker=${ticker}&exps=${exps}${forced ? '&force=true' : ''}`;
+      const url = `/api/v1/options-data?ticker=${encodeURIComponent(ticker)}&exps=${exps}${forced ? '&force=true' : ''}`;
       const res = await fetch(url);
       const contentType = res.headers.get('content-type') || '';
       const isJson = contentType.includes('application/json');

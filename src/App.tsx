@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
 import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info, Clock, Menu } from 'lucide-react';
@@ -68,7 +69,11 @@ export default function App() {
   // View Transition Helper
   const transition = (fn: () => void) => {
     if (document.startViewTransition) {
-      document.startViewTransition(fn);
+      document.startViewTransition(() => {
+        flushSync(() => {
+          fn();
+        });
+      });
     } else {
       fn();
     }
@@ -183,6 +188,7 @@ export default function App() {
   const [activeTicker, setActiveTicker] = useState(() => {
     return localStorage.getItem('floq_active_ticker') || 'SPY';
   });
+  const [tickerInput, setTickerInput] = useState(activeTicker);
 
   const { data: gexMetrics } = useGexMetrics(activeTicker, 1, 60000);
 
@@ -655,8 +661,8 @@ export default function App() {
     const fetchMacroData = async () => {
       setIsLoadingLive(true);
       try {
-        const symbols = ['SPY', 'QQQ'];
-        const ratios: any = {};
+        const symbols = [activeTicker];
+        const ratios: any = { ...conversionRatios };
         for (const symbol of symbols) {
           const res = await fetch(`/api/ratio/${symbol}`);
           if (res.ok) {
@@ -699,7 +705,7 @@ export default function App() {
     const fetchRealOHLC = async () => {
       if (!activeTicker) return;
       try {
-        const res = await fetch(`/api/yahoo/chart/${activeTicker}?interval=1m&range=1d`);
+        const res = await fetch(`/api/v1/chart-data/${activeTicker}?interval=1m&range=1d`);
         
         if (!res.ok) {
            const text = await res.text();
@@ -1198,21 +1204,52 @@ export default function App() {
                   </div>
 
                   {!hasAccess && (
-                    <div className="p-1 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-600/20">
+                    <>
+                      <div className="p-1 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-600/20">
+                        <button
+                          onClick={() => {
+                            setIsVIPOpen(true);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className="flex items-center gap-4 w-full p-6 bg-black/90 border border-white/5 rounded-2xl group transition-all"
+                        >
+                          <div className="p-2 bg-amber-400/10 rounded-lg">
+                            <Crown size={20} className="text-amber-500" />
+                          </div>
+                          <div className="flex flex-col items-start">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-0.5">Premium Unlock</span>
+                            <span className="text-xs font-bold text-white/80">Activate Enterprise</span>
+                          </div>
+                        </button>
+                      </div>
                       <button
                         onClick={() => {
-                          setIsVIPOpen(true);
+                          setIsKeyModalOpen(true);
                           setIsMobileMenuOpen(false);
                         }}
-                        className="flex items-center gap-4 w-full p-6 bg-black/90 border border-white/5 rounded-2xl group transition-all"
+                        className="flex items-center gap-3 w-full px-4 py-4 mt-4 text-left transition-all rounded-xl border border-white/5 hover:bg-white/5 text-white/40 hover:text-white"
                       >
-                        <div className="p-2 bg-amber-400/10 rounded-lg">
-                          <Crown size={20} className="text-amber-500" />
-                        </div>
-                        <div className="flex flex-col items-start">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-0.5">Premium Unlock</span>
-                          <span className="text-xs font-bold text-white/80">Activate Enterprise</span>
-                        </div>
+                        <Key size={14} className="" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest flex-1">Decrypt Access</span>
+                      </button>
+                    </>
+                  )}
+
+                  {hasAccess && (
+                    <div className="space-y-4">
+                      <div className={`flex items-center gap-3 px-4 py-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl`}>
+                        <ShieldCheck size={16} className="text-emerald-500" />
+                        <span className={`text-[11px] font-bold uppercase tracking-widest flex-1 text-emerald-500`}>Institutional Session</span>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setHasAccess(false);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-4 text-left transition-all rounded-xl border border-white/5 hover:bg-white/5 text-white/40 hover:text-white"
+                      >
+                        <Lock size={14} className="" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest flex-1">Lock Session</span>
                       </button>
                     </div>
                   )}
@@ -1660,7 +1697,7 @@ export default function App() {
           style={{ transform: `scale(${uiScale})`, transformOrigin: 'top center' }}
           className="min-h-screen bg-transparent w-full transition-all duration-500"
         >
-          <div className={`max-w-[1300px] w-full mx-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8 space-y-8 ${hasAccess ? 'bg-app-primary' : 'bg-transparent shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-main-primary'}`}>
+          <div className={`max-w-[1800px] w-full mx-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8 space-y-8 ${hasAccess ? 'bg-app-primary' : 'bg-transparent shadow-[0_0_100px_rgba(0,0,0,0.02)] border-x border-main-primary'}`}>
 
 
             {/* VIP Content Switcher */}
@@ -1677,9 +1714,9 @@ export default function App() {
                   </motion.div>
                 )}
 
-                {activeModule === 'vip-conversion' && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                    <div className="relative p-6 bg-card-primary text-main-primary shadow-[0_15px_40px_rgba(0,0,0,0.06)] rounded-xl overflow-hidden mt-2 font-mono">
+                {activeModule === 'vip-macro' && (
+                  <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
+                    <div className="relative p-6 bg-card-primary text-main-primary shadow-[0_15px_40px_rgba(0,0,0,0.4)] rounded-xl overflow-hidden mt-2 font-mono border border-main-primary">
                        {/* Hardware/terminal accents */}
                        <div className="absolute top-0 left-0 w-full h-1 bg-main-primary flex">
                          <div className="w-1/3 h-full bg-accent-primary shadow-[0_0_15px_var(--accent-glow)]" />
@@ -1716,34 +1753,56 @@ export default function App() {
                           isDarkTheme={isDarkTheme}
                        />
                     </div>
+                  </motion.div>
+                )}
 
-                    <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
+                {activeModule === 'vip-conversion' && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                    <div className="grid lg:grid-cols-1 gap-8 lg:gap-12">
                          <div className="relative p-8 bg-card-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-primary/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                           <div className="flex items-center gap-3 mb-2">
-                              <div className="p-2.5 bg-accent-surface rounded-xl shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
-                              <h3 className="text-xl font-bold tracking-tight text-main-primary/90">SPY → ES Converter</h3>
+                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+                              <div className="flex items-center gap-3">
+                                 <div className="p-2.5 bg-accent-surface rounded-xl shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
+                                 <h3 className="text-xl font-bold tracking-tight text-main-primary/90">ETF to Futures Conversion Engine</h3>
+                              </div>
+                              <div className="relative">
+                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Search size={14} className="text-main-primary/40" />
+                                 </div>
+                                 <input 
+                                    type="text" 
+                                    placeholder="SEARCH TICKER..." 
+                                    className="bg-accent-surface text-main-primary text-xs font-mono font-bold tracking-widest uppercase rounded-lg pl-9 pr-4 py-2 border-none outline-none w-full sm:w-48 placeholder:text-main-primary/30 transition-colors"
+                                    value={tickerInput}
+                                    onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+                                    onKeyDown={(e) => {
+                                       if (e.key === 'Enter' && tickerInput.trim()) {
+                                          setActiveTicker(tickerInput.trim());
+                                       }
+                                    }}
+                                 />
+                              </div>
                            </div>
-                           <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert SPY levels to ES using live ratio</p>
+                           <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert {activeTicker} levels to {conversionRatios[activeTicker]?.futuresTicker?.replace('=F', '') || 'FUT'} using live ratio</p>
                            
                            <div className="flex items-center gap-2 mb-6 text-accent-primary text-xs font-medium tracking-wide uppercase">
                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
                            </div>
 
-                           <div className="grid grid-cols-2 gap-4 mb-6">
+                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                               <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">SPY Spot</div>
-                                 <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios['SPY']?.spotPrice === 'number' ? conversionRatios['SPY']?.spotPrice?.toFixed(2) : '---'}</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">{activeTicker} Spot</div>
+                                 <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios[activeTicker]?.spotPrice === 'number' ? conversionRatios[activeTicker]?.spotPrice?.toFixed(2) : '---'}</div>
                               </div>
                               <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
-                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">ES Future</div>
-                                 <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios['SPY']?.futurePrice === 'number' ? conversionRatios['SPY']?.futurePrice?.toFixed(2) : '---'}</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">{conversionRatios[activeTicker]?.futuresTicker?.replace('=F', '') || 'FUT'} Future</div>
+                                 <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios[activeTicker]?.futurePrice === 'number' ? conversionRatios[activeTicker]?.futurePrice?.toFixed(2) : '---'}</div>
                               </div>
-                           </div>
-
-                           <div className="p-5 bg-card-primary rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                              <span className="text-sm text-main-primary/60 font-medium">Conversion Ratio (ES / SPY)</span>
-                              <span className="text-lg font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios['SPY']?.ratio?.toFixed(4) || '---'}</span>
+                              <div className="p-5 bg-card-primary rounded-xl flex flex-col items-center justify-center shadow-inner col-span-2 md:col-span-1">
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">Conversion Ratio</div>
+                                 <div className="text-2xl font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios[activeTicker]?.ratio?.toFixed(4) || '---'}</div>
+                              </div>
                            </div>
 
                            <div className="space-y-4">
@@ -1751,17 +1810,17 @@ export default function App() {
                                  <ChevronRight size={16} className="text-accent-primary" /> Calculate Level
                               </div>
                               <div className="relative group/input">
-                                 <input type="number" placeholder="Enter SPY level (e.g., 600)" className="w-full bg-card-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
+                                 <input type="number" placeholder={`Enter ${activeTicker} level`} className="w-full bg-card-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
                                     const val = parseFloat(e.target.value);
-                                    const box = document.getElementById('spy-result');
+                                    const box = document.getElementById('unified-result');
                                     if (box) {
-                                       box.innerText = isNaN(val) ? '0.00' : (val * (conversionRatios['SPY']?.ratio || 10.0869)).toFixed(2);
+                                       box.innerText = isNaN(val) ? '0.00' : (val * (conversionRatios[activeTicker]?.ratio || 1)).toFixed(2);
                                     }
                                  }} />
                               </div>
                               <div className="flex flex-col mt-4 bg-accent-surface rounded-xl p-5 mt-6">
-                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated ES Level</div>
-                                 <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="spy-result">0.00</div>
+                                 <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated {conversionRatios[activeTicker]?.futuresTicker?.replace('=F', '') || 'FUT'} Level</div>
+                                 <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="unified-result">0.00</div>
                               </div>
                               <div className="mt-6 p-4 bg-accent-surface rounded-xl">
                                  <div className="flex items-center gap-2 mb-2">
@@ -1769,67 +1828,10 @@ export default function App() {
                                     <span className="text-[9px] font-mono font-bold text-accent-primary uppercase tracking-widest leading-none">Macro AI Intel</span>
                                  </div>
                                  <p className="text-[10px] text-main-primary opacity-40 font-sans italic leading-tight">
-                                    Carry pricing reflects {conversionRatios['SPY']?.ratio > 10.05 ? 'dividend' : 'risk-free'} skew. Monitor basis for breakout signals.
+                                    Dynamic ratio synced across market structure API endpoints. Real-time {activeTicker} futures curve adjustments derived continuously.
                                  </p>
                               </div>
                            </div>
-                         </div>
-
-                         <div className="relative p-8 bg-card-primary shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-2xl text-main-primary overflow-hidden group hover:border-accent-primary/30 transition-colors duration-500">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent-primary/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                            <div className="flex items-center gap-3 mb-2">
-                               <div className="p-2.5 bg-accent-surface rounded-xl shadow-inner"><Calculator size={18} className="text-accent-primary" /></div>
-                               <h3 className="text-xl font-bold tracking-tight text-main-primary/90">QQQ → NQ Converter</h3>
-                            </div>
-                            <p className="text-sm text-main-primary/40 tracking-wide mb-8">Convert QQQ levels to NQ using live ratio</p>
-                            
-                            <div className="flex items-center gap-2 mb-6 text-accent-primary text-xs font-medium tracking-wide uppercase">
-                               <Check size={14} className="opacity-80" /> <span>Prices fetched dynamically</span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-6">
-                               <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
-                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">QQQ Spot</div>
-                                  <div className="text-2xl font-mono text-main-primary/90 drop-shadow-sm">{typeof conversionRatios['QQQ']?.spotPrice === 'number' ? conversionRatios['QQQ']?.spotPrice?.toFixed(2) : '---'}</div>
-                               </div>
-                               <div className="p-5 bg-accent-surface rounded-xl shadow-sm flex flex-col items-center justify-center">
-                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-2">NQ Future</div>
-                                  <div className="text-2xl font-mono text-accent-primary drop-shadow-sm">{typeof conversionRatios['QQQ']?.futurePrice === 'number' ? conversionRatios['QQQ']?.futurePrice?.toFixed(2) : '---'}</div>
-                               </div>
-                            </div>
-
-                            <div className="p-5 bg-card-primary rounded-xl flex justify-between items-center mb-8 shadow-inner">
-                               <span className="text-sm text-main-primary/60 font-medium">Conversion Ratio (NQ / QQQ)</span>
-                               <span className="text-lg font-mono font-bold text-accent-primary drop-shadow-[0_0_8px_var(--accent-glow)]">{conversionRatios['QQQ']?.ratio?.toFixed(4) || '---'}</span>
-                            </div>
-
-                            <div className="space-y-4">
-                               <div className="flex items-center gap-2 text-sm text-main-primary/80 font-medium tracking-wide">
-                                  <ChevronRight size={16} className="text-accent-primary" /> Calculate Level
-                               </div>
-                               <div className="relative group/input">
-                                  <input type="number" placeholder="Enter QQQ level (e.g., 500)" className="w-full bg-card-primary rounded-xl py-4 px-5 text-sm font-mono text-main-primary focus:outline-none focus:border-accent-primary/50 transition-colors placeholder:text-main-primary/20 shadow-inner" onChange={(e) => {
-                                     const val = parseFloat(e.target.value);
-                                     const box = document.getElementById('qqq-result');
-                                     if (box) {
-                                        box.innerText = isNaN(val) ? '0.00' : (val * (conversionRatios['QQQ']?.ratio || 41.4269)).toFixed(2);
-                                     }
-                                  }} />
-                               </div>
-                               <div className="flex flex-col mt-4 bg-accent-surface rounded-xl p-5 mt-6">
-                                  <div className="text-[10px] uppercase tracking-widest text-main-primary/40 mb-1">Estimated NQ Level</div>
-                                  <div className="text-3xl font-mono font-bold text-accent-primary drop-shadow-md" id="qqq-result">0.00</div>
-                               </div>
-                               <div className="mt-6 p-4 bg-accent-surface rounded-xl">
-                                  <div className="flex items-center gap-2 mb-2">
-                                     <Cpu size={12} className="text-accent-primary" />
-                                     <span className="text-[9px] font-mono font-bold text-accent-primary uppercase tracking-widest leading-none">Macro AI Intel</span>
-                                  </div>
-                                  <p className="text-[10px] text-main-primary opacity-40 font-sans italic leading-tight">
-                                     NQ premium expansion often correlates with tech liquidity surges. Watching for AI risk premium divergence.
-                                  </p>
-                               </div>
-                            </div>
                          </div>
                     </div>
 

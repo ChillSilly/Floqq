@@ -1,4 +1,4 @@
-import { Layers, Activity, Map as MapIcon, Monitor, Book, Zap, Calculator, Cpu, ShieldCheck } from 'lucide-react';
+import { Layers, Activity, Map as MapIcon, Monitor, Book, Zap, Calculator, Cpu, ShieldCheck, Globe } from 'lucide-react';
 
 export const MODULES = [
   { id: 'module-1', title: 'The Foundation', icon: Layers },
@@ -11,6 +11,7 @@ export const MODULES = [
 export const VIP_MODULES = [
   { id: 'vip-gex', title: 'Live GEX Dashboard', icon: Activity },
   { id: 'vip-blackscholes', title: 'Black-Scholes Calculator', icon: Calculator },
+  { id: 'vip-macro', title: 'Macro Analysis', icon: Globe },
   { id: 'vip-conversion', title: 'Conversion Engine', icon: Cpu },
   { id: 'vip-journal', title: 'Journal', icon: Book },
   { id: 'vip-alpha', title: 'Alpha Intelligence', icon: Zap },

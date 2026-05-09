@@ -251,7 +251,7 @@ export const GexDashboardChart: React.FC<GexDashboardChartProps> = ({ activeTick
         if (activeTimeframe === '1h') range = '1mo';
         else if (activeTimeframe === '1d') range = '6mo';
 
-        const res = await fetch(`/api/yahoo/chart/${activeTicker}?interval=${activeTimeframe}&range=${range}`);
+        const res = await fetch(`/api/v1/chart-data/${activeTicker}?interval=${activeTimeframe}&range=${range}`);
         
         if (!res.ok) {
           throw new Error(`API returned status ${res.status}`);

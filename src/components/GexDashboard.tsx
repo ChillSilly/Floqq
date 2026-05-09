@@ -70,8 +70,8 @@ function ExpoCard({ label, value, sub, color }: { label: string; value: string; 
 export function GexDashboard() {
   const [ticker, setTicker] = useState('SPY');
   const [exps, setExps] = useState(99);
-  const { data, loading, error } = useGexMetrics(ticker, exps, 15000);
-  const [countdown, setCountdown] = useState(15);
+  const { data, loading, error } = useGexMetrics(ticker, exps, 15 * 60 * 1000);
+  const [countdown, setCountdown] = useState(900);
   const [marketStatus, setMarketStatus] = useState<any>(null);
 
   const fetchMarketStatus = useCallback(async () => {
@@ -91,12 +91,12 @@ export function GexDashboard() {
   }, [fetchMarketStatus]);
 
   useEffect(() => {
-    setCountdown(15);
+    setCountdown(900);
   }, [data]);
   
   useEffect(() => {
     const id = setInterval(() => {
-      setCountdown(p => (p <= 1 ? 15 : p - 1));
+      setCountdown(p => (p <= 1 ? 900 : p - 1));
     }, 1000);
     return () => clearInterval(id);
   }, []);
@@ -159,7 +159,9 @@ export function GexDashboard() {
                  </div>
                  <div className="flex items-center gap-2">
                    <span className="text-[8px] font-mono font-black text-brand-amber/60 leading-none tracking-widest uppercase">SYNC</span>
-                   <span className="text-[10px] font-mono font-bold text-brand-amber tracking-tighter">{countdown}s</span>
+                   <span className="text-[10px] font-mono font-bold text-brand-amber tracking-tighter">
+                    {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+                  </span>
                  </div>
               </div>
             </div>

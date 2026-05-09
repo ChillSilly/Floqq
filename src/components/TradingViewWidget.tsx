@@ -2,11 +2,12 @@ import React, { useEffect, useRef } from 'react';
 
 interface TradingViewWidgetProps {
   symbol?: string;
+  interval?: string;
   theme?: 'light' | 'dark';
   height?: number | string;
 }
 
-export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', theme = 'dark', height = '100%' }: TradingViewWidgetProps) {
+export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', interval = '5', theme = 'dark', height = '100%' }: TradingViewWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
@@ -22,7 +23,7 @@ export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', theme = 'dark', heigh
         new window.TradingView.widget({
           autosize: true,
           symbol: symbol,
-          interval: "5",
+          interval: interval,
           timezone: "Etc/UTC",
           theme: theme,
           style: "1",
@@ -63,10 +64,15 @@ export function TradingViewWidget({ symbol = 'NASDAQ:QQQ', theme = 'dark', heigh
         containerRef.current.innerHTML = '';
       }
     };
-  }, [symbol, theme]);
+  }, [symbol, interval, theme]);
 
   return (
-    <div className='tradingview-widget-container' style={{ height: height, width: "100%" }}>
+    <div className='tradingview-widget-container w-full overflow-hidden' style={{ height: height }}>
+      <style>{`
+        .tradingview-widget-container iframe {
+           border: none !important;
+        }
+      `}</style>
       <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
     </div>
   );
