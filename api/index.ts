@@ -31,7 +31,7 @@ const SYSTEM_HEADERS_B = {
 };
 
 const SYSTEM_HEADERS_A = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Accept': 'application/json, text/plain, */*',
   'Referer': 'https://www.cboe.com/',
   'Origin': 'https://www.cboe.com',
@@ -147,7 +147,7 @@ router.get('/chain/:symbol', async (req, res) => {
 
   const symUpper = symbol.toUpperCase();
   const variations = [symUpper];
-  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA'].includes(symUpper)) variations.unshift(`_${symUpper}`);
+  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(symUpper)) variations.unshift(`_${symUpper}`);
 
   try {
     const promises = variations.map(v => 

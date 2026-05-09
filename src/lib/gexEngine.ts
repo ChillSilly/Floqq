@@ -59,7 +59,7 @@ if (!_floqUrl.startsWith('http')) _floqUrl = 'https://api.floq.data';
 const FLOQ_URL = _floqUrl;
 
 const CBOE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Accept': 'application/json, text/plain, */*',
   'Referer': 'https://www.cboe.com/',
   'Origin': 'https://www.cboe.com',
@@ -135,7 +135,7 @@ export async function getSpot(ticker: string): Promise<number> {
   });
   
   const variants = [symUpper];
-  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA', 'QQQ', 'SPY'].includes(symUpper)) variants.push(`_${symUpper}`);
+  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(symUpper)) variants.push(`_${symUpper}`);
 
   variants.forEach(v => {
     promises.push(
@@ -150,7 +150,7 @@ export async function getSpot(ticker: string): Promise<number> {
         }
         throw new Error('Invalid');
       }).catch(e => {
-        if (e.response?.status !== 404) {
+        if (e.response?.status !== 404 && e.response?.status !== 403) {
           console.warn(`[Engine] CBOE spot fail for ${v}: ${e.message}`);
         }
         throw e;
@@ -169,7 +169,7 @@ export async function getSpot(ticker: string): Promise<number> {
 async function getChain(ticker: string): Promise<any> {
   const sym = ticker.toUpperCase();
   const variants = [sym];
-  if (['SPX', 'NDX', 'RUT', 'VIX', 'DIA', 'QQQ', 'SPY'].includes(sym)) {
+  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(sym)) {
     variants.unshift(`_${sym}`); 
   }
 

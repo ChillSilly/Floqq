@@ -34,10 +34,7 @@ async function startServer() {
   });
 
   // Mount API router
-  app.use('/api', (req, res, next) => {
-    console.log(`[API Gateway] ${req.method} ${req.url}`);
-    apiRouter(req, res, next);
-  });
+  app.use('/api', apiRouter);
 
   // Global Error Handler
   app.use((err: any, req: any, res: any, next: any) => {
@@ -47,6 +44,10 @@ async function startServer() {
 
   process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
+
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
   });
 
   // Vite middleware for development
@@ -65,8 +66,13 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Elite Terminal] Server active at http://localhost:${PORT}`);
+    console.log(`[Elite Terminal] Server active at http://0.0.0.0:${PORT}`);
+    console.log(`[Elite Terminal] Mode: ${process.env.NODE_ENV || 'development'}`);
   });
 }
 
-startServer();
+console.log('[Elite Terminal] Starting application server...');
+startServer().catch(err => {
+  console.error('[Fatal Start Error]', err);
+  process.exit(1);
+});
