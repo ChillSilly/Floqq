@@ -418,10 +418,16 @@ export default function App() {
     setNewsError(null);
     try {
       const url = force ? '/api/news?force=true' : '/api/news';
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for news + AI analysis
+
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
       
       if (!res.ok) {
-        throw new Error(`Failed to fetch news: ${res.statusText}`);
+        const text = await res.text();
+        console.warn(`[News] Server returned status ${res.status}:`, text.substring(0, 50));
+        throw new Error(`Failed to fetch news: ${res.status}`);
       }
 
       const text = await res.text();
@@ -434,18 +440,17 @@ export default function App() {
         }
       } catch (e) {
         if (!text.trim().toLowerCase().startsWith('<!doctype html>')) {
-           console.error("News JSON parse error:", e, "Text:", text.substring(0, 200));
+           console.error("News JSON parse error:", e);
            setNewsError("Strategic intelligence decoding failed.");
         } else {
-           console.warn("Dev server restarting, intercepted news fetch.");
-           if (news.length === 0) {
-             setNewsError("Intelligence relay initializing. Reconnecting...");
-           }
+           // This is usually the dev server's "starting/restarting" page
+           console.warn("Dev server unavailable (restarting?).");
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
       console.error("News fetch error:", err);
-      setNewsError("Communication with intelligence relay disrupted.");
+      setNewsError("Communication with intelligence relay disrupting. Tactical fallback active.");
     } finally {
       setNewsLoading(false);
     }
@@ -667,21 +672,23 @@ export default function App() {
         const ratios: any = { ...conversionRatios };
         for (const symbol of symbols) {
           const res = await fetch(`/api/ratio/${symbol}`);
-          if (res.ok) {
-            const contentType = res.headers.get('content-type') || '';
-            if (contentType.includes('application/json')) {
-              ratios[symbol] = await res.json();
-            } else {
-              const text = await res.text();
-              console.error(`Ratio fetch for ${symbol} returned non-JSON (Type: ${contentType}): ${text.substring(0, 100)}`);
-            }
-          } else {
-            console.error(`Ratio fetch for ${symbol} failed with status ${res.status}`);
+          
+          if (!res.ok) {
+             const text = await res.text();
+             console.warn(`[Macro] Ratio fetch failed for ${symbol}: ${res.status}`, text.substring(0, 50));
+             continue;
+          }
+
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await res.json();
+            ratios[symbol] = data;
           }
         }
         setConversionRatios(ratios);
         setLastUpdate(new Date());
-      } catch (err) {
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
         console.error("Macro data fetch error:", err);
       } finally {
         setIsLoadingLive(false);
@@ -707,11 +714,11 @@ export default function App() {
     const fetchRealOHLC = async () => {
       if (!activeTicker) return;
       try {
-        const res = await fetch(`/api/v1/chart-data/${activeTicker}?interval=1m&range=1d`);
+        const res = await fetch(`/api/v1/chart-data/${activeTicker}?interval=1m&range=1d`, { signal: AbortSignal.timeout(30000) });
         
         if (!res.ok) {
            const text = await res.text();
-           console.error(`Fetch failed with status ${res.status}: ${text.substring(0, 200)}`);
+           console.warn(`[Chart] Fetch failed with status ${res.status}: ${text.substring(0, 100)}`);
            return false;
         }
 
@@ -1476,8 +1483,7 @@ export default function App() {
                         <p className="text-base sm:text-lg text-white/30 leading-relaxed font-light">
                           Market makers trade against the trend to maintain neutral books. This absorbs volatility, trapping price in predictable structural corridors.
                         </p>
-                        <div className="pt-6 flex items-center justify-between">
-                           <div className="text-[9px] sm:text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Volatility Floor: Active</div>
+                        <div className="pt-6 flex items-center justify-end">
                            <ChevronRight size={18} className="text-emerald-500/20 group-hover:text-emerald-500 group-hover:translate-x-2 transition-all" />
                         </div>
                       </div>
@@ -1498,8 +1504,7 @@ export default function App() {
                         <p className="text-base sm:text-lg text-white/30 leading-relaxed font-light">
                           Hedging flow accelerates price movement as dealers chase the underlying. This triggers aggressive expansion and high-velocity trends.
                         </p>
-                        <div className="pt-6 flex items-center justify-between">
-                           <div className="text-[9px] sm:text-[10px] font-mono font-bold text-white/10 uppercase tracking-widest">Expansion Risk: Critical</div>
+                        <div className="pt-6 flex items-center justify-end">
                            <ChevronRight size={18} className="text-rose-500/20 group-hover:text-rose-500 group-hover:translate-x-2 transition-all" />
                         </div>
                       </div>

@@ -88,7 +88,7 @@ export async function getSpot(ticker: string): Promise<number> {
       promises.push(
         axios.get(urlShort, { 
           headers: { 'Authorization': `Bearer ${FLOQ_API_KEY}` },
-          timeout: 6000 
+          timeout: 15000 
         }).then(r => {
           const p = parseFloat(r.data?.data?.current_price || r.data?.price || r.data?.data?.price || 0);
           if (p > 0) {
@@ -118,7 +118,7 @@ export async function getSpot(ticker: string): Promise<number> {
     promises.push(
       axios.get(`https://${sub}.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1m&range=1d`, { 
         headers: SYSTEM_HEADERS_B,
-        timeout: 6000
+        timeout: 15000
       }).then(r => {
         const meta = r.data.chart.result[0].meta;
         const p = meta.regularMarketPrice || meta.previousClose;
@@ -141,7 +141,7 @@ export async function getSpot(ticker: string): Promise<number> {
     promises.push(
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS,
-        timeout: 6000
+        timeout: 15000
       }).then(r => {
         const p = parseFloat(r.data.data?.current_price || r.data.data?.last_trade_price || 0);
         if (p > 0) {
@@ -179,7 +179,7 @@ async function getChain(ticker: string): Promise<any> {
     promises.push(
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: CBOE_HEADERS, 
-        timeout: 5000 
+        timeout: 15000 
       }).then(r => {
         if (r.data?.data?.options?.length) {
           console.log(`[Engine] Chain for ${sym} found via CBOE (${v})`);
@@ -200,7 +200,7 @@ async function getChain(ticker: string): Promise<any> {
             'Authorization': `Bearer ${FLOQ_API_KEY}`,
             'Accept': 'application/json' 
           },
-          timeout: 5000
+          timeout: 15000
         }).then(r => {
           if (r.data?.data?.options?.length || r.data?.options?.length) {
             console.log(`[Engine] Chain for ${sym} found via Floq (${url.includes('chain') ? 'chain' : 'options'})`);

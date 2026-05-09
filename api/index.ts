@@ -123,8 +123,8 @@ router.get('/ratio/:ticker', async (req, res) => {
     
     console.log(`[API] Fetching ratio for ${ticker} / ${futuresTicker}`);
     const [futureRes, spotRes] = await Promise.all([
-      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 }),
-      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 })
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 10000 }),
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 10000 })
     ]);
 
     if (!futureRes.data.chart?.result || !spotRes.data.chart?.result) {
@@ -158,7 +158,7 @@ router.get('/chain/:symbol', async (req, res) => {
     const promises = variations.map(v => 
       axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${v}.json`, { 
         headers: SYSTEM_HEADERS_A, 
-        timeout: 2500 
+        timeout: 10000 
       }).then(r => {
         if (r.data?.data?.options) return r.data;
         throw new Error('No options');
@@ -180,7 +180,7 @@ router.get('/spot/:ticker', async (req, res) => {
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json({ price: cache[cacheKey].data });
 
   try {
-    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A, timeout: 2500 });
+    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A, timeout: 10000 });
     const price = response.data.data.current_price;
     cache[cacheKey] = { data: price, ts: Date.now() };
     res.json({ price });
@@ -197,7 +197,7 @@ router.get('/v1/chart-data/:ticker', async (req, res) => {
 
   try {
     const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker.toUpperCase()}?interval=${interval}&range=${range}`;
-    const response = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 3000 });
+    const response = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 10000 });
     
     if (!response.data.chart?.result) {
       return res.status(404).json({ error: 'Ticker not found', details: `No chart data available for ${ticker}` });
@@ -228,7 +228,7 @@ router.get('/news', async (req, res) => {
     
     let allNews: any[] = [];
     try {
-       const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_B, timeout: 5000 })));
+       const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_B, timeout: 10000 })));
        responses.forEach(r => {
           if (r.data && r.data.news) allNews = allNews.concat(r.data.news);
        });
@@ -309,7 +309,7 @@ router.get('/macro/benchmarks', async (req, res) => {
   const results: any = {};
   await Promise.all(Object.entries(tickers).map(async ([key, symbol]) => {
     try {
-      const resp = await axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`, { headers: SYSTEM_HEADERS_B, timeout: 5000 });
+      const resp = await axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`, { headers: SYSTEM_HEADERS_B, timeout: 10000 });
       const meta = resp.data.chart.result[0].meta;
       const price = meta.regularMarketPrice || meta.previousClose;
       results[key] = { price, change: price - meta.previousClose, changePercent: ((price-meta.previousClose)/meta.previousClose)*100, symbol };

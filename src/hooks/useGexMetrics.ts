@@ -9,10 +9,12 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
 
   const fetchMetrics = useCallback(async (forced = false) => {
     if (!ticker) return;
+    
+    // Use an abort controller for the current request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for complex quant processing
+    
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
-      
       const url = `/api/v1/options-data?ticker=${encodeURIComponent(ticker)}&exps=${exps}${forced ? '&force=true' : ''}`;
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
@@ -76,8 +78,11 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
   useEffect(() => {
     setLoading(true);
     fetchMetrics();
+    
     const interval = setInterval(() => fetchMetrics(), intervalMs);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [fetchMetrics, intervalMs]);
 
   return { data, loading, error, refetch: () => fetchMetrics(true), lastUpdated };
