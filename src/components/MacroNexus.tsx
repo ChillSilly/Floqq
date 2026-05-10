@@ -94,6 +94,7 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
   const [synthesis, setSynthesis] = useState<MacroSynthesis | null>(null);
   const [benchmarks, setBenchmarks] = useState<Record<string, BenchmarkData>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [macroError, setMacroError] = useState<string | null>(null);
   const [isLoadingSynthesis, setIsLoadingSynthesis] = useState(false);
   const [activeTab, setActiveTab] = useState<'playbook' | 'synthesis' | 'technical' | 'indicators' | 'yields' | 'liquidity' | 'sectors'>('playbook');
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -116,26 +117,48 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
 
   useEffect(() => {
     const fetchBenchmarks = async () => {
+      setMacroError(null);
       try {
-        const benchRes = await fetch('/api/macro/benchmarks');
-        if (benchRes.ok) setBenchmarks(await benchRes.json());
-      } catch (e) { console.error(e); }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const benchRes = await fetch('/api/macro/benchmarks', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (benchRes.ok) {
+           setBenchmarks(await benchRes.json());
+        } else {
+           throw new Error(`Data Relay Offline: Macro Benchmarks sync failed (${benchRes.status}).`);
+        }
+      } catch (e: any) { 
+        console.error(e); 
+        if (e.name === 'AbortError') {
+          setMacroError("Data Relay Offline: Request to CBOE/Macro servers timed out.");
+        } else {
+          setMacroError(e.message || "Data Relay Offline: Failed to fetch Macro benchmark data.");
+        }
+      }
       finally { setIsLoading(false); }
     };
     fetchBenchmarks();
   }, []);
 
+  const [synthesisError, setSynthesisError] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchSynthesis = async () => {
       setIsLoadingSynthesis(true);
+      setSynthesisError(null);
       try {
         const synthRes = await fetch(`/api/macro/synthesis?symbol=${chartSymbol}`);
         if (synthRes.ok) {
           const data = await synthRes.json();
           setSynthesis(data);
+        } else {
+          throw new Error('Synthesis data unavailable');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Fetch Synthesis Error:', error);
+        setSynthesisError(error.message || 'AI Synthesis Offline');
       } finally {
         setIsLoadingSynthesis(false);
       }
@@ -166,6 +189,23 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
 
   return (
     <div className="space-y-4">
+      {macroError && (
+        <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-rose-500/5 border border-rose-500/20 rounded-xl mb-4">
+           <div className="flex items-center gap-3">
+             <div className="p-2 bg-rose-500/10 rounded-lg">
+                <ShieldAlert size={20} className="text-rose-500" />
+             </div>
+             <div>
+                <div className="text-rose-500 font-mono text-xs font-bold uppercase tracking-widest mb-1">RELAY INTERRUPTED</div>
+                <div className="text-main-tertiary text-[10px] font-mono">{macroError}</div>
+             </div>
+           </div>
+           <button onClick={() => window.location.reload()} className="mt-4 md:mt-0 px-4 py-2 bg-rose-500/10 text-rose-500 border border-rose-500/30 text-[10px] font-bold uppercase tracking-widest rounded hover:bg-rose-500 hover:text-white transition-colors">
+              RETRY CONNECTION
+           </button>
+        </div>
+      )}
+
       {/* Top Banner: Macro Context - More compact */}
       <div className="grid grid-cols-2 xs:grid-cols-3 md:grid-cols-6 gap-3">
         {[
@@ -215,6 +255,15 @@ export const MacroNexus: React.FC<MacroNexusProps> = ({ activeTicker, spotPrice,
               {isLoading ? (
                 <div className="flex items-center justify-center py-20">
                   <RefreshCcw size={24} className="text-accent-primary/20 animate-spin" />
+                </div>
+              ) : synthesisError ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <ShieldAlert size={24} className="text-rose-500 mb-3" />
+                  <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-rose-500 mb-2">NEURAL SYNC OFFLINE</div>
+                  <div className="text-main-tertiary text-xs max-w-[200px] mx-auto">{synthesisError}</div>
+                  <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-rose-500/10 text-rose-500 border border-rose-500/30 text-[9px] font-bold uppercase tracking-widest rounded transition-colors hover:bg-rose-500 hover:text-white">
+                     RETRY SYNC
+                  </button>
                 </div>
               ) : synthesis ? (
                 <>

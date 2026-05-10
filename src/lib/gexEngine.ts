@@ -108,8 +108,9 @@ export async function getSpot(ticker: string): Promise<number> {
 
   const symbolMapping: Record<string, string> = { 
     'SPX': '^GSPC', 'NDX': '^IXIC', 'RUT': '^RUT', 
-    'DIA': '^DJI', 'VIX': '^VIX', 'TYX': '^TYX', 'TNX': '^TNX',
-    'IWM': 'IWM', 'QQQ': 'QQQ', 'SPY': 'SPY'
+    'VIX': '^VIX', 'TYX': '^TYX', 'TNX': '^TNX',
+    'IWM': 'IWM', 'QQQ': 'QQQ', 'SPY': 'SPY', 'DIA': 'DIA',
+    'US30': 'DIA', 'YM': 'YM=F', 'BTC': 'BTC-USD', 'GOLD': 'GC=F'
   };
   const yahooSym = symbolMapping[symUpper] || symUpper;
   
@@ -168,9 +169,20 @@ export async function getSpot(ticker: string): Promise<number> {
 
 async function getChain(ticker: string): Promise<any> {
   const sym = ticker.toUpperCase();
-  const variants = [sym];
-  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(sym)) {
-    variants.unshift(`_${sym}`); 
+  
+  // Map index tracking names to standard tradeable symbols with options chains
+  const engineMapping: Record<string, string> = {
+    'US30': 'DIA',
+    'YM': 'DIA',
+    'NQ': 'QQQ',
+    'ES': 'SPY',
+    'RTY': 'IWM'
+  };
+  const chainSym = engineMapping[sym] || sym;
+  
+  const variants = [chainSym];
+  if (['SPX', 'NDX', 'RUT', 'VIX'].includes(chainSym)) {
+    variants.unshift(`_${chainSym}`); 
   }
 
   const promises: Promise<any>[] = [];
@@ -192,7 +204,7 @@ async function getChain(ticker: string): Promise<any> {
 
   if (FLOQ_API_KEY) {
     // Try both /chain/ and /options/ endpoints if one is 404
-    const floqChainUrls = [`${FLOQ_URL}/chain/${sym}`, `${FLOQ_URL}/options/${sym}`];
+    const floqChainUrls = [`${FLOQ_URL}/chain/${chainSym}`, `${FLOQ_URL}/options/${chainSym}`];
     floqChainUrls.forEach(url => {
        promises.push(
         axios.get(url, { 

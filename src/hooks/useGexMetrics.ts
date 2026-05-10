@@ -38,7 +38,7 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
           errorMsg += ` - ${text.substring(0, 100)}`;
         }
         console.error(`GEX API Error ${res.status}: ${errorMsg}`);
-        throw new Error(errorMsg);
+        throw new Error(`Data Relay Offline: Server returned ${res.status}`);
       }
       
       if (!isJson) {
@@ -46,15 +46,15 @@ export function useGexMetrics(ticker: string, exps = 1, intervalMs = 60000) {
         if (contentType.includes('text/html')) {
           console.warn('Backend temporarily unavailable or restarting (received HTML instead of JSON).');
           if (!data) {
-             throw new Error('Backend initializing or unavailable. Please retry in a moment.');
+             throw new Error('Data Relay Offline: Backend initializing or currently unavailable. Please retry in a moment.');
           }
           return;
         }
-        throw new Error(`Server returned non-JSON response [Status: ${res.status}, Type: ${contentType}]`);
+        throw new Error(`Data Relay Offline: Unexpected response format from clearing data.`);
       }
       
       if (!json) {
-        throw new Error("Failed to parse GEX response");
+        throw new Error("Data Relay Offline: Failed to decode options clearing data.");
       }
       
       setData(prev => {

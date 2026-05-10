@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { flushSync } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell } from 'recharts';
-import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info, Clock, Menu } from 'lucide-react';
+import { Layers, Activity, Crosshair, Map as MapIcon, Monitor, ChevronRight, ChevronDown, BarChart2, Zap, BrainCircuit, Target, Book, Search, Sun, Moon, Copy, Check, Crown, X, ExternalLink, Key, Lock, ShieldCheck, TrendingUp, TrendingDown, Scale, Terminal, Globe, Calculator, Cpu, RefreshCcw, ArrowUpRight, ArrowDownRight, LayoutGrid, PieChart, Image as ImageIcon, Calendar, Plus, Minus, Trash2, LogOut, LogIn, User as UserIcon, Maximize2, Info, Clock, Menu, Newspaper } from 'lucide-react';
+import { GoogleGenAI, Type } from "@google/genai";
 import { TradingViewWidget } from './components/TradingViewWidget';
 import { BeautifulChart } from './components/BeautifulChart';
 import { GexDashboard } from './components/GexDashboard';
@@ -190,7 +191,7 @@ export default function App() {
   });
   const [tickerInput, setTickerInput] = useState(activeTicker);
 
-  const { data: gexMetrics } = useGexMetrics(activeTicker, 1, 60000);
+  const { data: gexMetrics, error: gexError, loading: gexLoading, refetch: refetchGex } = useGexMetrics(activeTicker, 1, 60000);
 
   useEffect(() => {
     localStorage.setItem('floq_active_ticker', activeTicker);
@@ -309,6 +310,15 @@ export default function App() {
   const [newsSentimentFilter, setNewsSentimentFilter] = useState('ALL');
   const [newsTickerFilter, setNewsTickerFilter] = useState('');
   const [selectedNews, setSelectedNews] = useState<any>(null);
+  const [tickerAnalysis, setTickerAnalysis] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNews([]);
+    setTickerAnalysis(null);
+    setAnalysisError(null);
+  }, [activeTicker]);
 
   const getDisplaySource = (source: string) => {
     if (!source) return 'INTEL';
@@ -353,14 +363,47 @@ export default function App() {
     }
   };
 
+const UI_TICKER_CORRELATIONS: Record<string, string[]> = {
+  'NVDA': ['AMD', 'TSM', 'SMCI', 'AVGO', 'SOXX', 'QQQ', 'AI'],
+  'TSLA': ['RIVN', 'LCID', 'F', 'GM', 'QQQ', 'EV'],
+  'AAPL': ['MSFT', 'GOOGL', 'AMZN', 'XLK', 'QQQ', 'IPHONE'],
+  'QQQ': ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'TSLA', 'AMZN', 'NASDAQ', 'TECH'],
+  'SPY': ['QQQ', 'DIA', 'IWM', 'VIX', 'S&P 500', 'MARKET', 'ECONOMY'],
+  'DIA': ['^DJI', 'DOW JONES', 'DOW', 'IWM', 'SPY', 'BLUE CHIP'],
+  'GLD': ['SLV', 'GDX', 'DXY', 'GOLD', 'INFLATION', 'FED'],
+  'BTC': ['ETH', 'MARA', 'RIOT', 'COIN', 'MSTR', 'CRYPTO', 'BITCOIN'],
+  'COIN': ['BTC', 'ETH', 'CRYPTO'],
+  'AMD': ['NVDA', 'TSM', 'INTC', 'CHIPS'],
+  'MSFT': ['AAPL', 'GOOGL', 'AMZN', 'META', 'AZURE', 'AI'],
+  'GOOGL': ['AAPL', 'MSFT', 'META', 'ALPHABET', 'AI'],
+  'AMZN': ['WMT', 'TGT', 'SHOP', 'RETAIL', 'AWS'],
+  'META': ['GOOGL', 'SNAP', 'PINS', 'FACEBOOK', 'SOCIAL'],
+  'IWM': ['RUT', 'VIX', 'KRE', 'SMALL CAP', 'RUSSELL'],
+  'ETH': ['BTC', 'COIN', 'SOL', 'ETHEREUM'],
+  'USO': ['XLE', 'XOP', 'CVX', 'XOM', 'OIL', 'CRUDE'],
+  'TLT': ['US10Y', 'US30Y', 'SPY', 'BONDS', 'RATES', 'TREASURY'],
+};
+
   const getAffectedTickers = (title: string = '', desc: string = '') => {
     const combined = (title + ' ' + desc).toUpperCase();
-    const tickers = [];
-    if (combined.includes('TECH') || combined.includes('APPLE') || combined.includes('MICROSOFT') || combined.includes('NVIDIA')) tickers.push('QQQ');
-    if (combined.includes('ECONOMY') || combined.includes('FED') || combined.includes('INFLATION') || combined.includes('MARKET')) { tickers.push('SPY'); tickers.push('IWM'); }
-    if (combined.includes('SMALL CAP') || combined.includes('RATES')) tickers.push('IWM');
-    if (tickers.length === 0) tickers.push('SPY'); // Default
-    return Array.from(new Set(tickers));
+    const symbols = new Set<string>();
+    
+    // Regex for ticker symbols $TICKER or TICKER
+    const tickerRegex = /\$([A-Z]{1,5})\b/g;
+    let match;
+    while ((match = tickerRegex.exec(combined)) !== null) {
+      symbols.add(match[1]);
+    }
+
+    // Keyword matching
+    if (combined.includes('TECH') || combined.includes('NASD') || combined.includes('AI ')) symbols.add('QQQ');
+    if (combined.includes('GPU') || combined.includes('NVIDIA') || combined.includes('CHIP')) { symbols.add('NVDA'); symbols.add('SMCI'); }
+    if (combined.includes('FED') || combined.includes('INFLATION') || combined.includes('CPI')) { symbols.add('SPY'); symbols.add('DXY'); }
+    if (combined.includes('BITCOIN') || combined.includes('CRYPTO')) symbols.add('BTC');
+    if (combined.includes('GOLD') || combined.includes('PRECIOUS')) symbols.add('GLD');
+
+    const result = Array.from(symbols).filter(s => s.length > 1 && s.length <= 5).slice(0, 5);
+    return result;
   };
 
   const filteredNews = useMemo(() => {
@@ -417,17 +460,25 @@ export default function App() {
     setNewsLoading(true);
     setNewsError(null);
     try {
-      const url = force ? '/api/news?force=true' : '/api/news';
+      const url = force ? `/api/news?ticker=${activeTicker}&force=true` : `/api/news?ticker=${activeTicker}`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for news + AI analysis
+      const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
       
       if (!res.ok) {
-        const text = await res.text();
-        console.warn(`[News] Server returned status ${res.status}:`, text.substring(0, 50));
-        throw new Error(`Failed to fetch news: ${res.status}`);
+        let errorMsg = `Server error ${res.status}`;
+        try {
+          const errData = await res.json();
+          if (errData.error) errorMsg = errData.error;
+          if (errData.details) errorMsg += `: ${errData.details}`;
+        } catch {
+          const text = await res.text();
+          errorMsg = `Failed to fetch news. ${text ? 'Details: ' + text.substring(0, 50) : ''}`;
+        }
+        console.warn(`[News] API Error:`, errorMsg);
+        throw new Error(errorMsg);
       }
 
       const text = await res.text();
@@ -448,13 +499,74 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') return;
+      if (err.name === 'AbortError') {
+         setNewsError("Data Relay Offline: Connection timed out. Please retry connection.");
+         return;
+      }
       console.error("News fetch error:", err);
-      setNewsError("Communication with intelligence relay disrupting. Tactical fallback active.");
+      setNewsError(err.message || "Data Relay Offline: Communication with intelligence relay disrupted. Please retry.");
     } finally {
       setNewsLoading(false);
     }
-  }, [hasAccess]);
+  }, [hasAccess, activeTicker]);
+
+  const analyzeTickerNews = useCallback(async (ticker: string, currentNews: any[]) => {
+    if (!ticker) return;
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const newsContext = currentNews.slice(0, 10).map(n => `- ${n.title} (${n.source})`).join('\n');
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `You are an elite quantitative strategist focused on high-impact market catalysts and institutional order flow.
+        Synthesize a deep intelligence report for ${ticker} focusing on BIG IMPACT EVENTS, REGULATORY SHIFTS, and REAL-TIME INSTITUTIONAL CATALYSTS.
+        
+        RECENT HEADLINES:
+        ${newsContext}
+        
+        REQUIREMENTS:
+        1. Use Google Search to find current HIGH IMPACT news, quarterly results, whale moves, or unusual institutional flows for ${ticker}.
+        2. Identify 2-3 specific "Alpha Catalysts" that are driving the current move. Make this a list of strings.
+        3. Determine "Relative Strength" vs the sector and correlated benchmarks (e.g. Outperforming, Underperforming, In-line, and why).
+        4. Provide a Master Summary (2-3 sentences) focused on the BIG PICTURE.
+        5. Analyze "Market Condition" (volatility regime, liquidity depth, or macro environment context).
+        6. List 3-4 Correlated Factors or ripple effects in other tickers (e.g. if NVDA moves, how do AMD and TSM react?).
+        7. Institutional Verdict: Bullish, Bearish, or Neutral based strictly on high-impact catalysts.
+        
+        Output MUST be valid JSON.`,
+        config: {
+          responseMimeType: "application/json",
+          tools: [{ googleSearch: {} }],
+          toolConfig: { includeServerSideToolInvocations: true },
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              alphaCatalysts: { type: Type.ARRAY, items: { type: Type.STRING } },
+              relativeStrength: { type: Type.STRING },
+              marketCondition: { type: Type.STRING },
+              sentiment: { type: Type.STRING },
+              sentimentRationale: { type: Type.STRING },
+              correlatedFactors: { type: Type.ARRAY, items: { type: Type.STRING } },
+              volatility: { type: Type.STRING }
+            },
+            required: ["summary", "alphaCatalysts", "relativeStrength", "marketCondition", "sentiment", "sentimentRationale", "correlatedFactors", "volatility"]
+          }
+        }
+      });
+
+      if (response.text) {
+        setTickerAnalysis(JSON.parse(response.text));
+      }
+    } catch (err: any) {
+      console.error("News Analysis Error:", err);
+      setAnalysisError(err.message || "Failed to generate AI analysis. Neural sync interrupted.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -462,6 +574,19 @@ export default function App() {
     const interval = setInterval(() => fetchNews(false), 180000); // 3 min
     return () => clearInterval(interval);
   }, [hasAccess, fetchNews]);
+
+  useEffect(() => {
+    if (activeModule === 'vip-alpha' && activeTicker && !newsLoading) {
+      // Only run analysis if we don't have one and aren't currently analyzing
+      if (!tickerAnalysis && !isAnalyzing && news && news.length > 0) {
+        analyzeTickerNews(activeTicker, news);
+      }
+    } else if (activeModule !== 'vip-alpha') {
+      // We don't necessarily need to wipe it when navigating away, 
+      // but keeping original behavior.
+      if (tickerAnalysis) setTickerAnalysis(null);
+    }
+  }, [activeTicker, activeModule, newsLoading, analyzeTickerNews, tickerAnalysis, isAnalyzing, news]);
 
   // Journal State
   const [journalData, setJournalData] = useState<Record<string, any>>({});
@@ -1882,7 +2007,46 @@ export default function App() {
                              </thead>
                              <tbody>
                                {(() => {
-                                 if (!gexMetrics || !gexMetrics.agg) return null;
+                                 if (gexLoading) {
+                                   return (
+                                     <tr>
+                                       <td colSpan={10} className="py-20 text-center">
+                                         <div className="flex flex-col items-center justify-center gap-3">
+                                           <RefreshCcw size={24} className="text-accent-primary animate-spin" />
+                                           <div className="text-[10px] font-mono uppercase tracking-widest text-main-tertiary">Connecting to Options Clearing Data...</div>
+                                         </div>
+                                       </td>
+                                     </tr>
+                                   );
+                                 }
+                                 
+                                 if (gexError) {
+                                   return (
+                                     <tr>
+                                       <td colSpan={10} className="py-20">
+                                         <div className="flex flex-col flex-wrap items-center justify-center p-8 bg-rose-500/5 border border-rose-500/20 rounded-xl mx-auto max-w-lg text-center">
+                                            <div className="text-rose-500 font-mono text-sm mb-2 font-bold uppercase tracking-widest flex items-center gap-2">
+                                              <X size={16} /> DATA RELAY OFFLINE
+                                            </div>
+                                            <div className="text-main-tertiary text-xs font-mono mb-4 break-words px-4 leading-relaxed">{gexError}</div>
+                                            <button onClick={() => refetchGex()} className="px-6 py-2.5 bg-rose-500 text-white text-[10px] font-bold uppercase tracking-widest rounded transition-colors hover:bg-rose-600 shadow-lg">
+                                               ATTEMPT RECOVERY
+                                            </button>
+                                         </div>
+                                       </td>
+                                     </tr>
+                                   );
+                                 }
+
+                                 if (!gexMetrics || !gexMetrics.agg) {
+                                    return (
+                                      <tr>
+                                        <td colSpan={10} className="py-12 text-center text-[10px] font-mono text-main-tertiary uppercase tracking-wider">
+                                          No GEX profile data available for {activeTicker}
+                                        </td>
+                                      </tr>
+                                    );
+                                 }
                                  const spot = gexMetrics.spot;
                                  
                                  const ratio = conversionRatios[activeTicker]?.ratio || (activeTicker === 'SPY' ? 10.0869 : activeTicker === 'QQQ' ? 41.4269 : 1);
@@ -2443,14 +2607,31 @@ export default function App() {
                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/80 to-transparent opacity-50">
                          <div className="absolute top-0 left-0 h-full w-24 bg-card-primary/80 animate-[ping_3s_ease-in-out_infinite] blur-[2px]"></div>
                        </div>
-                         <div className="flex flex-col gap-6 w-full">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-main-primary pb-8">
+                       <div className="flex flex-col gap-6 w-full">
+                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-main-primary pb-8">
                             <div>
                               <h2 className="text-4xl font-serif italic mb-2 tracking-tight drop-shadow-md text-main-primary title-elegant">Alpha Intelligence <span className="text-amber-500 font-sans not-italic font-black text-sm tracking-[0.3em] uppercase align-middle ml-2">Internal News</span></h2>
                               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500/80 drop-shadow-sm">Real-time Institutional Flow & Catalyst Tracking</p>
                             </div>
                             
                             <div className="flex items-center gap-3">
+                              <div className="relative group">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-main-tertiary group-focus-within:text-amber-500 transition-colors" size={14} />
+                                <input 
+                                  type="text"
+                                  value={tickerInput}
+                                  onChange={e => setTickerInput(e.target.value.toUpperCase())}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      setActiveTicker(tickerInput);
+                                      transition(() => fetchNews(true));
+                                    }
+                                  }}
+                                  placeholder="SEARCH TICKER..."
+                                  className="bg-surface-primary border border-main-primary hover:border-amber-500/30 rounded-lg pl-9 pr-4 py-2 text-[10px] font-mono font-bold tracking-widest text-main-primary w-40 focus:outline-none focus:ring-1 focus:ring-amber-500/20 transition-all"
+                                />
+                              </div>
+
                               <div className="relative group">
                                 <select
                                   value={newsSentimentFilter}
@@ -2496,55 +2677,155 @@ export default function App() {
                               </button>
                             </div>
                           </div>
-
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-main-tertiary">Intelligence Sources</span>
-                                {newsSourceFilter.length > 0 && (
-                                  <button 
-                                    onClick={() => setNewsSourceFilter([])}
-                                    className="text-[9px] font-bold uppercase tracking-tighter text-amber-500/60 hover:text-amber-400 transition-colors"
-                                  >
-                                    (Reset Filters)
-                                  </button>
-                                )}
-                              </div>
-                              <span className="text-[9px] font-mono text-main-tertiary uppercase">
-                                {newsSourceFilter.length === 0 ? 'Showing All' : `${newsSourceFilter.length} Active Filters`}
-                              </span>
+                          
+                          <div className="bg-surface-secondary/50 border border-amber-500/10 rounded-xl p-6 relative group overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                              <BrainCircuit size={40} className="text-amber-500" />
                             </div>
                             
-                            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto pr-2 custom-scrollbar">
-                              {newsSources.filter(s => s !== 'ALL').map(source => {
-                                const isActive = newsSourceFilter.includes(source);
-                                return (
-                                  <button
-                                    key={source}
-                                    onClick={() => {
-                                      setNewsSourceFilter(prev => 
-                                        prev.includes(source) 
-                                          ? prev.filter(s => s !== source) 
-                                          : [...prev, source]
-                                      );
-                                    }}
-                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-mono border transition-all duration-200 ${
-                                      isActive 
-                                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.05)]' 
-                                        : 'bg-surface-primary border-main-primary text-main-tertiary hover:border-main-strong hover:text-main-primary'
-                                    }`}
-                                  >
-                                    <span>{source}</span>
-                                    <span className={`w-[1px] h-3 ${isActive ? 'bg-amber-500/20' : 'bg-main-tertiary/10'}`}></span>
-                                    <span className={isActive ? 'text-amber-400 font-bold' : 'text-amber-500/60'}>
-                                      {sourceCounts[source] || 0}
-                                    </span>
-                                  </button>
-                                );
-                              })}
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+                              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-main-primary">Institutional Alpha Insight: <span className="text-amber-500">{activeTicker}</span> — <span className="text-amber-500/60 uppercase">High Impact Analysis</span></h3>
+                            </div>
+
+                            {isAnalyzing ? (
+                              <div className="space-y-4 py-4">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <RefreshCcw size={14} className="text-amber-500 animate-spin" />
+                                  <span className="text-[10px] font-mono text-amber-500/80 animate-pulse uppercase tracking-widest">Gathering Institutional Intelligence & Flow Data...</span>
+                                </div>
+                                <div className="space-y-4 animate-pulse">
+                                  <div className="h-4 bg-main-primary/5 rounded-md w-3/4"></div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="h-20 bg-main-primary/5 rounded-lg border border-main-primary/5"></div>
+                                    <div className="h-20 bg-main-primary/5 rounded-lg border border-main-primary/5"></div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : analysisError ? (
+                              <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-10 px-6 bg-rose-500/5 border border-rose-500/20 rounded-xl mt-4">
+                                <div className="text-rose-500 font-mono text-sm mb-2 font-bold uppercase tracking-widest flex justify-center items-center gap-2">
+                                  <ShieldAlert size={16} /> NEURAL SYNC OFFLINE
+                                </div>
+                                <div className="text-main-tertiary text-xs font-mono mb-4">{analysisError}</div>
+                                <button
+                                  onClick={() => analyzeTickerNews(activeTicker, news)}
+                                  className="px-6 py-2 bg-rose-500 text-white text-[10px] font-bold uppercase tracking-widest rounded hover:bg-rose-600 transition-colors shadow-lg"
+                                >
+                                  RETRY ANALYSIS
+                                </button>
+                              </div>
+                            ) : tickerAnalysis ? (
+                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
+                                <div className="lg:col-span-5 flex flex-col justify-between">
+                                  <div>
+                                    <h4 className="text-[9px] font-black uppercase tracking-[0.2em] text-main-tertiary mb-3 relative inline-block">
+                                      Macro Synthesis
+                                      <div className="absolute -bottom-1 left-0 w-full h-[1px] bg-gradient-to-r from-amber-500/40 to-transparent"></div>
+                                    </h4>
+                                    <p className="text-sm md:text-base font-serif leading-relaxed text-main-secondary mb-6 italic border-l-2 border-amber-500/30 pl-4 py-1">
+                                      "{tickerAnalysis.summary}"
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[9px] font-black uppercase tracking-[0.2em] text-main-tertiary mb-3">Correlated Flows</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                      {tickerAnalysis.correlatedFactors?.map((factor: string, i: number) => (
+                                        <span key={i} className="text-[10px] font-mono px-2 py-0.5 bg-surface-primary border border-main-primary/20 rounded text-main-tertiary">
+                                          {factor}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="lg:col-span-4 space-y-6 lg:border-l lg:border-main-primary/10 lg:pl-8">
+                                  <div>
+                                    <div className="flex items-center gap-1.5 mb-2 text-main-tertiary">
+                                      <Zap size={12} className="text-amber-500"/>
+                                      <div className="text-[10px] font-bold uppercase tracking-widest text-main-primary">Alpha Catalysts</div>
+                                    </div>
+                                    <ul className="text-xs md:text-sm font-mono text-amber-500/90 space-y-2 ml-1">
+                                      {tickerAnalysis.alphaCatalysts?.map((c: string, idx: number) => (
+                                        <li key={idx} className="leading-snug flex gap-2">
+                                          <span className="text-amber-500/50 mt-0.5">•</span>
+                                          <span>{c}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-main-primary/5">
+                                     <div>
+                                       <div className="flex items-center gap-1.5 mb-1.5 text-main-tertiary">
+                                         <Activity size={10} className="text-emerald-500"/>
+                                         <div className="text-[9px] font-bold uppercase tracking-widest">Relative Str.</div>
+                                       </div>
+                                       <div className="text-[10px] md:text-xs font-mono text-emerald-500/90 leading-relaxed pr-2">{tickerAnalysis.relativeStrength}</div>
+                                     </div>
+                                     <div>
+                                       <div className="text-[9px] font-bold uppercase tracking-widest text-main-tertiary mb-1.5">Market Cond.</div>
+                                       <div className="text-[10px] md:text-xs font-mono text-main-secondary leading-relaxed">{tickerAnalysis.marketCondition}</div>
+                                     </div>
+                                  </div>
+                                </div>
+
+                                <div className="lg:col-span-3 bg-gradient-to-br from-black/40 to-black/20 p-6 rounded-xl border border-amber-500/10 flex flex-col justify-center items-center lg:items-start shadow-inner relative overflow-hidden group/verdict text-center lg:text-left">
+                                  <div className="absolute -bottom-6 -right-6 p-4 opacity-[0.03] group-hover/verdict:opacity-[0.05] transition-opacity hidden lg:block">
+                                      {tickerAnalysis.sentiment?.toLowerCase().includes('bull') ? <TrendingUp size={140} className="text-emerald-500" /> : 
+                                       tickerAnalysis.sentiment?.toLowerCase().includes('bear') ? <TrendingDown size={140} className="text-rose-500" /> : 
+                                       <Activity size={140} className="text-amber-500" />}
+                                  </div>
+                                  <div className="relative z-10 w-full">
+                                    <div className={`text-[10px] font-black uppercase tracking-[0.3em] mb-3 flex items-center justify-center lg:justify-start gap-2 ${
+                                      tickerAnalysis.sentiment?.toLowerCase().includes('bull') ? 'text-emerald-500' : 
+                                      tickerAnalysis.sentiment?.toLowerCase().includes('bear') ? 'text-rose-500' : 'text-amber-500'
+                                    }`}>
+                                      <Scale size={14} /> Verdict
+                                    </div>
+                                    <div className="text-2xl font-serif mb-4 text-main-primary font-bold tracking-tight uppercase">{tickerAnalysis.sentiment}</div>
+                                    <div className="text-xs text-main-tertiary leading-relaxed italic lg:pr-4 mx-auto lg:mx-0 max-w-[250px] border-t border-main-primary/5 pt-4">
+                                      {tickerAnalysis.sentimentRationale}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center py-6 text-[10px] font-mono text-main-tertiary uppercase tracking-widest italic">
+                                Select a ticker or wait for intelligence synthesis...
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-12 mb-8 pb-4 border-b border-main-primary/5">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2.5 bg-amber-500/10 rounded-xl">
+                                <Newspaper size={20} className="text-amber-500" />
+                              </div>
+                              <div>
+                                <h2 className="text-xl font-serif font-medium text-main-primary uppercase tracking-tight">Intelligence Headlines</h2>
+                                <div className="flex items-center flex-wrap gap-2 mt-1">
+                                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-main-tertiary">Strategic Catalyst Feed • <span className="text-amber-500 font-bold">{activeTicker}</span></p>
+                                  {UI_TICKER_CORRELATIONS[activeTicker] && UI_TICKER_CORRELATIONS[activeTicker].length > 0 && (
+                                    <div className="flex items-center gap-1.5 ml-2 border-l border-main-primary/10 pl-2">
+                                      <span className="text-[8px] font-mono text-main-tertiary/70 uppercase">Correlated Flows:</span>
+                                      <div className="flex gap-1 flex-wrap">
+                                        {UI_TICKER_CORRELATIONS[activeTicker].slice(0, 4).map(c => (
+                                          <span key={c} className="text-[8px] font-mono px-1.5 py-0.5 bg-main-primary/5 text-main-primary/80 rounded uppercase">{c}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono text-main-tertiary px-2 py-1 bg-surface-primary border border-main-primary rounded uppercase tracking-tighter shadow-sm">
+                                Relay: <span className="text-emerald-500 font-bold">Synchronized</span>
+                              </span>
                             </div>
                           </div>
-                                   <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[750px] overflow-y-auto pr-2 custom-scrollbar">
+
+                          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[750px] overflow-y-auto pr-2 custom-scrollbar">
                         {newsError ? (
                            <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-20 px-6 bg-rose-500/5 border border-rose-500/20 rounded-xl">
                               <div className="text-rose-500 font-mono text-sm mb-2 font-bold uppercase tracking-widest">RELAY INTERRUPTED</div>
@@ -2582,7 +2863,19 @@ export default function App() {
                             </div>
                           ))
                         ) : filteredNews.length === 0 && !newsLoading ? (
-                           <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-12 opacity-40 italic font-mono text-sm text-main-primary">NO INTELLIGENCE FOUND MATCHING CRITERIA.</div>
+                           <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-20 px-8 bg-surface-primary border border-main-primary rounded-xl">
+                              <div className="p-4 bg-main-primary/5 rounded-full inline-flex items-center justify-center mb-6">
+                                <Monitor size={32} className="text-main-tertiary/20" />
+                               </div>
+                              <div className="text-main-primary font-serif text-lg mb-2 capitalize italic tracking-tight">No Strategic Catalysts Found for {activeTicker}</div>
+                              <div className="text-main-tertiary text-xs font-mono max-w-md mx-auto leading-relaxed">The intelligence relay reported no high-impact events specifically tagged for this symbol in the last 72 hours. Initial flow analysis continues.</div>
+                              <button 
+                                onClick={() => fetchNews(true)}
+                                className="mt-6 px-6 py-2.5 bg-main-primary text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-amber-600 transition-all shadow-lg"
+                               >
+                                RESCAN RELAY
+                               </button>
+                           </div>
                         ) : (
                           filteredNews.map((item, idx) => {
                             const desc = item.ai_description || item.description || `AI Summary: Initial flow analysis indicates institutional activity surrounding "${item.title}". Volatility markers from ${getDisplaySource(item.source)} suggest market makers are adjusting positions. Further details and market impacts are being processed by our models.`;
@@ -2595,57 +2888,82 @@ export default function App() {
                                 return 'text-main-tertiary';
                             };
 
+                            const isBigImpact = item.title.toUpperCase().includes('BREAKING') || 
+                                              item.title.toUpperCase().includes('CRITICAL') || 
+                                              item.title.toUpperCase().includes('MAJOR') ||
+                                              item.title.toUpperCase().includes('FED') ||
+                                              item.title.toUpperCase().includes('CATALYST');
+
                             return (
                             <div 
                               key={idx} 
                               onClick={() => setSelectedNews({...item, displayDesc: desc, displayTickers: tickers, displaySentiment: sentiment})}
                               className="flex flex-col h-full p-6 bg-card-primary border border-main-primary rounded-xl hover:border-amber-500/40 hover:bg-surface-primary hover:-translate-y-1 transition-all duration-300 group/news shadow-sm overflow-hidden relative cursor-pointer"
                             >
+                              {isBigImpact && (
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-rose-500 animate-pulse"></div>
+                              )}
+                              
                               <div className="absolute top-0 right-0 p-8 opacity-0 group-hover/news:opacity-[0.03] transition-opacity duration-500 delay-100 pointer-events-none">
                                 <Zap size={100} />
                               </div>
                               <div className="flex-1 flex flex-col z-10 pointer-events-none">
-                                <div className="flex items-center justify-between gap-3 mb-5 pb-4">
+                                <div className="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-main-primary/5">
                                   <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-amber-500">
                                       {getDisplaySource(item.source)}
                                     </span>
-                                    <span className="text-main-tertiary text-[9px]">•</span>
+                                    <span className="text-main-tertiary text-[9px] opacity-30">•</span>
                                     {sentiment && (
                                       <span className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${getSentimentStyle(sentiment)}`}>
                                         {sentiment}
                                       </span>
                                     )}
+                                    {isBigImpact && (
+                                      <span className="text-[8px] font-black bg-rose-500/10 text-rose-500 px-1.5 py-0.5 rounded tracking-tighter uppercase ml-2 border border-rose-500/20">Big Impact</span>
+                                    )}
                                   </div>
                                   <span className="text-[9px] text-main-tertiary font-mono font-medium whitespace-nowrap">{item.date}</span>
                                 </div>
-                                <h3 className="text-lg font-serif font-medium text-main-primary group-hover/news:text-amber-500 transition-colors leading-snug mb-4">
+                                <h3 className="text-lg font-serif font-medium text-main-primary group-hover/news:text-amber-500 transition-colors leading-tight mb-3">
                                   {item.title}
                                 </h3>
-                                <div className="relative mt-auto">
-                                  <p className="text-sm text-main-secondary leading-relaxed font-sans line-clamp-3">
+                                <div className="relative mb-6">
+                                  <p className="text-[11px] text-main-tertiary leading-relaxed font-sans line-clamp-2 italic opacity-80">
                                     {desc}
                                   </p>
                                 </div>
                               </div>
-                              <div className="mt-5 pt-4 flex items-center justify-between shrink-0 z-10 pointer-events-none">
-                                <div className="flex flex-wrap gap-1.5">
-                                  {tickers.slice(0, 4).map((tick: string, i: number) => (
-                                    <span key={i} className="text-[9px] font-mono font-bold uppercase text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-sm flex items-center gap-1">
-                                      ${tick}
-                                    </span>
+
+                              <div className="mt-auto pt-4 border-t border-main-primary/5 flex items-center justify-between z-10">
+                                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pr-2 flex-grow">
+                                  <span className="text-[8px] font-black uppercase text-main-tertiary mr-1 tracking-tighter opacity-50">Impact:</span>
+                                  {tickers.slice(0, 5).map((tick: string, i: number) => (
+                                    <button 
+                                      key={i} 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveTicker(tick.toUpperCase());
+                                      }}
+                                      className={`text-[9px] font-mono font-black uppercase px-2 py-0.5 rounded transition-all cursor-pointer ${
+                                        tick.toUpperCase() === activeTicker?.toUpperCase() ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-surface-primary border border-main-primary text-amber-500/80 hover:border-amber-500/40 hover:text-amber-400'
+                                      }`}
+                                    >
+                                      {tick}
+                                    </button>
                                   ))}
                                 </div>
                                 <span 
-                                  className="text-[10px] font-bold uppercase tracking-widest text-amber-500 opacity-60 group-hover/news:opacity-100 transition-opacity flex items-center gap-1"
+                                  className="text-[10px] font-bold uppercase tracking-widest text-amber-500/60 group-hover/news:text-amber-500 transition-all flex items-center gap-1 ml-4 whitespace-nowrap"
                                 >
-                                  Deep Analysis <ArrowUpRight size={12} />
+                                  DEEP ALPHA <ArrowUpRight size={10} />
                                 </span>
                               </div>
                             </div>
                           )})
                         )}
-                      </div>                  </div>
+                      </div>
+                    </div>
 
                       {/* Modal overlay for selected news */}
                       <AnimatePresence>
@@ -2678,7 +2996,7 @@ export default function App() {
                                 <div className="overflow-y-auto custom-scrollbar pr-4 mt-4">
                                   <div className="flex items-center gap-3 mb-6 border-b border-black/5 pb-4">
                                     <div className="flex items-center gap-2 px-2 py-1 bg-amber-500/10 rounded">
-                                      <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500 shrink-0">
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-amber-500 shrink-0">
                                         {getDisplaySource(selectedNews.source)}
                                       </span>
                                     </div>

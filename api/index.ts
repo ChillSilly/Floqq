@@ -111,6 +111,8 @@ router.get('/ratio/:ticker', async (req, res) => {
       'QQQ': 'NQ=F', 
       'IWM': 'RTY=F',
       'DIA': 'YM=F',
+      'US30': 'YM=F',
+      'YM': 'YM=F',
       'VIX': 'VX=F',
       'GLD': 'GC=F',
       'SLV': 'SI=F',
@@ -121,10 +123,14 @@ router.get('/ratio/:ticker', async (req, res) => {
     };
     const futuresTicker = symbolMapping[ticker.toUpperCase()] || ticker.toUpperCase();
     
-    console.log(`[API] Fetching ratio for ${ticker} / ${futuresTicker}`);
+    // For ratio calculation, we need a valid spot symbol. 
+    // If the ticker is US30 or YM, we use DIA as the spot reference.
+    const spotTicker = (ticker.toUpperCase() === 'US30' || ticker.toUpperCase() === 'YM') ? 'DIA' : ticker.toUpperCase();
+    
+    console.log(`[API] Fetching ratio for ${ticker} -> Spot: ${spotTicker} / Future: ${futuresTicker}`);
     const [futureRes, spotRes] = await Promise.all([
       axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${futuresTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 10000 }),
-      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 10000 })
+      axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${spotTicker}?interval=1m&range=1d`, { headers: SYSTEM_HEADERS_B, timeout: 10000 })
     ]);
 
     if (!futureRes.data.chart?.result || !spotRes.data.chart?.result) {
@@ -180,7 +186,15 @@ router.get('/spot/:ticker', async (req, res) => {
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CACHE_TTL) return res.json({ price: cache[cacheKey].data });
 
   try {
-    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${ticker.toUpperCase()}.json`, { headers: SYSTEM_HEADERS_A, timeout: 10000 });
+    const spotMapping: Record<string, string> = {
+      'US30': 'DIA',
+      'YM': 'DIA',
+      'NQ': 'QQQ',
+      'ES': 'SPY',
+      'RTY': 'IWM'
+    };
+    const targetSym = spotMapping[ticker.toUpperCase()] || ticker.toUpperCase();
+    const response = await axios.get(`https://cdn.cboe.com/api/global/delayed_quotes/options/${targetSym}.json`, { headers: SYSTEM_HEADERS_A, timeout: 10000 });
     const price = response.data.data.current_price;
     cache[cacheKey] = { data: price, ts: Date.now() };
     res.json({ price });
@@ -196,7 +210,18 @@ router.get('/v1/chart-data/:ticker', async (req, res) => {
   if (cache[cacheKey] && Date.now() - cache[cacheKey].ts < CHART_CACHE_TTL) return res.json(cache[cacheKey].data);
 
   try {
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker.toUpperCase()}?interval=${interval}&range=${range}`;
+    const chartMapping: Record<string, string> = {
+      'US30': '^DJI',
+      'YM': 'YM=F',
+      'NQ': 'NQ=F',
+      'ES': 'ES=F',
+      'RTY': 'RTY=F',
+      'BTC': 'BTC-USD',
+      'GOLD': 'GC=F'
+    };
+    const mappedSymbol = chartMapping[ticker.toUpperCase()] || ticker.toUpperCase();
+    
+    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${mappedSymbol}?interval=${interval}&range=${range}`;
     const response = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 10000 });
     
     if (!response.data.chart?.result) {
@@ -211,88 +236,130 @@ router.get('/v1/chart-data/:ticker', async (req, res) => {
   }
 });
 
+const TICKER_CORRELATIONS: Record<string, string[]> = {
+  'NVDA': ['AMD', 'TSM', 'SMCI', 'AVGO', 'SOXX', 'QQQ', 'AI'],
+  'TSLA': ['RIVN', 'LCID', 'F', 'GM', 'QQQ', 'EV'],
+  'AAPL': ['MSFT', 'GOOGL', 'AMZN', 'XLK', 'QQQ', 'IPHONE'],
+  'QQQ': ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'TSLA', 'AMZN', 'NASDAQ', 'TECH'],
+  'SPY': ['QQQ', 'DIA', 'IWM', 'VIX', 'S&P 500', 'MARKET', 'ECONOMY'],
+  'DIA': ['^DJI', 'DOW JONES', 'DOW', 'IWM', 'SPY', 'BLUE CHIP'],
+  'GLD': ['SLV', 'GDX', 'DXY', 'GOLD', 'INFLATION', 'FED'],
+  'BTC': ['ETH', 'MARA', 'RIOT', 'COIN', 'MSTR', 'CRYPTO', 'BITCOIN'],
+  'COIN': ['BTC', 'ETH', 'CRYPTO'],
+  'AMD': ['NVDA', 'TSM', 'INTC', 'CHIPS'],
+  'MSFT': ['AAPL', 'GOOGL', 'AMZN', 'META', 'AZURE', 'AI'],
+  'GOOGL': ['AAPL', 'MSFT', 'META', 'ALPHABET', 'AI'],
+  'AMZN': ['WMT', 'TGT', 'SHOP', 'RETAIL', 'AWS'],
+  'META': ['GOOGL', 'SNAP', 'PINS', 'FACEBOOK', 'SOCIAL'],
+  'IWM': ['RUT', 'VIX', 'KRE', 'SMALL CAP', 'RUSSELL'],
+  'ETH': ['BTC', 'COIN', 'SOL', 'ETHEREUM'],
+  'USO': ['XLE', 'XOP', 'CVX', 'XOM', 'OIL', 'CRUDE'],
+  'TLT': ['US10Y', 'US30Y', 'SPY', 'BONDS', 'RATES', 'TREASURY'],
+};
+
 router.get('/news', async (req, res) => {
-  const cacheKey = 'yahoo_news_ai_v3';
+  const { ticker } = req.query;
+  const tickerStr = typeof ticker === 'string' ? ticker.toUpperCase() : null;
+  const cacheKey = tickerStr ? `yahoo_news_${tickerStr}` : 'yahoo_news_general';
   const force = req.query.force === 'true';
 
-  if (!force && cache[cacheKey] && Date.now() - cache[cacheKey].ts < 3 * 60 * 1000) { 
+  if (!force && cache[cacheKey] && Date.now() - cache[cacheKey].ts < 5 * 60 * 1000) { 
     return res.json(cache[cacheKey].data);
   }
 
-  try {
-    const urls = [
-      'https://query2.finance.yahoo.com/v1/finance/search?q=financial%20news&quotesCount=0&newsCount=10',
-      'https://query2.finance.yahoo.com/v1/finance/search?q=us%20equities&quotesCount=0&newsCount=10',
-      'https://query2.finance.yahoo.com/v1/finance/search?q=tech%20stocks&quotesCount=0&newsCount=10'
-    ];
-    
-    let allNews: any[] = [];
     try {
-       const responses = await Promise.all(urls.map(u => axios.get(u, { headers: SYSTEM_HEADERS_B, timeout: 10000 })));
-       responses.forEach(r => {
-          if (r.data && r.data.news) allNews = allNews.concat(r.data.news);
-       });
-    } catch(e) {
-       console.error("Yahoo News Fetch error", e);
-    }
+    const tickerMapping: Record<string, string> = {
+      'US30': 'Dow Jones Industrial Average',
+      'YM': 'Dow Jones futures',
+      'DIA': 'Dow Jones Industrial Average ETF',
+      'NQ': 'Nasdaq 100',
+      'ES': 'S&P 500 futures',
+      'SPY': 'SP500 ETF',
+      'QQQ': 'Nasdaq ETF'
+    };
+    const expandedSearch = tickerMapping[tickerStr] || tickerStr;
 
+    let queries = tickerStr 
+      ? [
+          `${tickerStr} stock "Reuters"`, 
+          `${tickerStr} "Dow Jones"`,
+          `${tickerStr} "dpa-AFX" "Mace News"`,
+          `${tickerStr} "etf.com"`,
+          `${tickerStr} "Zacks"`,
+          expandedSearch !== tickerStr ? expandedSearch : `${tickerStr} stock`
+        ]
+      : ['US equities', 'stock market today'];
+    
+    // Add correlated queries if ticker provided taking top 2
+    if (tickerStr && TICKER_CORRELATIONS[tickerStr]) {
+      const correlated = TICKER_CORRELATIONS[tickerStr].slice(0, 2);
+      correlated.forEach(c => {
+        queries.push(c);
+      });
+    }
+      
     const uniqueNews = new Map();
-    for (const item of allNews) {
-        if (!uniqueNews.has(item.uuid)) uniqueNews.set(item.uuid, item);
-    }
-    const mergedNews = Array.from(uniqueNews.values())
-        .sort((a: any, b: any) => b.providerPublishTime - a.providerPublishTime)
-        .slice(0, 15);
-
-    const newsData = mergedNews.map((item: any) => ({
-      date: new Date(item.providerPublishTime * 1000).toISOString(),
-      title: item.title,
-      url: item.link,
-      source: item.publisher || 'Yahoo Finance',
-      original_symbols: item.relatedTickers || [],
-      summary: item.summary || ''
+    
+    await Promise.all(queries.map(async (q) => {
+      try {
+        const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=0&newsCount=15`;
+        const r = await axios.get(url, { headers: SYSTEM_HEADERS_B, timeout: 8000 });
+        if (r.data && r.data.news) {
+          r.data.news.forEach((item: any) => {
+            if (!uniqueNews.has(item.uuid)) uniqueNews.set(item.uuid, item);
+          });
+        }
+      } catch(e) {
+        console.error(`Yahoo News Fetch error for query: ${q}`, (e as any).message);
+      }
     }));
 
-    let enhancedNews = newsData.map((item: any) => {
-      return { 
-        ...item, 
-        sentiment: 'Neutral', 
-        tickers: item.original_symbols && item.original_symbols.length > 0 ? item.original_symbols : ['Macro'], 
-        ai_description: item.summary || item.title 
+    const mergedNews = Array.from(uniqueNews.values())
+        .sort((a: any, b: any) => b.providerPublishTime - a.providerPublishTime)
+        .slice(0, 40);
+
+    const newsData = mergedNews.map((item: any) => {
+      const foundTickers = new Set<string>();
+      if (item.relatedTickers) item.relatedTickers.forEach((t: string) => foundTickers.add(t.toUpperCase()));
+      
+      const symbolRegex = /\b[A-Z]{1,5}\b/g;
+      const title = item.title || '';
+      const summary = item.summary || '';
+      const text = (title + ' ' + summary).toUpperCase();
+      let match;
+      while ((match = symbolRegex.exec(text)) !== null) {
+        const sym = match[0];
+        if (sym.length > 1 && !['THE', 'FOR', 'AND', 'NOW', 'OUT', 'NEW', 'ALL', 'SEE', 'IPO', 'USA', 'SEC', 'FED', 'CPI', 'GDP', 'PPI', 'USD', 'NEWS', 'BUY', 'SELL', 'MAY'].includes(sym)) {
+          foundTickers.add(sym);
+        }
+      }
+
+      return {
+        uuid: item.uuid,
+        date: new Date(item.providerPublishTime * 1000).toISOString(),
+        title: item.title,
+        url: item.link,
+        source: item.publisher || 'Yahoo Finance',
+        tickers: Array.from(foundTickers).slice(0, 8),
+        summary: item.summary || item.title
       };
     });
 
-    try {
-      const genAI = getAI();
-      if (genAI && newsData.length > 0) {
-        const prompt = `Elite quant strategist. Analyze these news headlines and return a JSON array of objects [{index:number, sentiment:string, tickers:string[], description:string}] for: \n` + newsData.map((n: any, i: number) => `${i}: ${n.title}`).join('\n');
-        
-        const aiPromise = genAI.models.generateContent({
-           model: 'gemini-1.5-flash',
-           contents: prompt,
-           config: { responseMimeType: "application/json" }
-        });
-        
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
-        const result: any = await Promise.race([aiPromise, timeoutPromise]);
-        const aiData = JSON.parse(result.text);
-        
-        enhancedNews = newsData.map((item: any, i: number) => {
-            const analysis = Array.isArray(aiData) ? aiData.find((a: any) => a.index === i) : null;
-            return analysis ? { 
-              ...item, 
-              sentiment: analysis.sentiment, 
-              tickers: analysis.tickers || item.original_symbols, 
-              ai_description: analysis.description 
-            } : item;
-        });
-      }
-    } catch (aiError) {
-      console.error("News AI Sentiment Error:", aiError);
-    }
+    // Strategy: Filter newsData to ensure relevance
+    const finalNews = newsData.filter(item => {
+      if (!tickerStr) return true;
+      const correlates = TICKER_CORRELATIONS[tickerStr] || [];
+      const relevantKeywords = [tickerStr, ...correlates];
+      
+      const text = (item.title + ' ' + (item.summary || '')).toUpperCase();
+      const mentionsRelevance = relevantKeywords.some(keyword => text.includes(keyword.toUpperCase()));
+      const hasRelatedTicker = item.tickers.some(t => relevantKeywords.includes(t));
 
-    cache[cacheKey] = { data: enhancedNews, ts: Date.now() };
-    res.json(enhancedNews);
+      return mentionsRelevance || hasRelatedTicker;
+    });
+    
+    cache[cacheKey] = { data: finalNews.slice(0, 30), ts: Date.now() };
+    res.json(cache[cacheKey].data);
   } catch (error: any) {
     res.status(500).json({ error: 'News Fetch Failed', details: error.message });
   }
@@ -537,7 +604,7 @@ router.get('/system/health', (req, res) => {
   });
 });
 
-router.all('/*', (req, res) => res.status(404).json({ error: 'API route not found' }));
+router.all('*all', (req, res) => res.status(404).json({ error: 'API route not found' }));
 
 // Mount router on app for serverless environments
 app.use('/api', router);
